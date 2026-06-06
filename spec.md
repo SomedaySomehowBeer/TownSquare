@@ -6,7 +6,7 @@ Short product spec for what this project is trying to be.
 
 A tiny presence layer for websites.
 
-Visitors can see that other people are there, walk left and right through a tiny shared scene, interact with a few simple props, and chat in a lightweight shared space at the bottom of the page.
+Visitors can see that other people are there, walk left and right through a tiny shared scene, interact with a few simple props, and chat in a lightweight scene-native shared space.
 
 The goal is to make a site feel inhabited.
 
