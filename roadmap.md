@@ -1,46 +1,80 @@
 # TownSquare roadmap
 
-Product-level roadmap and deliverables.
-This is directional, not a detailed implementation plan.
-`spec.md` remains the source of truth for product intent.
+Product-level sequencing. Directional, not an implementation plan.
+`spec.md` = intent; `v1-interaction-model.md` = first usable experience.
+
+Each item has a concrete "done when" bar.
+
+## Where we are
+
+First playable slice works: widget, presence, movement, chat, one bench, deployable server.
+
+Still thin: scene feels like a demo strip; one prop; anonymous visitors; deployment docs lack production examples; embed API not yet stable.
 
 ## Done
 
-- [x] A first bench prop with a simple sit interaction
-- [x] Shared visitor identity across browser tabs
-- [x] Per-character recent-message tray for lightweight short-term recovery
-- [x] Reusable embed/widget module separated from the demo bootstrap
+- [x] **Shared presence**: live scene; movement and idle visible to others
+- [x] **Left/right movement**: responsive, readable, not game-like
+- [x] **Lightweight chat**: speech bubbles + per-character recovery tray
+- [x] **Bench prop**: pause to sit; consistent seat ownership
+- [x] **Shared visitor across tabs**: one character per browser
+- [x] **Reusable embed module**: widget separate from demo bootstrap
+- [x] **Self-hostable server**: assets, WebSocket, `/healthz`, Docker
 
 ## Now
 
-- [ ] A default TownSquare experience that already feels alive without customization
-- [x] Lightweight real-time chat
-- [x] Left/right movement, idling, and co-presence in a shared scene
-- [ ] A small set of clear props with simple interactions
-- [ ] A scene that feels like a place rather than a UI overlay
-- [x] Low-friction self-hosted setup
-- [x] A deployable single-process server with a documented embed boundary
+Focus: **scene legibility** and **credible self-host on a real site**.
+
+### Scene
+
+- [ ] **Default props**: trees and lamps join the bench
+- [ ] **Distinct behaviors**: one obvious interaction per prop, no instructions needed
+- [ ] **Busy-scene readability**: capped bubbles per character, overflow to tray, basic collision avoidance
+
+### Self-host
+
+- [ ] **Real-site embed**: third-party page mounts widget with documented steps
+- [ ] **Production proxy examples**: copy-paste nginx/Caddy configs with WebSocket on `/live`
+- [ ] **Documented embed contract**: `mountTownSquare` options documented; breaking changes versioned
 
 ## Next
 
-- [ ] Lightweight naming
-- [ ] Small expressive actions or ambient feedback
-- [ ] Clear self-hosted deployment docs for real servers and reverse proxies
-- [ ] Stable site-facing embed API
-- [ ] A clean concept for hosted TownSquare without pulling tenant complexity into the core runtime
-- [ ] Optional inter-TownSquare communication for self-hosted sites that want to join the wider network
-- [ ] Clear room for future extensibility
+Finish v1 without reading source.
+
+### Visitors
+
+- [ ] **Optional display name**: short ephemeral name on own character; no accounts
+- [ ] **Click/tap props**: intentional interaction where proximity isn't enough
+- [ ] **Arrival clarity**: live place, who's here, can move and chat: obvious in seconds
+
+### Site owners
+
+- [ ] **Operator checklist**: install, health check, embed, two-browser test, common failures
+- [ ] **Stable widget + protocol**: public contract; hosted layer can sit on top later
+
+### Boundary (concept)
+
+- [ ] **Hosted shape defined**: register site, get snippet, no self-hosted server: around current runtime
+- [ ] **Optional network**: self-hosted sites can opt into discovery, linking, travel
 
 ## Future
 
-- [ ] Custom props and interactions
-- [ ] Open interfaces for maps, visualizations, and related tools
-- [ ] A first credible form of movement between places
-- [ ] A basic map or world view
-- [ ] Connected places that feel coherent enough to read as a wider world
-- [ ] Hosted site registration and multi-site management
+Post-v1, roughly ordered.
+
+- [ ] **Movement between places (websites)**: travel feels like walking, not a normal link
+- [ ] **Map / world view**: nearby linked places (websites) without clutter
+- [ ] **Connected neighbourhoods**: sites read as one wider world
+- [ ] **Hosted registration**: same product, hosted deployment
+- [ ] **Custom props and interactions**
+- [ ] **Open interfaces**: maps, visualizations, related tools
 
 ## Ideas bucket
 
-- [ ] Optional notifications for new messages, with a simple enable/disable control similar in spirit to quiet mode
-- [ ] Notification defaults and interaction states that stay lightweight and reveal complexity only on demand
+- [ ] **Optional message notifications**: simple on/off, quiet by default
+- [ ] **Minimum moderation story**: lightest viable public-chat surface
+
+## Open questions
+
+- How much cross-site identity before it stops feeling ephemeral?
+- How are neighbouring sites chosen or discovered?
+- Smallest moderation surface that keeps chat usable?
