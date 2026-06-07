@@ -71,7 +71,6 @@ It should feel like part of the shared place, not a separate product bolted unde
 
 In v1, chat should combine:
 - in-scene speech bubbles for live presence
-- a per-character unread indicator when something may have been missed
 - a per-character recent-message tray with timestamps for quick recovery
 - enough short-term continuity to make live conversation easier
 
@@ -82,14 +81,10 @@ The current preferred recovery model is:
 - speech bubbles remain primary
 - the tray exists for recovery, not as the main chat surface
 - each character exposes their own small tray rather than feeding one global message log
-- the tray shows the last few messages from that character, including read and unread ones
-- the unread icon only appears when needed
-- hover or focus can preview; click opens the tray fully
+- the tray shows the last few messages from that character
+- hover or focus previews the tray
 - the tray appears as a small floating panel near the character
-- the tray follows the character while open
-
-For now, unread state can clear on hover or focus.
-That should be treated as provisional and revisited if it proves too eager or too easy to miss.
+- the tray follows the character while visible
 
 ## Multi-person readability
 

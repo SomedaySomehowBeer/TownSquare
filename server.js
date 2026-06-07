@@ -24,6 +24,7 @@ const PORT = Number(process.env.PORT || 8787);
 const PUBLIC_DIR = path.join(__dirname, "public");
 const MAX_BROWSER_ID_LEN = 80;
 const MAX_MESSAGE_LEN = 140;
+const MAX_RECENT_MESSAGES = 5;
 const MOVE_THROTTLE_MS = 40;
 const RECONNECT_GRACE_MS = 1500;
 
@@ -49,7 +50,7 @@ function createClient(connectionId, ws) {
   };
 }
 
-/** @returns {{id:number,browserId:string,x:number,clients:Set<any>,joined:boolean,leaveTimer:any}} */
+/** @returns {{id:number,browserId:string,x:number,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
@@ -58,6 +59,7 @@ function createIdentity(id, browserId, x) {
     clients: new Set(),
     joined: false,
     leaveTimer: null,
+    messages: [],
   };
 }
 
@@ -104,6 +106,7 @@ function snapshotIdentity(identity) {
   return {
     id: identity.id,
     x: identity.x,
+    messages: identity.messages,
   };
 }
 
@@ -213,6 +216,7 @@ function handleInit(client, message) {
     type: "hello",
     id: identity.id,
     x: identity.x,
+    messages: identity.messages,
     peers,
   });
 
@@ -248,13 +252,16 @@ function handleSay(client, message) {
 
   const text = sanitizeMessage(message.text);
   if (!text) return;
+  const at = Date.now();
+  client.identity.messages.push({ text, at });
+  client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
 
   broadcast(
     {
       type: "say",
       id: client.identity.id,
       text,
-      at: Date.now(),
+      at,
     },
     { exceptConnectionId: client.connectionId },
   );

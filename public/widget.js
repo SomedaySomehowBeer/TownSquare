@@ -13,6 +13,7 @@ if (!root) {
 
 const BUBBLE_TTL_MS = 6000;
 const BROWSER_ID_KEY = "townsquare-browser-id";
+const MAX_RECENT_MESSAGES = 5;
 const MOVEMENT_SPEED = 0.22;
 const SEND_INTERVAL_MS = 45;
 const MIN_X = 0.02;
@@ -103,7 +104,23 @@ function createAvatar({ isSelf }) {
   bubble.hidden = true;
   el.appendChild(bubble);
 
-  const avatar = { el, bubble };
+  const tray = document.createElement("section");
+  tray.className = "avatar__tray";
+  tray.setAttribute("aria-label", "Recent messages");
+  tray.hidden = true;
+
+  const trayList = document.createElement("div");
+  trayList.className = "avatar__tray-list";
+  tray.appendChild(trayList);
+  el.appendChild(tray);
+
+  const avatar = {
+    el,
+    bubble,
+    messages: [],
+    tray,
+    trayList,
+  };
 
   if (!isSelf) {
     return avatar;
@@ -180,6 +197,7 @@ function submitChat(input, composer) {
   if (!text || socket.readyState !== WebSocket.OPEN) return;
 
   socket.send(JSON.stringify({ type: "say", text }));
+  addMessage(self.avatar, { text, at: Date.now() });
   showBubble(self.avatar, text);
   input.value = "";
   composer.hidden = true;
@@ -189,6 +207,7 @@ function submitChat(input, composer) {
 
 function renderAvatar(avatar, x) {
   avatar.el.style.left = `${(x * 100).toFixed(2)}%`;
+  avatar.el.classList.toggle("avatar--edge-right", x > 0.78);
 }
 
 function setFacing(avatar, movingLeft) {
@@ -202,6 +221,37 @@ function showBubble(avatar, text) {
   avatar.bubbleTimer = setTimeout(() => {
     avatar.bubble.hidden = true;
   }, BUBBLE_TTL_MS);
+}
+
+function addMessage(avatar, message) {
+  avatar.messages.push({
+    text: message.text,
+    at: typeof message.at === "number" ? message.at : Date.now(),
+  });
+  avatar.messages = avatar.messages.slice(-MAX_RECENT_MESSAGES);
+  syncTray(avatar);
+}
+
+function syncTray(avatar) {
+  avatar.el.classList.toggle("avatar--has-history", avatar.messages.length > 0);
+  avatar.tray.hidden = avatar.messages.length === 0;
+  avatar.trayList.replaceChildren(...avatar.messages.map(renderTrayMessage));
+}
+
+function renderTrayMessage(message) {
+  const row = document.createElement("div");
+  row.className = "avatar__tray-message";
+
+  const text = document.createElement("p");
+  text.textContent = message.text;
+
+  const time = document.createElement("time");
+  const date = new Date(message.at);
+  time.dateTime = date.toISOString();
+  time.textContent = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  row.append(text, time);
+  return row;
 }
 
 function setWalking(avatar, walking) {
@@ -232,6 +282,9 @@ function addOrUpdatePeer(peer) {
   peers.set(peer.id, nextPeer);
   stage.appendChild(avatar.el);
   renderAvatar(avatar, nextPeer.x);
+  for (const recent of peer.messages || []) {
+    addMessage(avatar, recent);
+  }
   updateStatus();
   return nextPeer;
 }
@@ -254,6 +307,9 @@ function wireSocket(ws) {
 
     if (message.type === "hello") {
       self.id = message.id;
+      for (const recent of message.messages || []) {
+        addMessage(self.avatar, recent);
+      }
       for (const peer of message.peers) {
         addOrUpdatePeer(peer);
       }
@@ -301,12 +357,14 @@ function wireSocket(ws) {
 
     if (message.type === "say") {
       if (message.id === self.id) {
+        addMessage(self.avatar, { text: message.text, at: message.at });
         showBubble(self.avatar, message.text);
         return;
       }
 
       const peer = peers.get(message.id);
       if (!peer) return;
+      addMessage(peer.avatar, { text: message.text, at: message.at });
       showBubble(peer.avatar, message.text);
     }
   });
