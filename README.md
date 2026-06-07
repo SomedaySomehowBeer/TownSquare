@@ -74,6 +74,8 @@ HOST=0.0.0.0 PORT=8787 npm start
    - opening it in a different browser or separate browser profile shows a second visitor
    - arrow keys move your figure left/right
    - movement is reflected in the other window
+   - pausing by the bench for a moment settles the visitor into a seat
+   - the bench seat is reflected in the other window
    - chat messages appear above the figure and disappear after a few seconds
    - closing one window removes that visitor from the other window only when it was the last tab for that browser
 
@@ -107,10 +109,10 @@ Included now:
 - one default scene area
 - presence
 - walking
+- a first bench prop with simple sit interaction
 - chat
 
 Not included yet:
-- props/bench interaction
 - persistence
 - accounts
 - identity
@@ -130,7 +132,6 @@ A few deliberate choices in this first version:
 
 ## Next likely steps
 
-- add the first prop interaction (bench)
 - improve scene legibility and inhabited feeling
 - define the clean embed API/boundary
 - separate demo-app concerns from reusable widget concerns

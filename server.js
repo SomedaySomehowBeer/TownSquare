@@ -10,6 +10,7 @@ const { WebSocketServer } = require("ws");
  * - serve the demo page and widget assets from ./public
  * - keep a short-lived in-memory list of connected visitors
  * - treat multiple tabs from the same browser as one visitor identity
+ * - arbitrate the first bench prop so seat ownership stays consistent
  * - broadcast movement/chat/presence events over WebSocket
  *
  * Non-goals for this first slice:
@@ -27,6 +28,14 @@ const MAX_MESSAGE_LEN = 140;
 const MAX_RECENT_MESSAGES = 5;
 const MOVE_THROTTLE_MS = 40;
 const RECONNECT_GRACE_MS = 1500;
+
+const BENCH = {
+  id: "bench",
+  x: 0.2,
+  zoneRadius: 0.035,
+  pose: "sitting",
+  seats: [-0.01, 0.01],
+};
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -50,12 +59,14 @@ function createClient(connectionId, ws) {
   };
 }
 
-/** @returns {{id:number,browserId:string,x:number,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
     browserId,
     x,
+    pose: null,
+    propId: null,
     clients: new Set(),
     joined: false,
     leaveTimer: null,
@@ -106,6 +117,8 @@ function snapshotIdentity(identity) {
   return {
     id: identity.id,
     x: identity.x,
+    pose: identity.pose,
+    propId: identity.propId,
     messages: identity.messages,
   };
 }
@@ -133,6 +146,26 @@ function broadcast(message, options = {}) {
   }
 }
 
+function emitIdentityState(identity, options = {}) {
+  const { exceptConnectionId = null, includeConnectionId = null } = options;
+  const message = {
+    type: "move",
+    id: identity.id,
+    x: identity.x,
+    pose: identity.pose,
+    propId: identity.propId,
+  };
+
+  if (includeConnectionId !== null) {
+    const client = clients.get(includeConnectionId);
+    if (client?.joined) {
+      send(client.ws, message);
+    }
+  }
+
+  broadcast(message, { exceptConnectionId });
+}
+
 function getOrCreateIdentity(browserId, fallbackX) {
   const key = sanitizeBrowserId(browserId) || `connection-${nextConnectionKey++}`;
   const existing = identityByBrowser.get(key);
@@ -144,6 +177,37 @@ function getOrCreateIdentity(browserId, fallbackX) {
   identities.set(identity.id, identity);
   identityByBrowser.set(key, identity);
   return identity;
+}
+
+function clearPose(identity) {
+  identity.pose = null;
+  identity.propId = null;
+}
+
+function findAvailableBenchSeatX(requestedX, excludeIdentityId = null) {
+  const takenSeats = new Set();
+
+  for (const identity of identities.values()) {
+    if (!identity.joined || identity.propId !== BENCH.id) continue;
+    if (identity.id === excludeIdentityId) continue;
+
+    const seatIndex = BENCH.seats.findIndex((offset) => Math.abs(identity.x - (BENCH.x + offset)) < 0.005);
+    if (seatIndex !== -1) {
+      takenSeats.add(seatIndex);
+    }
+  }
+
+  const freeSeats = BENCH.seats
+    .map((offset, index) => ({ index, x: BENCH.x + offset }))
+    .filter((seat) => !takenSeats.has(seat.index));
+
+  if (freeSeats.length === 0) {
+    return null;
+  }
+
+  return freeSeats.reduce((best, seat) => (
+    Math.abs(seat.x - requestedX) < Math.abs(best.x - requestedX) ? seat : best
+  )).x;
 }
 
 const clients = new Map();
@@ -216,6 +280,8 @@ function handleInit(client, message) {
     type: "hello",
     id: identity.id,
     x: identity.x,
+    pose: identity.pose,
+    propId: identity.propId,
     messages: identity.messages,
     peers,
   });
@@ -240,11 +306,30 @@ function handleMove(client, message) {
   client.lastMoveAt = now;
   client.x = nextX;
   client.identity.x = nextX;
+  clearPose(client.identity);
 
-  broadcast(
-    { type: "move", id: client.identity.id, x: client.identity.x },
-    { exceptConnectionId: client.connectionId },
-  );
+  emitIdentityState(client.identity, { exceptConnectionId: client.connectionId });
+}
+
+function handleSettle(client, message) {
+  if (!client.identity) return;
+  if (message.propId !== BENCH.id) return;
+
+  const identity = client.identity;
+  if (Math.abs(identity.x - BENCH.x) > BENCH.zoneRadius) return;
+
+  const seatX = findAvailableBenchSeatX(identity.x, identity.id);
+  if (seatX === null) return;
+
+  identity.x = seatX;
+  identity.pose = BENCH.pose;
+  identity.propId = BENCH.id;
+  client.x = seatX;
+
+  emitIdentityState(identity, {
+    includeConnectionId: client.connectionId,
+    exceptConnectionId: client.connectionId,
+  });
 }
 
 function handleSay(client, message) {
@@ -286,6 +371,11 @@ function handleClientMessage(client, raw) {
 
   if (message.type === "move") {
     handleMove(client, message);
+    return;
+  }
+
+  if (message.type === "settle") {
+    handleSettle(client, message);
     return;
   }
 

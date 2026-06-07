@@ -13,11 +13,31 @@ if (!root) {
 
 const BUBBLE_TTL_MS = 6000;
 const BROWSER_ID_KEY = "townsquare-browser-id";
+const BENCH_SETTLE_MS = 700;
 const MAX_RECENT_MESSAGES = 5;
 const MOVEMENT_SPEED = 0.22;
 const SEND_INTERVAL_MS = 45;
 const MIN_X = 0.02;
 const MAX_X = 0.98;
+
+const BENCH = {
+  id: "bench",
+  x: 0.2,
+  zoneRadius: 0.035,
+  width: 52,
+  height: 18,
+  svg: `
+    <svg viewBox="0 0 50 18" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+      <line x1="8" y1="8" x2="6" y2="17"></line>
+      <line x1="42" y1="8" x2="44" y2="17"></line>
+      <line x1="3" y1="8" x2="47" y2="8"></line>
+      <line x1="6" y1="1" x2="6" y2="8"></line>
+      <line x1="44" y1="1" x2="44" y2="8"></line>
+      <line x1="6" y1="2" x2="44" y2="2"></line>
+      <line x1="6" y1="5" x2="44" y2="5"></line>
+    </svg>
+  `,
+};
 
 const socketUrl = `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/live`;
 const browserId = getBrowserId();
@@ -27,6 +47,8 @@ const app = renderShell();
 const stage = app.querySelector('[data-role="stage"]');
 const statusEl = app.querySelector('[data-role="status"]');
 
+renderBench(stage);
+
 const self = {
   id: null,
   x: 0.5,
@@ -34,11 +56,16 @@ const self = {
   movingRight: false,
   lastSentX: 0.5,
   lastSendAt: 0,
+  pose: null,
+  propId: null,
+  benchZoneEnteredAt: 0,
+  benchRequested: false,
   avatar: createAvatar({ isSelf: true }),
 };
 
 stage.appendChild(self.avatar.el);
 renderAvatar(self.avatar, self.x);
+updatePose(self.avatar, self.pose);
 updateStatus();
 
 const socket = new WebSocket(socketUrl);
@@ -52,7 +79,7 @@ function renderShell() {
   element.innerHTML = `
     <div class="townsquare__status">
       <span data-role="status">Connecting…</span>
-      <span>Use ← and → to walk. Presence and chat only in this first slice.</span>
+      <span>Use ← and → to walk. Pause by the bench to sit.</span>
     </div>
     <div class="townsquare__stage" data-role="stage">
       <div class="townsquare__ground"></div>
@@ -61,6 +88,16 @@ function renderShell() {
   `;
   root.appendChild(element);
   return element;
+}
+
+function renderBench(container) {
+  const bench = document.createElement("div");
+  bench.className = "prop prop--bench";
+  bench.style.left = `${(BENCH.x * 100).toFixed(2)}%`;
+  bench.style.width = `${BENCH.width}px`;
+  bench.style.height = `${BENCH.height}px`;
+  bench.innerHTML = BENCH.svg;
+  container.appendChild(bench);
 }
 
 function createAvatar({ isSelf }) {
@@ -258,6 +295,41 @@ function setWalking(avatar, walking) {
   avatar.el.classList.toggle("walking", walking);
 }
 
+function updatePose(avatar, pose) {
+  avatar.el.classList.toggle("avatar--sitting", pose === "sitting");
+  if (pose === "sitting") {
+    setWalking(avatar, false);
+  }
+}
+
+function applySelfState(state) {
+  const previousX = self.x;
+  self.x = state.x;
+  self.pose = state.pose || null;
+  self.propId = state.propId || null;
+  self.benchRequested = false;
+  self.benchZoneEnteredAt = 0;
+  renderAvatar(self.avatar, self.x);
+  if (self.x !== previousX) {
+    setFacing(self.avatar, self.x < previousX);
+  }
+  updatePose(self.avatar, self.pose);
+}
+
+function applyPeerState(peerState) {
+  const peer = addOrUpdatePeer(peerState);
+  const previousX = peer.x;
+  peer.x = peerState.x;
+  peer.pose = peerState.pose || null;
+  peer.propId = peerState.propId || null;
+  renderAvatar(peer.avatar, peer.x);
+  if (peer.x !== previousX) {
+    setFacing(peer.avatar, peer.x < previousX);
+  }
+  updatePose(peer.avatar, peer.pose);
+  return peer;
+}
+
 function updateStatus() {
   const count = peers.size + (self.id ? 1 : 0);
   statusEl.textContent = self.id
@@ -268,20 +340,21 @@ function updateStatus() {
 function addOrUpdatePeer(peer) {
   const existing = peers.get(peer.id);
   if (existing) {
-    const previousX = existing.x;
-    existing.x = peer.x;
-    renderAvatar(existing.avatar, existing.x);
-    if (existing.x !== previousX) {
-      setFacing(existing.avatar, existing.x < previousX);
-    }
     return existing;
   }
 
   const avatar = createAvatar({ isSelf: false });
-  const nextPeer = { id: peer.id, x: peer.x, avatar };
+  const nextPeer = {
+    id: peer.id,
+    x: peer.x,
+    pose: peer.pose || null,
+    propId: peer.propId || null,
+    avatar,
+  };
   peers.set(peer.id, nextPeer);
   stage.appendChild(avatar.el);
   renderAvatar(avatar, nextPeer.x);
+  updatePose(avatar, nextPeer.pose);
   for (const recent of peer.messages || []) {
     addMessage(avatar, recent);
   }
@@ -307,11 +380,13 @@ function wireSocket(ws) {
 
     if (message.type === "hello") {
       self.id = message.id;
+      applySelfState(message);
       for (const recent of message.messages || []) {
         addMessage(self.avatar, recent);
       }
       for (const peer of message.peers) {
         addOrUpdatePeer(peer);
+        applyPeerState(peer);
       }
       updateStatus();
       return;
@@ -319,6 +394,7 @@ function wireSocket(ws) {
 
     if (message.type === "join") {
       addOrUpdatePeer(message.peer);
+      applyPeerState(message.peer);
       return;
     }
 
@@ -329,29 +405,22 @@ function wireSocket(ws) {
 
     if (message.type === "move") {
       if (message.id === self.id) {
-        const previousX = self.x;
-        self.x = message.x;
-        renderAvatar(self.avatar, self.x);
-        if (self.x !== previousX) {
-          setFacing(self.avatar, self.x < previousX);
+        const wasSitting = self.pose === "sitting";
+        applySelfState(message);
+        if (!self.pose && !wasSitting) {
+          setWalking(self.avatar, true);
+          clearTimeout(self.walkTimer);
+          self.walkTimer = setTimeout(() => setWalking(self.avatar, false), 120);
         }
-        setWalking(self.avatar, true);
-        clearTimeout(self.walkTimer);
-        self.walkTimer = setTimeout(() => setWalking(self.avatar, false), 120);
         return;
       }
 
-      const peer = peers.get(message.id);
-      if (!peer) return;
-      const previousX = peer.x;
-      peer.x = message.x;
-      renderAvatar(peer.avatar, peer.x);
-      if (peer.x !== previousX) {
-        setFacing(peer.avatar, peer.x < previousX);
+      const peer = applyPeerState(message);
+      if (!peer.pose) {
+        setWalking(peer.avatar, true);
+        clearTimeout(peer.walkTimer);
+        peer.walkTimer = setTimeout(() => setWalking(peer.avatar, false), 120);
       }
-      setWalking(peer.avatar, true);
-      clearTimeout(peer.walkTimer);
-      peer.walkTimer = setTimeout(() => setWalking(peer.avatar, false), 120);
       return;
     }
 
@@ -391,6 +460,33 @@ function clampSelfX(x) {
   return Math.max(MIN_X, Math.min(MAX_X, x));
 }
 
+function resetBenchSettle() {
+  self.benchZoneEnteredAt = 0;
+  self.benchRequested = false;
+}
+
+function maybeRequestBenchSettle(now) {
+  if (self.pose === "sitting") return;
+  if (socket.readyState !== WebSocket.OPEN) return;
+
+  const isNearBench = Math.abs(self.x - BENCH.x) < BENCH.zoneRadius;
+  if (!isNearBench) {
+    resetBenchSettle();
+    return;
+  }
+
+  if (!self.benchZoneEnteredAt) {
+    self.benchZoneEnteredAt = now;
+  }
+
+  if (self.benchRequested || now - self.benchZoneEnteredAt < BENCH_SETTLE_MS) {
+    return;
+  }
+
+  self.benchRequested = true;
+  socket.send(JSON.stringify({ type: "settle", propId: BENCH.id }));
+}
+
 let lastFrameAt = performance.now();
 function tick(now) {
   const dt = Math.min(0.05, (now - lastFrameAt) / 1000);
@@ -398,6 +494,10 @@ function tick(now) {
 
   const direction = Number(self.movingRight) - Number(self.movingLeft);
   if (direction !== 0) {
+    resetBenchSettle();
+    self.pose = null;
+    self.propId = null;
+    updatePose(self.avatar, self.pose);
     self.x = clampSelfX(self.x + direction * MOVEMENT_SPEED * dt);
     renderAvatar(self.avatar, self.x);
     setFacing(self.avatar, direction < 0);
@@ -405,6 +505,7 @@ function tick(now) {
     maybeSendMove();
   } else {
     setWalking(self.avatar, false);
+    maybeRequestBenchSettle(now);
   }
 
   requestAnimationFrame(tick);

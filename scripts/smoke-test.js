@@ -33,6 +33,15 @@ function assert(condition, message) {
   }
 }
 
+function findLast(messages, predicate) {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    if (predicate(messages[index])) {
+      return messages[index];
+    }
+  }
+  return null;
+}
+
 async function main() {
   const first = await connect({ x: 0.25, browserId: "browser-a" });
   const secondSameBrowser = await connect({ x: 0.75, browserId: "browser-a" });
@@ -59,6 +68,26 @@ async function main() {
   assert(first.seen.some((message) => message.type === "say" && message.id === first.id), "same-browser chat did not propagate to sibling tab");
   assert(third.seen.some((message) => message.type === "move" && message.id === first.id), "different browser did not observe shared visitor movement");
   assert(third.seen.some((message) => message.type === "say" && message.id === first.id), "different browser did not observe shared visitor chat");
+
+  secondSameBrowser.ws.send(JSON.stringify({ type: "move", x: 0.2 }));
+  await delay(100);
+  secondSameBrowser.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
+  await delay(100);
+
+  const firstBenchState = findLast(first.seen, (message) => message.type === "move" && message.id === first.id && message.pose === "sitting");
+  const thirdBenchState = findLast(third.seen, (message) => message.type === "move" && message.id === first.id && message.pose === "sitting");
+
+  assert(firstBenchState, "same-browser bench settle did not propagate to sibling tab");
+  assert(thirdBenchState, "bench settle did not propagate to other visitors");
+
+  third.ws.send(JSON.stringify({ type: "move", x: 0.2 }));
+  await delay(100);
+  third.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
+  await delay(100);
+
+  const thirdSeatState = findLast(first.seen, (message) => message.type === "move" && message.id === third.id && message.pose === "sitting");
+  assert(thirdSeatState, "second visitor did not settle onto the bench");
+  assert(Math.abs(thirdSeatState.x - firstBenchState.x) > 0.005, "bench seat allocation reused an occupied seat");
 
   secondSameBrowser.ws.close();
   await delay(100);

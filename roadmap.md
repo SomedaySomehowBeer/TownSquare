@@ -6,6 +6,8 @@ This is directional, not a detailed implementation plan.
 
 ## Done
 
+- [x] A first bench prop with a simple sit interaction
+
 ## Now
 
 - [ ] A default TownSquare experience that already feels alive without customization

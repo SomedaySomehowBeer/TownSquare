@@ -108,6 +108,30 @@ body {
   background: var(--line);
 }
 
+.prop {
+  position: absolute;
+  bottom: 9px;
+  transform: translateX(-50%);
+  color: color-mix(in oklab, var(--text) 58%, var(--muted) 42%);
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.prop svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.prop svg * {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
 .townsquare__hint {
   padding: 10px 4px 0;
   color: var(--muted);
@@ -151,6 +175,7 @@ body {
 .avatar--self { color: var(--accent); }
 .avatar--peer { color: color-mix(in oklab, var(--text) 78%, var(--muted) 22%); }
 .avatar.walking { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
+.avatar--sitting { bottom: 0; }
 
 .avatar svg g.figure-core,
 .avatar svg g.joint {
@@ -269,6 +294,29 @@ body {
   68% { transform: rotate(-28deg); }
   85% { transform: rotate(-24deg); }
 }
+
+.avatar--sitting svg g.figure-core,
+.avatar--sitting svg g.arm-l,
+.avatar--sitting svg g.arm-r,
+.avatar--sitting svg g.elbow-l,
+.avatar--sitting svg g.elbow-r,
+.avatar--sitting svg g.leg-l,
+.avatar--sitting svg g.leg-r,
+.avatar--sitting svg g.knee-l,
+.avatar--sitting svg g.knee-r {
+  animation: none !important;
+  transition: transform 220ms ease;
+}
+
+.avatar--sitting svg g.figure-core { transform: translateY(0) rotate(0); }
+.avatar--sitting svg g.leg-l { transform: rotate(74deg); }
+.avatar--sitting svg g.leg-r { transform: rotate(70deg); }
+.avatar--sitting svg g.knee-l { transform: rotate(-84deg); }
+.avatar--sitting svg g.knee-r { transform: rotate(-80deg); }
+.avatar--sitting svg g.arm-l,
+.avatar--sitting svg g.arm-r { transform: rotate(16deg); }
+.avatar--sitting svg g.elbow-l { transform: rotate(24deg); }
+.avatar--sitting svg g.elbow-r { transform: rotate(-24deg); }
 
 .avatar__bubble {
   position: absolute;
