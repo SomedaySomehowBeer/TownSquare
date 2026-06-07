@@ -63,11 +63,26 @@ async function main() {
   await delay(100);
   secondSameBrowser.ws.send(JSON.stringify({ type: "say", text: "hello from shared browser" }));
   await delay(100);
+  secondSameBrowser.ws.send(JSON.stringify({ type: "say", text: "this should be rate-limited away" }));
+  await delay(100);
 
   assert(first.seen.some((message) => message.type === "move" && message.id === first.id), "same-browser move did not propagate to sibling tab");
   assert(first.seen.some((message) => message.type === "say" && message.id === first.id), "same-browser chat did not propagate to sibling tab");
   assert(third.seen.some((message) => message.type === "move" && message.id === first.id), "different browser did not observe shared visitor movement");
   assert(third.seen.some((message) => message.type === "say" && message.id === first.id), "different browser did not observe shared visitor chat");
+  assert(
+    !third.seen.some((message) => message.type === "say" && message.id === first.id && message.text === "this should be rate-limited away"),
+    "chat rate limit did not suppress a rapid second message",
+  );
+
+  await delay(1600);
+  const longText = "x".repeat(200);
+  secondSameBrowser.ws.send(JSON.stringify({ type: "say", text: longText }));
+  await delay(100);
+
+  const truncatedChat = findLast(third.seen, (message) => message.type === "say" && message.id === first.id);
+  assert(truncatedChat, "expected to observe the post-rate-limit chat message");
+  assert(truncatedChat.text.length === 140, "chat text was not capped to 140 characters");
 
   secondSameBrowser.ws.send(JSON.stringify({ type: "move", x: 0.2 }));
   await delay(100);

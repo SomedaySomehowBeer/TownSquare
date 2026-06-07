@@ -96,16 +96,32 @@ export function mountTownSquare(root, options = {}) {
   function renderShell(container, mountOptions) {
     const element = document.createElement("section");
     element.className = "townsquare";
-    element.innerHTML = `
-      <div class="townsquare__status">
-        <span data-role="status">Connecting…</span>
-        <span>${mountOptions.instructions || "Use ← and → to walk. Pause by the bench to sit."}</span>
-      </div>
-      <div class="townsquare__stage" data-role="stage">
-        <div class="townsquare__ground"></div>
-      </div>
-      <div class="townsquare__hint">${mountOptions.hint || "Embedded into a normal page instead of running as a disconnected mockup."}</div>
-    `;
+
+    const statusRow = document.createElement("div");
+    statusRow.className = "townsquare__status";
+
+    const status = document.createElement("span");
+    status.dataset.role = "status";
+    status.textContent = "Connecting…";
+
+    const instructions = document.createElement("span");
+    instructions.textContent = mountOptions.instructions || "Use ← and → to walk. Pause by the bench to sit.";
+
+    statusRow.append(status, instructions);
+
+    const stageEl = document.createElement("div");
+    stageEl.className = "townsquare__stage";
+    stageEl.dataset.role = "stage";
+
+    const ground = document.createElement("div");
+    ground.className = "townsquare__ground";
+    stageEl.appendChild(ground);
+
+    const hint = document.createElement("div");
+    hint.className = "townsquare__hint";
+    hint.textContent = mountOptions.hint || "Embedded into a normal page instead of running as a disconnected mockup.";
+
+    element.append(statusRow, stageEl, hint);
     container.appendChild(element);
     return element;
   }
@@ -380,7 +396,16 @@ export function mountTownSquare(root, options = {}) {
     });
 
     ws.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data);
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (!message || typeof message !== "object") {
+        return;
+      }
 
       if (message.type === "hello") {
         self.id = message.id;
@@ -442,8 +467,10 @@ export function mountTownSquare(root, options = {}) {
       }
     });
 
-    ws.addEventListener("close", () => {
-      statusEl.textContent = "Disconnected. Refresh to rejoin the square.";
+    ws.addEventListener("close", (event) => {
+      statusEl.textContent = event.code === 1006 || event.reason === "full"
+        ? "Square is full right now. Try again later."
+        : "Disconnected. Refresh to rejoin the square.";
     });
   }
 

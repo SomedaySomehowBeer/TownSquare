@@ -23,11 +23,24 @@ const { WebSocketServer } = require("ws");
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8787);
 const PUBLIC_DIR = path.join(__dirname, "public");
+const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS || "");
+const DEFAULT_DEV_ORIGINS = new Set([
+  `http://${HOST}:${PORT}`,
+  `http://127.0.0.1:${PORT}`,
+  `http://localhost:${PORT}`,
+  `https://${HOST}:${PORT}`,
+  `https://127.0.0.1:${PORT}`,
+  `https://localhost:${PORT}`,
+]);
+const MAX_CONNECTIONS = Number(process.env.MAX_CONNECTIONS || 100);
 const MAX_BROWSER_ID_LEN = 80;
+const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
 const MAX_MESSAGE_LEN = 140;
 const MAX_RECENT_MESSAGES = 5;
 const MOVE_THROTTLE_MS = 40;
+const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
+const HEARTBEAT_INTERVAL_MS = 30000;
 
 const BENCH = {
   id: "bench",
@@ -47,7 +60,63 @@ const MIME_TYPES = {
   ".svg": "image/svg+xml",
 };
 
-/** @returns {{connectionId:number,ws:any,browserId:string,identity:any,x:number,joined:boolean,lastMoveAt:number}} */
+function parseAllowedOrigins(value) {
+  return new Set(
+    String(value)
+      .split(",")
+      .map((origin) => origin.trim())
+      .filter(Boolean)
+      .map((origin) => normalizeOrigin(origin))
+      .filter(Boolean),
+  );
+}
+
+function normalizeOrigin(origin) {
+  if (typeof origin !== "string" || !origin.trim()) return null;
+
+  try {
+    const url = new URL(origin);
+    url.hash = "";
+    url.search = "";
+    url.pathname = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedOrigin(origin, hostHeader) {
+  if (!origin) {
+    return true;
+  }
+
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+  if (DEFAULT_DEV_ORIGINS.has(normalized)) return true;
+
+  try {
+    const originUrl = new URL(normalized);
+    const requestHost = String(hostHeader || "").trim().toLowerCase();
+    if (requestHost && originUrl.host.toLowerCase() === requestHost) {
+      return true;
+    }
+  } catch {
+    return false;
+  }
+
+  if (ALLOWED_ORIGINS.size === 0) return false;
+  return ALLOWED_ORIGINS.has(normalized);
+}
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function isKnownMessageType(type) {
+  return type === "init" || type === "move" || type === "settle" || type === "say";
+}
+
+/** @returns {{connectionId:number,ws:any,browserId:string,identity:any,x:number,joined:boolean,lastMoveAt:number,lastChatAt:number}} */
 function createClient(connectionId, ws) {
   return {
     connectionId,
@@ -57,6 +126,7 @@ function createClient(connectionId, ws) {
     x: 0.5,
     joined: false,
     lastMoveAt: 0,
+    lastChatAt: 0,
   };
 }
 
@@ -260,7 +330,24 @@ const server = http.createServer((req, res) => {
   });
 });
 
-const wss = new WebSocketServer({ server, path: "/live" });
+const wss = new WebSocketServer({
+  server,
+  path: "/live",
+  maxPayload: MAX_WS_PAYLOAD_BYTES,
+  verifyClient(info, done) {
+    if (clients.size >= MAX_CONNECTIONS) {
+      done(false, 503, "full");
+      return;
+    }
+
+    if (!isAllowedOrigin(info.origin, info.req.headers.host)) {
+      done(false, 403, "origin not allowed");
+      return;
+    }
+
+    done(true);
+  },
+});
 
 function handleInit(client, message) {
   if (client.joined) return;
@@ -342,10 +429,14 @@ function handleSettle(client, message) {
 function handleSay(client, message) {
   if (!client.identity) return;
 
+  const now = Date.now();
+  if (now - client.lastChatAt < CHAT_THROTTLE_MS) return;
+
   const text = sanitizeMessage(message.text);
   if (!text) return;
-  const at = Date.now();
-  client.identity.messages.push({ text, at });
+
+  client.lastChatAt = now;
+  client.identity.messages.push({ text, at: now });
   client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
 
   broadcast(
@@ -353,7 +444,7 @@ function handleSay(client, message) {
       type: "say",
       id: client.identity.id,
       text,
-      at,
+      at: now,
     },
     { exceptConnectionId: client.connectionId },
   );
@@ -367,7 +458,8 @@ function handleClientMessage(client, raw) {
     return;
   }
 
-  if (!message || typeof message !== "object") return;
+  if (!isPlainObject(message)) return;
+  if (typeof message.type !== "string" || !isKnownMessageType(message.type)) return;
 
   if (message.type === "init") {
     handleInit(client, message);
@@ -409,11 +501,31 @@ function handleClientClose(client) {
   }, RECONNECT_GRACE_MS);
 }
 
+const heartbeatTimer = setInterval(() => {
+  for (const client of clients.values()) {
+    if (client.ws.readyState !== client.ws.OPEN) continue;
+
+    if (!client.ws.isAlive) {
+      client.ws.terminate();
+      continue;
+    }
+
+    client.ws.isAlive = false;
+    client.ws.ping();
+  }
+}, HEARTBEAT_INTERVAL_MS);
+
+heartbeatTimer.unref?.();
+
 wss.on("connection", (ws) => {
   const client = createClient(nextConnectionId++, ws);
   clients.set(client.connectionId, client);
+  ws.isAlive = true;
 
   ws.on("message", (raw) => handleClientMessage(client, raw));
+  ws.on("pong", () => {
+    ws.isAlive = true;
+  });
   ws.on("close", () => {
     clients.delete(client.connectionId);
     handleClientClose(client);
@@ -421,6 +533,10 @@ wss.on("connection", (ws) => {
   ws.on("error", () => {
     // close handler owns cleanup
   });
+});
+
+wss.on("close", () => {
+  clearInterval(heartbeatTimer);
 });
 
 server.listen(PORT, HOST, () => {
