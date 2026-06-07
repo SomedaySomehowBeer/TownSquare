@@ -115,6 +115,7 @@ body {
 }
 
 .avatar {
+  --walk-cycle: 1.2s;
   position: absolute;
   bottom: 9px;
   width: 18px;
@@ -123,31 +124,150 @@ body {
   transition: left 80ms linear;
 }
 
+.avatar.flip svg {
+  transform: scaleX(-1);
+  transform-origin: 50% 50%;
+}
+
 .avatar svg {
   width: 100%;
   height: 100%;
+  display: block;
   overflow: visible;
 }
 
-.avatar line,
-.avatar circle {
+.avatar svg * {
   fill: none;
   stroke: currentColor;
-  stroke-width: 2.2;
+  stroke-width: 1.8;
   stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.avatar svg circle.head {
+  fill: currentColor;
 }
 
 .avatar--self { color: var(--accent); }
 .avatar--peer { color: color-mix(in oklab, var(--text) 78%, var(--muted) 22%); }
 .avatar.walking { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
-.avatar.walking .leg-left,
-.avatar.walking .arm-right { animation: swing 420ms linear infinite alternate; transform-origin: 10px 26px; }
-.avatar.walking .leg-right,
-.avatar.walking .arm-left { animation: swing 420ms linear infinite alternate-reverse; transform-origin: 10px 26px; }
 
-@keyframes swing {
-  from { transform: rotate(-13deg); }
-  to { transform: rotate(13deg); }
+.avatar svg g.figure-core,
+.avatar svg g.joint {
+  transform-box: view-box;
+}
+
+.avatar svg g.figure-core { transform-origin: 10px 24px; }
+.avatar svg g.arm-l { transform-origin: 9.4px 14px; }
+.avatar svg g.arm-r { transform-origin: 10.6px 14px; }
+.avatar svg g.elbow-l { transform-origin: 6.1px 20px; }
+.avatar svg g.elbow-r { transform-origin: 13.9px 20px; }
+.avatar svg g.leg-l { transform-origin: 9.2px 26px; }
+.avatar svg g.leg-r { transform-origin: 10.8px 26px; }
+.avatar svg g.knee-l { transform-origin: 7.1px 34px; }
+.avatar svg g.knee-r { transform-origin: 12.9px 34px; }
+
+.avatar.walking svg g.figure-core,
+.avatar.walking svg g.leg-l,
+.avatar.walking svg g.leg-r,
+.avatar.walking svg g.knee-l,
+.avatar.walking svg g.knee-r,
+.avatar.walking svg g.arm-l,
+.avatar.walking svg g.arm-r,
+.avatar.walking svg g.elbow-l,
+.avatar.walking svg g.elbow-r {
+  animation-duration: var(--walk-cycle);
+  animation-timing-function: cubic-bezier(0.42, 0, 0.3, 1);
+  animation-iteration-count: infinite;
+}
+
+.avatar.walking svg g.figure-core { animation-name: presence-body-bob; }
+.avatar.walking svg g.leg-l { animation-name: presence-leg-a; }
+.avatar.walking svg g.leg-r { animation-name: presence-leg-b; }
+.avatar.walking svg g.knee-l { animation-name: presence-knee-a; }
+.avatar.walking svg g.knee-r { animation-name: presence-knee-b; }
+.avatar.walking svg g.arm-l { animation-name: presence-arm-a; }
+.avatar.walking svg g.arm-r { animation-name: presence-arm-b; }
+.avatar.walking svg g.elbow-l { animation-name: presence-forearm-a; }
+.avatar.walking svg g.elbow-r { animation-name: presence-forearm-b; }
+
+@keyframes presence-body-bob {
+  0%, 100% { transform: translateY(0.6px) rotate(-0.8deg); }
+  25% { transform: translateY(-0.8px) rotate(0.6deg); }
+  50% { transform: translateY(0.4px) rotate(0.9deg); }
+  75% { transform: translateY(-1px) rotate(-0.4deg); }
+}
+
+@keyframes presence-leg-a {
+  0%, 100% { transform: rotate(18deg); }
+  18% { transform: rotate(10deg); }
+  35% { transform: rotate(-6deg); }
+  50% { transform: rotate(-18deg); }
+  68% { transform: rotate(-10deg); }
+  85% { transform: rotate(8deg); }
+}
+
+@keyframes presence-leg-b {
+  0%, 100% { transform: rotate(-18deg); }
+  18% { transform: rotate(-10deg); }
+  35% { transform: rotate(6deg); }
+  50% { transform: rotate(18deg); }
+  68% { transform: rotate(10deg); }
+  85% { transform: rotate(-8deg); }
+}
+
+@keyframes presence-knee-a {
+  0%, 100% { transform: rotate(24deg); }
+  18% { transform: rotate(14deg); }
+  35% { transform: rotate(2deg); }
+  50% { transform: rotate(0deg); }
+  68% { transform: rotate(8deg); }
+  85% { transform: rotate(20deg); }
+}
+
+@keyframes presence-knee-b {
+  0%, 100% { transform: rotate(0deg); }
+  18% { transform: rotate(-8deg); }
+  35% { transform: rotate(-20deg); }
+  50% { transform: rotate(-24deg); }
+  68% { transform: rotate(-14deg); }
+  85% { transform: rotate(-2deg); }
+}
+
+@keyframes presence-arm-a {
+  0%, 100% { transform: rotate(-18deg); }
+  18% { transform: rotate(-9deg); }
+  35% { transform: rotate(4deg); }
+  50% { transform: rotate(16deg); }
+  68% { transform: rotate(10deg); }
+  85% { transform: rotate(-6deg); }
+}
+
+@keyframes presence-arm-b {
+  0%, 100% { transform: rotate(16deg); }
+  18% { transform: rotate(9deg); }
+  35% { transform: rotate(-4deg); }
+  50% { transform: rotate(-18deg); }
+  68% { transform: rotate(-10deg); }
+  85% { transform: rotate(6deg); }
+}
+
+@keyframes presence-forearm-a {
+  0%, 100% { transform: rotate(18deg); }
+  18% { transform: rotate(28deg); }
+  35% { transform: rotate(24deg); }
+  50% { transform: rotate(10deg); }
+  68% { transform: rotate(8deg); }
+  85% { transform: rotate(14deg); }
+}
+
+@keyframes presence-forearm-b {
+  0%, 100% { transform: rotate(-10deg); }
+  18% { transform: rotate(-8deg); }
+  35% { transform: rotate(-14deg); }
+  50% { transform: rotate(-18deg); }
+  68% { transform: rotate(-28deg); }
+  85% { transform: rotate(-24deg); }
 }
 
 .avatar__bubble {

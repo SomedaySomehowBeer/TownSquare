@@ -64,13 +64,35 @@ function createAvatar({ isSelf }) {
   const el = document.createElement("div");
   el.className = `avatar ${isSelf ? "avatar--self" : "avatar--peer"}`;
   el.innerHTML = `
-    <svg viewBox="0 0 20 46" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
-      <circle cx="10" cy="6" r="4"></circle>
-      <line x1="10" y1="10" x2="10" y2="26"></line>
-      <line class="arm-left" x1="10" y1="14" x2="4" y2="20"></line>
-      <line class="arm-right" x1="10" y1="14" x2="16" y2="20"></line>
-      <line class="leg-left" x1="10" y1="26" x2="6" y2="42"></line>
-      <line class="leg-right" x1="10" y1="26" x2="14" y2="42"></line>
+    <svg viewBox="0 0 20 44" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+      <g class="figure-core">
+        <circle class="head" cx="10" cy="6.2" r="3.4"></circle>
+        <line x1="10" y1="10" x2="10" y2="26"></line>
+        <g class="joint arm-l">
+          <line x1="9.4" y1="14" x2="6.1" y2="20"></line>
+          <g class="joint elbow-l">
+            <line x1="6.1" y1="20" x2="4.7" y2="26"></line>
+          </g>
+        </g>
+        <g class="joint arm-r">
+          <line x1="10.6" y1="14" x2="13.9" y2="20"></line>
+          <g class="joint elbow-r">
+            <line x1="13.9" y1="20" x2="15.3" y2="26"></line>
+          </g>
+        </g>
+        <g class="joint leg-l">
+          <line x1="9.2" y1="26" x2="7.1" y2="34"></line>
+          <g class="joint knee-l">
+            <line x1="7.1" y1="34" x2="5.4" y2="42"></line>
+          </g>
+        </g>
+        <g class="joint leg-r">
+          <line x1="10.8" y1="26" x2="12.9" y2="34"></line>
+          <g class="joint knee-r">
+            <line x1="12.9" y1="34" x2="14.6" y2="42"></line>
+          </g>
+        </g>
+      </g>
     </svg>
   `;
 
@@ -145,6 +167,10 @@ function renderAvatar(avatar, x) {
   avatar.el.style.left = `${(x * 100).toFixed(2)}%`;
 }
 
+function setFacing(avatar, movingLeft) {
+  avatar.el.classList.toggle("flip", !movingLeft);
+}
+
 function showBubble(avatar, text) {
   avatar.bubble.textContent = text;
   avatar.bubble.hidden = false;
@@ -168,8 +194,12 @@ function updateStatus() {
 function addOrUpdatePeer(peer) {
   const existing = peers.get(peer.id);
   if (existing) {
+    const previousX = existing.x;
     existing.x = peer.x;
     renderAvatar(existing.avatar, existing.x);
+    if (existing.x !== previousX) {
+      setFacing(existing.avatar, existing.x < previousX);
+    }
     return existing;
   }
 
@@ -220,8 +250,12 @@ function wireSocket(ws) {
     if (message.type === "move") {
       const peer = peers.get(message.id);
       if (!peer) return;
+      const previousX = peer.x;
       peer.x = message.x;
       renderAvatar(peer.avatar, peer.x);
+      if (peer.x !== previousX) {
+        setFacing(peer.avatar, peer.x < previousX);
+      }
       setWalking(peer.avatar, true);
       clearTimeout(peer.walkTimer);
       peer.walkTimer = setTimeout(() => setWalking(peer.avatar, false), 120);
@@ -267,6 +301,7 @@ function tick(now) {
   if (direction !== 0) {
     self.x = clampSelfX(self.x + direction * MOVEMENT_SPEED * dt);
     renderAvatar(self.avatar, self.x);
+    setFacing(self.avatar, direction < 0);
     setWalking(self.avatar, true);
     maybeSendMove();
   } else {
