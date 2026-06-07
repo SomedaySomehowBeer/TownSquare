@@ -30,3 +30,8 @@ This is directional, not a detailed implementation plan.
 - [ ] A first credible form of movement between places
 - [ ] A basic map or world view
 - [ ] Connected places that feel coherent enough to read as a wider world
+
+## Ideas bucket
+
+- [ ] Optional notifications for new messages, with a simple enable/disable control similar in spirit to quiet mode
+- [ ] Notification defaults and interaction states that stay lightweight and reveal complexity only on demand

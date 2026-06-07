@@ -1,0 +1,8 @@
+# Ignore local install artifacts
+node_modules/
+
+# Logs
+npm-debug.log*
+
+# OS/editor noise
+.DS_Store

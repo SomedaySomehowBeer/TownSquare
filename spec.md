@@ -69,6 +69,37 @@ Version 1 should provide:
 - self-hosted backend
 - ephemeral interaction by default
 
+## First playable slice
+
+Before going deeper into the full MVP, the first working slice should prove the core feeling on a real site.
+
+It should be:
+- a real embedded widget on one page of a real site
+- playable and testable in-place rather than as a disconnected mockup
+- focused on presence, walking, and chat before richer scene interactions
+
+The first slice should include:
+- real-time shared presence
+- simple left/right movement and idle state
+- lightweight real-time chat
+- one fixed default scene
+
+It should not yet depend on:
+- accounts
+- persistence
+- customization
+- multiple scenes
+- cross-site travel
+- complex moderation systems
+- environmental props beyond what is needed to make the scene readable
+
+The purpose of this slice is to answer a small number of concrete questions:
+- does the widget feel natural when embedded in a real page?
+- does the space feel alive with presence, movement, and chat alone?
+- is the interaction legible without explanation?
+
+If that works, the next step can add one simple prop interaction, likely a bench, without changing the basic shape of the product.
+
 ## Scene and interaction language
 
 The shared space should feel a bit like a tiny sidewalk, park strip, or town-edge scene rather than an abstract chat box.
