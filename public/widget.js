@@ -119,6 +119,7 @@ function createAvatar({ isSelf }) {
   const composer = document.createElement("form");
   composer.className = "avatar__composer";
   composer.hidden = true;
+  toggle.setAttribute("aria-expanded", "false");
 
   const input = document.createElement("input");
   input.className = "avatar__input";
@@ -138,6 +139,7 @@ function createAvatar({ isSelf }) {
 
   toggle.addEventListener("click", () => {
     composer.hidden = !composer.hidden;
+    toggle.setAttribute("aria-expanded", String(!composer.hidden));
     if (!composer.hidden) input.focus();
   });
 
@@ -161,6 +163,8 @@ function submitChat(input, composer) {
   showBubble(self.avatar, text);
   input.value = "";
   composer.hidden = true;
+  const toggle = composer.parentElement?.querySelector(".avatar__chat-toggle");
+  toggle?.setAttribute("aria-expanded", "false");
 }
 
 function renderAvatar(avatar, x) {
