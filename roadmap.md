@@ -39,8 +39,6 @@ Focus: **scene legibility** and **credible self-host on a real site**.
 
 ## Next
 
-Finish v1 without reading source.
-
 ### Visitors
 
 - [ ] **Optional display name**: short ephemeral name on own character; no accounts
@@ -52,6 +50,8 @@ Finish v1 without reading source.
 - [ ] **Operator checklist**: install, health check, embed, two-browser test, common failures
 - [ ] **Stable widget + protocol**: public contract; hosted layer can sit on top later
 - [ ] **Basic Moderation**: allow admins to kick/block people
+- [ ] **Customizable appearance**: site owner can set background color, border, accent collor and basic widget styling
+
 
 ### Boundary (concept)
 

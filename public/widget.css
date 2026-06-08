@@ -78,7 +78,7 @@ body {
 
 .townsquare {
   position: relative;
-  min-height: 176px;
+  min-height: 224px;
   border-top: 1px solid var(--line);
   overflow: hidden;
 }
@@ -94,7 +94,7 @@ body {
 
 .townsquare__stage {
   position: relative;
-  height: 132px;
+  height: 180px;
   border-radius: 20px 20px 0 0;
   background:
     linear-gradient(180deg, transparent 0%, color-mix(in oklab, var(--bg) 65%, transparent) 100%),
@@ -103,14 +103,14 @@ body {
 
 .townsquare__ground {
   position: absolute;
-  inset: auto 0 8px;
+  inset: auto 0 52px;
   height: 1px;
   background: var(--line);
 }
 
 .prop {
   position: absolute;
-  bottom: 9px;
+  bottom: 53px;
   transform: translateX(-50%);
   color: color-mix(in oklab, var(--text) 58%, var(--muted) 42%);
   opacity: 0.5;
@@ -141,7 +141,7 @@ body {
 .avatar {
   --walk-cycle: 1.2s;
   position: absolute;
-  bottom: 9px;
+  bottom: 53px;
   width: 18px;
   height: 46px;
   transform: translateX(-50%);
@@ -175,7 +175,7 @@ body {
 .avatar--self { color: var(--accent); }
 .avatar--peer { color: color-mix(in oklab, var(--text) 78%, var(--muted) 22%); }
 .avatar.walking { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
-.avatar--sitting { bottom: 0; }
+.avatar--sitting { bottom: 44px; }
 
 .avatar svg g.figure-core,
 .avatar svg g.joint {
@@ -350,7 +350,7 @@ body {
 
 .avatar__tray {
   position: absolute;
-  left: calc(100% + 10px);
+  left: 50%;
   bottom: calc(100% + 8px);
   width: min(190px, 58vw);
   max-height: 140px;
@@ -362,22 +362,17 @@ body {
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.08);
   opacity: 0;
   pointer-events: none;
-  transform: translateY(4px);
+  transform: translate(-50%, 4px);
   transition: opacity 120ms ease, transform 120ms ease;
   overflow: auto;
   z-index: 2;
-}
-
-.avatar--edge-right .avatar__tray {
-  left: auto;
-  right: calc(100% + 10px);
 }
 
 .avatar--has-history:hover .avatar__tray,
 .avatar--has-history:focus-within .avatar__tray {
   opacity: 1;
   pointer-events: auto;
-  transform: translateY(0);
+  transform: translate(-50%, 0);
 }
 
 .avatar__tray-list {
@@ -416,20 +411,21 @@ body {
 
 .avatar__controls {
   position: absolute;
-  left: 100%;
-  bottom: 7px;
+  left: 50%;
+  top: calc(100% + 8px);
+  bottom: auto;
   display: flex;
   align-items: center;
   gap: 8px;
-  padding-left: 8px;
+  padding: 0;
+  transform: translateX(-50%);
 }
 
 .avatar--edge-right .avatar__controls {
-  right: 100%;
+  right: 50%;
   left: auto;
   flex-direction: row-reverse;
-  padding-right: 8px;
-  padding-left: 0;
+  transform: none;
 }
 
 .avatar__chat-toggle,

@@ -6,5 +6,5 @@ if (!root) {
 }
 
 mountTownSquare(root, {
-  socketPath: "/townsquare/live",
+  socketPath: "/live",
 });
