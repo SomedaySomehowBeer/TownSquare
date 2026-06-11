@@ -141,11 +141,12 @@ https://your-townsquare-host/register.html
 The flow is intentionally accountless:
 - enter a website URL
 - receive an embed snippet with a public site key
-- receive a private admin link with an admin token
+- receive a private admin token and admin link
 - paste the snippet into the website
 
 The public `siteKey` routes visitors into that site's isolated scene.
-The private admin token is the password for settings and moderation, so keep the admin link private.
+The private admin token is the password for settings and moderation.
+Save it; the registration page can use it to reopen the admin page later.
 
 The admin page can:
 - show install/seen status

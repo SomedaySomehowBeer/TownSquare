@@ -909,6 +909,8 @@ body {
 }
 
 .hosted-form input,
+.hosted-token input,
+.hosted-dialog input,
 .hosted-section textarea,
 .hosted-result textarea {
   width: 100%;
@@ -919,9 +921,26 @@ body {
   font: 500 1rem var(--font);
 }
 
-.hosted-form input {
+.hosted-form input,
+.hosted-token input,
+.hosted-dialog input {
   height: 44px;
   padding: 0 12px;
+}
+
+.hosted-token {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.hosted-token input,
+.hosted-dialog input {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86rem;
 }
 
 .hosted-section textarea,
@@ -965,6 +984,31 @@ body {
   margin-top: 24px;
   padding-top: 22px;
   border-top: 1px solid var(--hair-2);
+}
+
+.hosted-dialog {
+  width: min(520px, calc(100% - 32px));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 0;
+  background: var(--surface);
+  color: var(--ink);
+  box-shadow: var(--shadow);
+}
+
+.hosted-dialog::backdrop {
+  background: rgb(33 31 28 / 0.45);
+}
+
+.hosted-dialog form {
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+}
+
+.hosted-dialog h2,
+.hosted-dialog p {
+  margin: 0;
 }
 
 .hosted-actions {

@@ -256,6 +256,17 @@ function getAdminSite(url) {
   return site;
 }
 
+function findSiteByAdminToken(adminToken) {
+  const token = typeof adminToken === "string" ? adminToken.trim() : "";
+  if (!token) return null;
+
+  for (const site of sitesByKey.values()) {
+    if (site.adminToken === token) return site;
+  }
+
+  return null;
+}
+
 function buildEmbedSnippet(req, site) {
   const serverOrigin = normalizeOrigin(
     process.env.PUBLIC_ORIGIN || `http://${req.headers.host || `${HOST}:${PORT}`}`,
@@ -316,6 +327,21 @@ function handleGetAdminSite(req, res, url) {
     adminUrl: buildAdminUrl(req, site),
     embedSnippet: buildEmbedSnippet(req, site),
     scene: getSceneStats(getScene(site.siteKey)),
+  });
+}
+
+function handleAdminLogin(req, res) {
+  readJsonBody(req, res, (body) => {
+    const site = findSiteByAdminToken(body.adminToken);
+    if (!site) {
+      sendJson(res, 403, { error: "Invalid admin token." });
+      return;
+    }
+
+    sendJson(res, 200, {
+      site: publicSite(site),
+      adminUrl: buildAdminUrl(req, site),
+    });
   });
 }
 
@@ -625,6 +651,11 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/admin/site") {
     handleGetAdminSite(req, res, url);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/login") {
+    handleAdminLogin(req, res);
     return;
   }
 

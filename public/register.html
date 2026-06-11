@@ -39,15 +39,52 @@
         <section class="hosted-result" id="register-result" hidden>
           <h2>Paste this into your website</h2>
           <textarea id="embed-snippet" readonly rows="8"></textarea>
+          <label class="hosted-token">
+            <span>Admin token</span>
+            <input id="admin-token" type="text" readonly />
+          </label>
           <div class="hosted-actions">
             <button type="button" id="copy-snippet">Copy snippet</button>
+            <button type="button" id="copy-token">Copy admin token</button>
             <a id="admin-link" href="#">Open admin</a>
           </div>
           <p class="hosted-note">
-            Keep the admin link private. It is the password for moderation and settings.
+            Keep the admin token private. It is the password for moderation and settings.
           </p>
         </section>
+
+        <section class="hosted-section" aria-labelledby="login-title">
+          <h2 id="login-title">Already registered?</h2>
+          <form class="hosted-form" id="admin-login-form">
+            <label>
+              <span>Admin token</span>
+              <input
+                id="login-admin-token"
+                name="adminToken"
+                type="password"
+                placeholder="admin_..."
+                autocomplete="current-password"
+                required
+              />
+            </label>
+            <button type="submit">Open admin</button>
+          </form>
+        </section>
       </section>
+
+      <dialog class="hosted-dialog" id="token-dialog">
+        <form method="dialog">
+          <h2>Save your admin token</h2>
+          <p class="hosted-copy">
+            This token is the only way back into your site admin. Save it before leaving this page.
+          </p>
+          <input id="dialog-admin-token" type="text" readonly />
+          <div class="hosted-actions">
+            <button type="button" id="copy-dialog-token">Copy token</button>
+            <button type="submit">I saved it</button>
+          </div>
+        </form>
+      </dialog>
     </main>
 
     <script type="module" src="/hosted-register.mjs"></script>

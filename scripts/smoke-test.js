@@ -44,6 +44,19 @@ async function createSite(name) {
   return body;
 }
 
+async function loginWithAdminToken(adminToken) {
+  const response = await fetch(`${HTTP_ORIGIN}/api/admin/login`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ adminToken }),
+  });
+  const body = await response.json();
+  assert(response.ok, body.error || "admin token login failed");
+  assert(body.site.siteKey, "admin token login did not return a site");
+  assert(body.adminUrl.includes("adminToken="), "admin token login did not return an admin URL");
+  return body;
+}
+
 async function assertEmbeddableAssetsAreCrossOriginLoadable() {
   const response = await fetch(`${HTTP_ORIGIN}/townsquare.mjs`);
   assert(response.ok, "townsquare module was not served");
@@ -148,6 +161,9 @@ async function main() {
 
   const hostedA = await createSite("Smoke A");
   const hostedB = await createSite("Smoke B");
+  const hostedALogin = await loginWithAdminToken(hostedA.adminToken);
+  assert(hostedALogin.site.siteKey === hostedA.site.siteKey, "admin token login returned the wrong site");
+
   const siteAVisitor = await connect({
     x: 0.3,
     browserId: "hosted-a",

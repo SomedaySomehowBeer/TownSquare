@@ -80,11 +80,11 @@ https://your-townsquare-host/register.html
 The hosted flow does not require an owner account:
 - the site owner enters a website URL
 - TownSquare issues a public `siteKey` in the embed snippet
-- TownSquare issues a private admin link containing an admin token
+- TownSquare issues a private admin token and admin link
 - the site is marked seen/verified when the snippet connects from the registered origin
 
-The admin link is the password for moderation.
-Keep it private.
+The admin token is the password for moderation.
+Save it; the registration page can use it to reopen the admin page later.
 
 The admin page supports the first hosted operations:
 - view install status and active visitors
