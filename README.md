@@ -147,6 +147,7 @@ The flow is intentionally accountless:
 The public `siteKey` routes visitors into that site's isolated scene.
 The private admin token is the password for settings and moderation.
 Save it; the registration page can use it to reopen the admin page later.
+Generated admin links keep the token in the URL fragment so it is not sent in HTTP requests.
 
 The admin page can:
 - show install/seen status

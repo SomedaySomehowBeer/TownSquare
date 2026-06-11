@@ -85,6 +85,7 @@ The hosted flow does not require an owner account:
 
 The admin token is the password for moderation.
 Save it; the registration page can use it to reopen the admin page later.
+Generated admin links keep the token in the URL fragment so it is not sent in HTTP requests.
 
 The admin page supports the first hosted operations:
 - view install status and active visitors

@@ -1,7 +1,3 @@
-const params = new URLSearchParams(window.location.search);
-const siteKey = params.get("siteKey") || "";
-const adminToken = params.get("adminToken") || "";
-
 const statusEl = document.getElementById("admin-status");
 const metaEl = document.getElementById("site-meta");
 const installSection = document.getElementById("install-section");
@@ -15,6 +11,20 @@ const disableSiteButton = document.getElementById("disable-site");
 const visitorList = document.getElementById("visitor-list");
 
 let currentSite = null;
+let siteKey = "";
+let adminToken = "";
+
+function readCredentialsFromUrl() {
+  const queryParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+
+  siteKey = queryParams.get("siteKey") || hashParams.get("siteKey") || "";
+  adminToken = hashParams.get("adminToken") || queryParams.get("adminToken") || "";
+
+  if (siteKey || adminToken) {
+    window.history.replaceState({}, document.title, "/admin");
+  }
+}
 
 function setStatus(message) {
   statusEl.textContent = message;
@@ -92,16 +102,30 @@ function render(data) {
 }
 
 async function loadSite() {
-  if (!siteKey || !adminToken) {
-    setStatus("Missing site key or admin token.");
+  if (!adminToken) {
+    setStatus("Missing admin token.");
     return;
   }
 
-  const url = new URL("/api/admin/site", window.location.origin);
-  url.searchParams.set("siteKey", siteKey);
-  url.searchParams.set("adminToken", adminToken);
+  if (!siteKey) {
+    const loginResponse = await fetch("/api/admin/login", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ adminToken }),
+    });
+    const loginBody = await loginResponse.json();
+    if (!loginResponse.ok) {
+      setStatus(loginBody.error || "Could not load this site.");
+      return;
+    }
+    siteKey = loginBody.site.siteKey;
+  }
 
-  const response = await fetch(url);
+  const response = await fetch("/api/admin/site", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ siteKey, adminToken }),
+  });
   const body = await response.json();
   if (!response.ok) {
     setStatus(body.error || "Could not load this site.");
@@ -144,4 +168,5 @@ chatDisabledInput.addEventListener("change", () => action("setChatDisabled", { d
 clearMessagesButton.addEventListener("click", () => action("clearMessages"));
 disableSiteButton.addEventListener("click", () => action("disableSite", { disabled: !currentSite.disabled }));
 
+readCredentialsFromUrl();
 loadSite();

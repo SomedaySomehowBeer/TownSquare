@@ -255,6 +255,10 @@ function sendJson(res, status, body) {
 function getAdminSite(url) {
   const siteKey = url.searchParams.get("siteKey") || "";
   const adminToken = url.searchParams.get("adminToken") || "";
+  return getAdminSiteByCredentials(siteKey, adminToken);
+}
+
+function getAdminSiteByCredentials(siteKey, adminToken) {
   const site = sitesByKey.get(siteKey);
   if (!site || site.adminToken !== adminToken) return null;
   return site;
@@ -292,9 +296,8 @@ function buildAdminUrl(req, site) {
   const serverOrigin = normalizeOrigin(
     process.env.PUBLIC_ORIGIN || `http://${req.headers.host || `${HOST}:${PORT}`}`,
   );
-  const url = new URL("/admin.html", `${serverOrigin}/`);
-  url.searchParams.set("siteKey", site.siteKey);
-  url.searchParams.set("adminToken", site.adminToken);
+  const url = new URL("/admin", `${serverOrigin}/`);
+  url.hash = new URLSearchParams({ adminToken: site.adminToken }).toString();
   return url.toString();
 }
 
@@ -321,6 +324,10 @@ function handleRegisterSite(req, res) {
 
 function handleGetAdminSite(req, res, url) {
   const site = getAdminSite(url);
+  sendAdminSite(req, res, site);
+}
+
+function sendAdminSite(req, res, site) {
   if (!site) {
     sendJson(res, 403, { error: "Invalid site key or admin token." });
     return;
@@ -331,6 +338,13 @@ function handleGetAdminSite(req, res, url) {
     adminUrl: buildAdminUrl(req, site),
     embedSnippet: buildEmbedSnippet(req, site),
     scene: getSceneStats(getScene(site.siteKey)),
+  });
+}
+
+function handlePostAdminSite(req, res) {
+  readJsonBody(req, res, (body) => {
+    const site = getAdminSiteByCredentials(String(body.siteKey || ""), String(body.adminToken || ""));
+    sendAdminSite(req, res, site);
   });
 }
 
@@ -655,6 +669,11 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "GET" && url.pathname === "/api/admin/site") {
     handleGetAdminSite(req, res, url);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/site") {
+    handlePostAdminSite(req, res);
     return;
   }
 

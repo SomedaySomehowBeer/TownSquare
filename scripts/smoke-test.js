@@ -53,7 +53,9 @@ async function loginWithAdminToken(adminToken) {
   const body = await response.json();
   assert(response.ok, body.error || "admin token login failed");
   assert(body.site.siteKey, "admin token login did not return a site");
-  assert(body.adminUrl.includes("adminToken="), "admin token login did not return an admin URL");
+  const adminUrl = new URL(body.adminUrl);
+  assert(adminUrl.searchParams.get("adminToken") === null, "admin URL leaked the token in query params");
+  assert(adminUrl.hash.includes("adminToken="), "admin token login did not return a fragment admin URL");
   return body;
 }
 
