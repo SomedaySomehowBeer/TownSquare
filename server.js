@@ -218,7 +218,7 @@ function broadcast(message, options = {}) {
 }
 
 function emitIdentityState(identity, options = {}) {
-  const { exceptConnectionId = null, includeConnectionId = null } = options;
+  const { exceptConnectionId = null } = options;
   const message = {
     type: "move",
     id: identity.id,
@@ -226,13 +226,6 @@ function emitIdentityState(identity, options = {}) {
     pose: identity.pose,
     propId: identity.propId,
   };
-
-  if (includeConnectionId !== null) {
-    const client = clients.get(includeConnectionId);
-    if (client?.joined) {
-      send(client.ws, message);
-    }
-  }
 
   broadcast(message, { exceptConnectionId });
 }
@@ -420,10 +413,7 @@ function handleSettle(client, message) {
   identity.propId = BENCH.id;
   client.x = seatX;
 
-  emitIdentityState(identity, {
-    includeConnectionId: client.connectionId,
-    exceptConnectionId: client.connectionId,
-  });
+  emitIdentityState(identity);
 }
 
 function handleSay(client, message) {
