@@ -285,6 +285,8 @@ body {
   height: 46px;
   transform: translateX(-50%);
   transition: left 80ms linear;
+  /* --speak-order: most recent speaker stacks on top when columns must overlap */
+  z-index: var(--speak-order, 0);
 }
 
 .avatar.flip svg {
@@ -313,6 +315,10 @@ body {
 
 .avatar--self { color: var(--you); }
 .avatar--peer { color: var(--other); }
+
+/* reading a character's tray outranks any neighbour's speak-order stacking */
+.avatar--has-history:hover,
+.avatar--has-history:focus-within { z-index: 2147483000; }
 .avatar.walking { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
 .avatar--sitting { bottom: 44px; }
 
@@ -462,7 +468,11 @@ body {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 12px);
-  transform: translateX(-50%);
+  /* --bubble-shift: collision-avoidance nudge; --bubble-scale / --bubble-fade:
+     proximity prominence — all set per frame by bubble-layout */
+  transform: translateX(calc(-50% + var(--bubble-shift, 0px))) scale(var(--bubble-scale, 1));
+  transform-origin: bottom center;
+  opacity: var(--bubble-fade, 1);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -470,7 +480,7 @@ body {
   width: max-content;
   max-width: min(240px, 72vw);
   pointer-events: none;
-  transition: opacity 140ms ease;
+  transition: opacity 140ms ease, transform 160ms ease;
 }
 
 .avatar__above:empty { display: none; }
@@ -503,13 +513,22 @@ body {
 .avatar__tail {
   position: absolute;
   left: 50%;
-  bottom: -5px;
-  width: 13px;
-  height: 13px;
+  bottom: -11px;
+  width: 160px;
+  height: 12px;
   background: var(--surface);
-  transform: translateX(-50%) rotate(45deg);
-  border-radius: 0 0 4px 0;
-  box-shadow: 3px 3px 5px -2px rgba(60, 40, 20, 0.18);
+  /* The base slides along the bubble's flat bottom (--tail-shift) and the tip
+     leans the rest of the way to the speaker (--tail-tip), so the pointer
+     always lands on whoever spoke even when the column was nudged aside. */
+  transform: translateX(calc(-50% + var(--tail-shift, 0px)));
+  clip-path: polygon(
+    calc(50% - 8px) 0,
+    calc(50% + 8px) 0,
+    calc(50% + var(--tail-tip, 0px) + 1.5px) 100%,
+    calc(50% + var(--tail-tip, 0px) - 1.5px) 100%
+  );
+  filter: drop-shadow(2px 3px 2px rgba(60, 40, 20, 0.14));
+  transition: transform 160ms ease, clip-path 160ms ease;
 }
 
 /* only the live (bottom) bubble keeps its tail */

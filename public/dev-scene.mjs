@@ -1,3 +1,4 @@
+import { layoutBubbleColumns } from "./widget/bubble-layout.mjs";
 import { sayMessage } from "./widget/chat.mjs";
 import {
   createAvatar,
@@ -229,6 +230,7 @@ function mountDevScene(count, walking) {
     for (const actor of actors) {
       stepActor(actor, now, dt, random, actorsWalking);
     }
+    layoutBubbleColumns(stage, [self, ...actors], self.x);
     frame = requestAnimationFrame(tick);
   };
 

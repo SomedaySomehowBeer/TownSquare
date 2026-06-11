@@ -2,6 +2,7 @@
  * Keyboard input, local movement animation, and prop settle requests.
  */
 
+import { layoutBubbleColumns } from "./bubble-layout.mjs";
 import { BENCH, BENCH_SETTLE_MS, MAX_X, MIN_X, MOVEMENT_SPEED, SEND_INTERVAL_MS } from "./constants.mjs";
 import { renderAvatar, setFacing, setWalking, updatePose } from "./dom.mjs";
 
@@ -95,6 +96,8 @@ export function tick(ctx, now) {
     setWalking(ctx.self.avatar, false);
     maybeRequestBenchSettle(ctx, now);
   }
+
+  layoutBubbleColumns(ctx.stage, [ctx.self, ...ctx.peers.values()], ctx.self.x);
 
   ctx.frameHandle = requestAnimationFrame((nextNow) => tick(ctx, nextNow));
 }
