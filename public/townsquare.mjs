@@ -91,7 +91,7 @@ export function mountTownSquare(root, options = {}) {
       benchRequested: false,
       avatar: createAvatar({
         isSelf: true,
-        onSubmitChat: (input, composer) => submitChat(ctx, input, composer),
+        onSubmitChat: () => submitChat(ctx),
       }),
       walkTimer: null,
     },

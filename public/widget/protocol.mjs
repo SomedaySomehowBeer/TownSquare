@@ -2,7 +2,7 @@
  * WebSocket wire-up and server message routing for the widget runtime.
  */
 
-import { addMessage, showBubble } from "./chat.mjs";
+import { recordMessage, sayMessage } from "./chat.mjs";
 import { setWalking } from "./dom.mjs";
 import {
   applyPeerState,
@@ -42,8 +42,10 @@ export function wireSocket(ctx) {
     if (message.type === "hello") {
       self.id = message.id;
       applySelfState(ctx, message);
+      // Backlog seeds the hover tray only — it never pops a live bubble, so a
+      // refresh doesn't replay everyone's last messages into the scene.
       for (const recent of message.messages || []) {
-        addMessage(self.avatar, recent);
+        recordMessage(self.avatar, recent);
       }
       for (const peer of message.peers) {
         applyPeerState(ctx, peer);
@@ -85,15 +87,13 @@ export function wireSocket(ctx) {
 
     if (message.type === "say") {
       if (message.id === self.id) {
-        addMessage(self.avatar, { text: message.text, at: message.at });
-        showBubble(self.avatar, message.text);
+        sayMessage(self.avatar, { text: message.text, at: message.at });
         return;
       }
 
       const peer = peers.get(message.id);
       if (!peer) return;
-      addMessage(peer.avatar, { text: message.text, at: message.at });
-      showBubble(peer.avatar, message.text);
+      sayMessage(peer.avatar, { text: message.text, at: message.at });
     }
   });
 

@@ -8,6 +8,8 @@ export const BUBBLE_TTL_MS = 6000;
 export const BROWSER_ID_KEY = "townsquare-browser-id";
 export const BENCH_SETTLE_MS = 700;
 export const MAX_RECENT_MESSAGES = 5;
+/** Most bubbles kept visible in a figure's ghost stack (live + lingering ghosts). */
+export const GHOST_STACK_MAX = 4;
 export const MOVEMENT_SPEED = 0.22;
 export const SEND_INTERVAL_MS = 45;
 export const MIN_X = 0.02;

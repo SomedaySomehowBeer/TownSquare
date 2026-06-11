@@ -2,7 +2,7 @@
  * Local and remote visitor state: peers, poses, and status text.
  */
 
-import { addMessage } from "./chat.mjs";
+import { recordMessage } from "./chat.mjs";
 import { createAvatar, renderAvatar, setFacing, updatePose } from "./dom.mjs";
 
 /**
@@ -44,8 +44,9 @@ export function addOrUpdatePeer(ctx, peer) {
   ctx.stage.appendChild(avatar.el);
   renderAvatar(avatar, nextPeer.x);
   updatePose(avatar, nextPeer.pose);
+  // Seed the peer's backlog into their hover tray, not as live bubbles.
   for (const recent of peer.messages || []) {
-    addMessage(avatar, recent);
+    recordMessage(avatar, recent);
   }
   updateStatus(ctx);
   return nextPeer;
