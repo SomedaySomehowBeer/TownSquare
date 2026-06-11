@@ -25,7 +25,7 @@ export function updateStatus(ctx) {
  * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, messages?: Array<{ text: string, at?: number }> }} peer
  * @returns {PeerState}
  */
-export function addOrUpdatePeer(ctx, peer) {
+export function getOrCreatePeer(ctx, peer) {
   const existing = ctx.peers.get(peer.id);
   if (existing) {
     return existing;
@@ -34,16 +34,14 @@ export function addOrUpdatePeer(ctx, peer) {
   const avatar = createAvatar({ isSelf: false });
   const nextPeer = {
     id: peer.id,
-    x: peer.x,
-    pose: peer.pose || null,
-    propId: peer.propId || null,
+    x: 0,
+    pose: null,
+    propId: null,
     avatar,
     walkTimer: null,
   };
   ctx.peers.set(peer.id, nextPeer);
   ctx.stage.appendChild(avatar.el);
-  renderAvatar(avatar, nextPeer.x);
-  updatePose(avatar, nextPeer.pose);
   // Seed the peer's backlog into their hover tray, not as live bubbles.
   for (const recent of peer.messages || []) {
     recordMessage(avatar, recent);
@@ -88,13 +86,14 @@ export function applySelfState(ctx, state) {
  * @returns {PeerState}
  */
 export function applyPeerState(ctx, peerState) {
-  const peer = addOrUpdatePeer(ctx, peerState);
+  const hadPeer = ctx.peers.has(peerState.id);
+  const peer = getOrCreatePeer(ctx, peerState);
   const previousX = peer.x;
   peer.x = peerState.x;
   peer.pose = peerState.pose || null;
   peer.propId = peerState.propId || null;
   renderAvatar(peer.avatar, peer.x);
-  if (peer.x !== previousX) {
+  if (hadPeer && peer.x !== previousX) {
     setFacing(peer.avatar, peer.x < previousX);
   }
   updatePose(peer.avatar, peer.pose);
