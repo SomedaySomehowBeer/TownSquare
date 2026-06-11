@@ -73,6 +73,8 @@ Post-v1, roughly ordered.
 
 - [ ] **Optional message notifications**: simple on/off, quiet by default
 - [ ] **Minimum moderation story**: lightest viable public-chat surface
+- [ ] **Expandable Area**: Click to expand or full-screen
+- [ ] **Highlight character**: CLick to highlight character, keep history or chat focused.
 
 ## Open questions
 
