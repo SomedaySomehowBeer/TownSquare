@@ -1,22 +1,28 @@
-const CYCLE_MS = 1200;
+const CYCLE_MS = 800;
 const FRAME_STEP = 2;
 
+// Mirrors the presence-* keyframes in widget.css — keep the two in sync.
+// Conventions (figure facing right): legs/arms positive = backward;
+// knees positive = flexion; elbows negative = flexion. Left-leg heel
+// strike at 0%, right-leg at 50%; stance ~60% / swing ~40% per leg.
 const tracks = {
   ".figure-core": [
-    [0, "translateY(0.6px) rotate(-0.8deg)"],
-    [25, "translateY(-0.8px) rotate(0.6deg)"],
-    [50, "translateY(0.4px) rotate(0.9deg)"],
-    [75, "translateY(-1px) rotate(-0.4deg)"],
-    [100, "translateY(0.6px) rotate(-0.8deg)"],
+    [0, "translateY(0.4px) rotate(0.6deg)"],
+    [6, "translateY(0.7px) rotate(0.9deg)"],
+    [28, "translateY(-0.6px) rotate(1.2deg)"],
+    [50, "translateY(0.4px) rotate(0.6deg)"],
+    [56, "translateY(0.7px) rotate(0.9deg)"],
+    [78, "translateY(-0.6px) rotate(1.2deg)"],
+    [100, "translateY(0.4px) rotate(0.6deg)"],
   ],
-  ".leg-l": [[0, 18], [18, 10], [35, -6], [50, -18], [68, -10], [85, 8], [100, 18]],
-  ".leg-r": [[0, -18], [18, -10], [35, 6], [50, 18], [68, 10], [85, -8], [100, -18]],
-  ".knee-l": [[0, 24], [18, 14], [35, 2], [50, 0], [68, 8], [85, 20], [100, 24]],
-  ".knee-r": [[0, 0], [18, -8], [35, -20], [50, -24], [68, -14], [85, -2], [100, 0]],
-  ".arm-l": [[0, -18], [18, -9], [35, 4], [50, 16], [68, 10], [85, -6], [100, -18]],
-  ".arm-r": [[0, 16], [18, 9], [35, -4], [50, -18], [68, -10], [85, 6], [100, 16]],
-  ".elbow-l": [[0, 18], [18, 28], [35, 24], [50, 10], [68, 8], [85, 14], [100, 18]],
-  ".elbow-r": [[0, -10], [18, -8], [35, -14], [50, -18], [68, -28], [85, -24], [100, -10]],
+  ".leg-l": [[0, -20], [8, -18], [30, -2], [45, 10], [55, 14], [62, 15], [75, -4], [88, -17], [94, -21], [100, -20]],
+  ".leg-r": [[0, 12], [5, 14], [12, 15], [25, -4], [38, -17], [44, -21], [50, -20], [58, -18], [80, -2], [95, 10], [100, 12]],
+  ".knee-l": [[0, 4], [8, 12], [20, 6], [40, 5], [55, 18], [65, 32], [72, 38], [80, 28], [90, 8], [96, 3], [100, 4]],
+  ".knee-r": [[0, 14], [5, 18], [15, 32], [22, 38], [30, 28], [40, 8], [46, 3], [50, 4], [58, 12], [70, 6], [90, 5], [100, 14]],
+  ".arm-l": [[0, 12], [12, 10], [30, 1], [50, -10], [60, -11], [75, -5], [90, 7], [100, 12]],
+  ".arm-r": [[0, -10], [10, -11], [25, -5], [40, 7], [50, 12], [62, 10], [80, 1], [100, -10]],
+  ".elbow-l": [[0, -6], [15, -7], [35, -10], [55, -14], [68, -15], [85, -9], [100, -6]],
+  ".elbow-r": [[0, -13], [5, -14], [18, -15], [35, -9], [50, -6], [65, -7], [85, -10], [100, -13]],
 };
 
 const transformOrigins = {
@@ -80,24 +86,24 @@ function setTransform(selector, transform) {
 }
 
 function render() {
-  const poseFrame = directionLeft.checked ? 100 - frame : frame;
-
+  // The scaleX(-1) mirror alone handles facing left; the pose data is
+  // direction-independent (reversing frames would play the gait backwards).
   figure.classList.toggle("walk-figure--left", directionLeft.checked);
-  setTransform(".figure-core", sampleBody(poseFrame));
+  setTransform(".figure-core", sampleBody(frame));
 
   for (const [selector, track] of Object.entries(tracks)) {
     if (selector === ".figure-core") continue;
-    setTransform(selector, `rotate(${interpolate(track, poseFrame).toFixed(2)}deg)`);
+    setTransform(selector, `rotate(${interpolate(track, frame).toFixed(2)}deg)`);
   }
 
   slider.value = String(Math.round(frame));
   frameLabel.textContent = `Frame ${Math.round(frame)}`;
   poseReadout.value = [
-    `body ${sampleBody(poseFrame)}`,
-    `leg-l ${interpolate(tracks[".leg-l"], poseFrame).toFixed(1)}deg`,
-    `leg-r ${interpolate(tracks[".leg-r"], poseFrame).toFixed(1)}deg`,
-    `arm-l ${interpolate(tracks[".arm-l"], poseFrame).toFixed(1)}deg`,
-    `arm-r ${interpolate(tracks[".arm-r"], poseFrame).toFixed(1)}deg`,
+    `body ${sampleBody(frame)}`,
+    `leg-l ${interpolate(tracks[".leg-l"], frame).toFixed(1)}deg`,
+    `leg-r ${interpolate(tracks[".leg-r"], frame).toFixed(1)}deg`,
+    `arm-l ${interpolate(tracks[".arm-l"], frame).toFixed(1)}deg`,
+    `arm-r ${interpolate(tracks[".arm-r"], frame).toFixed(1)}deg`,
   ].join(" · ");
 }
 
