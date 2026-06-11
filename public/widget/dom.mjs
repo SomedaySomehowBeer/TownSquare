@@ -3,6 +3,7 @@
  */
 
 import { BENCH } from "./constants.mjs";
+import { figureMarkup } from "./figure.mjs";
 
 /**
  * @typedef {Object} GhostMessage
@@ -83,38 +84,7 @@ export function renderShell(container, mountOptions) {
 export function createAvatar({ isSelf, onSubmitChat }) {
   const el = document.createElement("div");
   el.className = `avatar ${isSelf ? "avatar--self" : "avatar--peer"}`;
-  el.innerHTML = `
-    <svg viewBox="0 0 20 44" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
-      <g class="figure-core">
-        <circle class="head" cx="10" cy="6.2" r="3.4"></circle>
-        <line x1="10" y1="10" x2="10" y2="26"></line>
-        <g class="joint arm-l">
-          <line x1="9.4" y1="14" x2="6.1" y2="20"></line>
-          <g class="joint elbow-l">
-            <line x1="6.1" y1="20" x2="4.7" y2="26"></line>
-          </g>
-        </g>
-        <g class="joint arm-r">
-          <line x1="10.6" y1="14" x2="13.9" y2="20"></line>
-          <g class="joint elbow-r">
-            <line x1="13.9" y1="20" x2="15.3" y2="26"></line>
-          </g>
-        </g>
-        <g class="joint leg-l">
-          <line x1="9.2" y1="26" x2="7.1" y2="34"></line>
-          <g class="joint knee-l">
-            <line x1="7.1" y1="34" x2="5.4" y2="42"></line>
-          </g>
-        </g>
-        <g class="joint leg-r">
-          <line x1="10.8" y1="26" x2="12.9" y2="34"></line>
-          <g class="joint knee-r">
-            <line x1="12.9" y1="34" x2="14.6" y2="42"></line>
-          </g>
-        </g>
-      </g>
-    </svg>
-  `;
+  el.innerHTML = figureMarkup('aria-hidden="true"');
 
   // The ghost stack: recent lines linger as fading bubbles above the live one.
   const above = document.createElement("div");

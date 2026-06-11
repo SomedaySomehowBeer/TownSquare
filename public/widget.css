@@ -348,30 +348,6 @@ body {
   filter: drop-shadow(0 16px 18px rgba(0,0,0,0.12));
 }
 
-.walk-preview svg {
-  width: 100%;
-  height: 100%;
-  display: block;
-  overflow: visible;
-}
-
-.walk-preview svg * {
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.4;
-  stroke-linecap: round;
-  vector-effect: non-scaling-stroke;
-}
-
-.walk-preview svg circle.head {
-  fill: currentColor;
-}
-
-.walk-figure--left {
-  transform: scaleX(-1);
-  transform-origin: 50% 50%;
-}
-
 .walk-ground {
   position: absolute;
   left: 0;
@@ -447,8 +423,19 @@ body {
 .avatar.walking { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
 .avatar--sitting { bottom: 44px; }
 
-.avatar svg g.figure-core,
-.avatar svg g.joint {
+/* Walk-sandbox preview: fills the preview box instead of standing on a stage. */
+.avatar--preview {
+  position: static;
+  width: 100%;
+  height: 100%;
+  transform: none;
+  transition: none;
+}
+
+.avatar--preview.walking { filter: none; }
+.avatar--preview svg * { stroke-width: 1.4; }
+
+.avatar svg :is(g.figure-core, g.joint) {
   transform-box: view-box;
 }
 
@@ -462,15 +449,7 @@ body {
 .avatar svg g.knee-l { transform-origin: 7.1px 34px; }
 .avatar svg g.knee-r { transform-origin: 12.9px 34px; }
 
-.avatar.walking svg g.figure-core,
-.avatar.walking svg g.leg-l,
-.avatar.walking svg g.leg-r,
-.avatar.walking svg g.knee-l,
-.avatar.walking svg g.knee-r,
-.avatar.walking svg g.arm-l,
-.avatar.walking svg g.arm-r,
-.avatar.walking svg g.elbow-l,
-.avatar.walking svg g.elbow-r {
+.avatar.walking svg :is(g.figure-core, g.joint) {
   animation-duration: var(--walk-cycle);
   /* linear between frames: the easing lives in the keyframe spacing itself,
      so motion doesn't decelerate/re-accelerate at every keyframe. */
@@ -598,15 +577,7 @@ body {
   85% { transform: rotate(-10deg); }
 }
 
-.avatar--sitting svg g.figure-core,
-.avatar--sitting svg g.arm-l,
-.avatar--sitting svg g.arm-r,
-.avatar--sitting svg g.elbow-l,
-.avatar--sitting svg g.elbow-r,
-.avatar--sitting svg g.leg-l,
-.avatar--sitting svg g.leg-r,
-.avatar--sitting svg g.knee-l,
-.avatar--sitting svg g.knee-r {
+.avatar--sitting svg :is(g.figure-core, g.joint) {
   animation: none !important;
   transition: transform 220ms ease;
 }
