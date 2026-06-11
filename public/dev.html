@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TownSquare — dev scene</title>
+    <link rel="stylesheet" href="/widget.css" />
+  </head>
+  <body class="dev-page">
+    <main class="dev-shell">
+      <header class="dev-toolbar" aria-label="Dev scene controls">
+        <div>
+          <p class="eyebrow">TownSquare dev scene</p>
+          <h1>Simulated characters</h1>
+        </div>
+
+        <form class="dev-controls" id="dev-controls">
+          <label class="dev-field">
+            <span>Characters</span>
+            <input id="character-count" name="characters" type="number" min="1" max="60" step="1" />
+          </label>
+          <label class="dev-check">
+            <input id="characters-walking" name="walking" type="checkbox" checked />
+            <span>Walking</span>
+          </label>
+          <button class="dev-button" type="submit">Apply</button>
+        </form>
+      </header>
+
+      <section class="townsquare-host dev-host" aria-label="TownSquare simulated scene">
+        <div id="dev-scene-root"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/dev-scene.mjs"></script>
+  </body>
+</html>

@@ -21,6 +21,7 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 - `public/widget.css` — widget and demo styling
 - `public/demo.mjs` — local demo bootstrap
 - `public/index.html` — demo host page for local development
+- `public/dev.html` — local simulation page for configurable walking/talking characters
 - `scripts/smoke-test.js` — automated websocket smoke test
 - `spec.md` — product truth
 - `roadmap.md` — product-facing sequencing
@@ -86,6 +87,12 @@ http://127.0.0.1:8787/healthz
    - pausing by the bench settles the visitor into a seat
    - chat messages appear above the figure and also enter the recent-message tray
    - closing one tab does not remove the visitor if another tab from that browser is still open
+
+For local scene stress testing with one controllable local user plus simulated visitors, use:
+
+```text
+http://127.0.0.1:8787/dev.html?characters=24
+```
 
 ## Embed the widget into another site
 
