@@ -22,6 +22,7 @@ Configure with environment variables:
 - `PORT`
 - `DATA_DIR` for hosted site registry storage
 - `PUBLIC_ORIGIN` for generated hosted snippets/admin links
+- `REGISTRATIONS_PER_HOUR` per-IP registration rate limit (default 20, `0` disables)
 
 ## Local run
 
@@ -84,7 +85,8 @@ The hosted flow does not require an owner account:
 - the site is marked seen/verified when the snippet connects from the registered origin
 
 The admin token is the password for moderation.
-Save it; the registration page can use it to reopen the admin page later.
+Save it; the admin page asks for it to sign back in later, and keeps it in
+`sessionStorage` for the duration of the browser session.
 Generated admin links keep the token in the URL fragment so it is not sent in HTTP requests.
 
 The admin page supports the first hosted operations:

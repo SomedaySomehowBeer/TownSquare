@@ -9,3 +9,6 @@ npm-debug.log*
 
 # OS/editor noise
 .DS_Store
+
+# Local hosted-site registry (contains admin tokens)
+.data/

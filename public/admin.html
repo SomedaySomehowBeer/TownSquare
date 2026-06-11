@@ -8,23 +8,54 @@
   </head>
   <body>
     <main class="hosted-shell">
-      <section class="hosted-panel" aria-labelledby="admin-title">
+      <section class="hosted-panel" id="login-view" aria-labelledby="login-title" hidden>
         <p class="eyebrow">TownSquare admin</p>
-        <h1 id="admin-title">Site settings</h1>
-        <p class="hosted-status" id="admin-status" role="status">Loading...</p>
+        <h1 id="login-title">Open your site admin</h1>
+        <p class="hosted-copy">Paste the admin token you saved when you registered your site.</p>
 
-        <section class="hosted-meta" id="site-meta" hidden></section>
+        <form class="hosted-form" id="login-form">
+          <label>
+            <span>Admin token</span>
+            <input
+              id="login-token"
+              name="adminToken"
+              type="password"
+              placeholder="admin_..."
+              autocomplete="current-password"
+              required
+            />
+          </label>
+          <button type="submit" id="login-submit">Open admin</button>
+        </form>
 
-        <section class="hosted-section" id="install-section" hidden>
+        <p class="hosted-status" id="login-status" role="status" hidden></p>
+
+        <p class="hosted-note hosted-footnote">
+          No TownSquare yet? <a href="/register">Register your website</a>.
+        </p>
+      </section>
+
+      <section class="hosted-panel" id="admin-view" aria-labelledby="admin-title" hidden>
+        <div class="hosted-head">
+          <div>
+            <p class="eyebrow">TownSquare admin</p>
+            <h1 id="admin-title">Site settings</h1>
+          </div>
+          <button type="button" class="hosted-quiet-button" id="sign-out">Sign out</button>
+        </div>
+        <p class="hosted-status" id="admin-status" role="status"></p>
+
+        <section class="hosted-meta" id="site-meta"></section>
+
+        <section class="hosted-section" id="install-section">
           <h2>Embed snippet</h2>
-          <textarea id="embed-snippet" readonly rows="8"></textarea>
+          <textarea id="embed-snippet" readonly rows="7" spellcheck="false"></textarea>
           <div class="hosted-actions">
             <button type="button" id="copy-snippet">Copy snippet</button>
-            <button type="button" id="refresh-site">Refresh</button>
           </div>
         </section>
 
-        <section class="hosted-section" id="moderation-section" hidden>
+        <section class="hosted-section" id="moderation-section">
           <div class="hosted-section-head">
             <h2>Moderation</h2>
             <label class="hosted-toggle">

@@ -42,6 +42,8 @@ const MAX_MESSAGE_LEN = 140;
 const MAX_RECENT_MESSAGES = 5;
 const MAX_SITE_NAME_LEN = 80;
 const MAX_ORIGIN_LEN = 240;
+const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
+const LAST_SEEN_SAVE_INTERVAL_MS = 60000;
 const MOVE_THROTTLE_MS = 40;
 const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
@@ -184,6 +186,13 @@ function createToken(prefix, bytes = 18) {
   return `${prefix}_${crypto.randomBytes(bytes).toString("base64url")}`;
 }
 
+function tokensMatch(expected, provided) {
+  const a = Buffer.from(String(expected || ""));
+  const b = Buffer.from(String(provided || ""));
+  if (a.length === 0 || a.length !== b.length) return false;
+  return crypto.timingSafeEqual(a, b);
+}
+
 function getContentType(filePath) {
   return MIME_TYPES[path.extname(filePath)] || "application/octet-stream";
 }
@@ -252,15 +261,9 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function getAdminSite(url) {
-  const siteKey = url.searchParams.get("siteKey") || "";
-  const adminToken = url.searchParams.get("adminToken") || "";
-  return getAdminSiteByCredentials(siteKey, adminToken);
-}
-
 function getAdminSiteByCredentials(siteKey, adminToken) {
   const site = sitesByKey.get(siteKey);
-  if (!site || site.adminToken !== adminToken) return null;
+  if (!site || !tokensMatch(site.adminToken, adminToken)) return null;
   return site;
 }
 
@@ -269,16 +272,24 @@ function findSiteByAdminToken(adminToken) {
   if (!token) return null;
 
   for (const site of sitesByKey.values()) {
-    if (site.adminToken === token) return site;
+    if (tokensMatch(site.adminToken, token)) return site;
   }
 
   return null;
 }
 
+function getPublicOrigin(req) {
+  if (process.env.PUBLIC_ORIGIN) {
+    return normalizeOrigin(process.env.PUBLIC_ORIGIN);
+  }
+
+  const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
+  const proto = forwardedProto === "https" ? "https" : "http";
+  return normalizeOrigin(`${proto}://${req.headers.host || `${HOST}:${PORT}`}`);
+}
+
 function buildEmbedSnippet(req, site) {
-  const serverOrigin = normalizeOrigin(
-    process.env.PUBLIC_ORIGIN || `http://${req.headers.host || `${HOST}:${PORT}`}`,
-  );
+  const serverOrigin = getPublicOrigin(req);
 
   return `<link rel="stylesheet" href="${serverOrigin}/widget.css" />
 <div id="townsquare-root"></div>
@@ -293,16 +304,42 @@ function buildEmbedSnippet(req, site) {
 }
 
 function buildAdminUrl(req, site) {
-  const serverOrigin = normalizeOrigin(
-    process.env.PUBLIC_ORIGIN || `http://${req.headers.host || `${HOST}:${PORT}`}`,
-  );
+  const serverOrigin = getPublicOrigin(req);
   const url = new URL("/admin", `${serverOrigin}/`);
   url.hash = new URLSearchParams({ adminToken: site.adminToken }).toString();
   return url.toString();
 }
 
+const registrationsByIp = new Map();
+
+function isRegistrationAllowed(ip) {
+  if (REGISTRATIONS_PER_HOUR <= 0) return true;
+
+  const now = Date.now();
+  const cutoff = now - 60 * 60 * 1000;
+
+  if (registrationsByIp.size > 1000) {
+    for (const [key, timestamps] of registrationsByIp) {
+      if (timestamps.every((at) => at <= cutoff)) registrationsByIp.delete(key);
+    }
+  }
+
+  const recent = (registrationsByIp.get(ip) || []).filter((at) => at > cutoff);
+  registrationsByIp.set(ip, recent);
+
+  if (recent.length >= REGISTRATIONS_PER_HOUR) return false;
+
+  recent.push(now);
+  return true;
+}
+
 function handleRegisterSite(req, res) {
   readJsonBody(req, res, (body) => {
+    if (!isRegistrationAllowed(req.socket.remoteAddress || "unknown")) {
+      sendJson(res, 429, { error: "Too many registrations from this address. Try again later." });
+      return;
+    }
+
     const origin = normalizeOrigin(String(body.origin || "").slice(0, MAX_ORIGIN_LEN));
     if (!origin) {
       sendJson(res, 400, { error: "Enter a valid website origin, like https://example.com." });
@@ -320,11 +357,6 @@ function handleRegisterSite(req, res) {
       embedSnippet: buildEmbedSnippet(req, site),
     });
   });
-}
-
-function handleGetAdminSite(req, res, url) {
-  const site = getAdminSite(url);
-  sendAdminSite(req, res, site);
 }
 
 function sendAdminSite(req, res, site) {
@@ -365,8 +397,8 @@ function handleAdminLogin(req, res) {
 
 function handleAdminAction(req, res) {
   readJsonBody(req, res, (body) => {
-    const site = sitesByKey.get(String(body.siteKey || ""));
-    if (!site || site.adminToken !== body.adminToken) {
+    const site = getAdminSiteByCredentials(String(body.siteKey || ""), String(body.adminToken || ""));
+    if (!site) {
       sendJson(res, 403, { error: "Invalid site key or admin token." });
       return;
     }
@@ -667,11 +699,6 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === "GET" && url.pathname === "/api/admin/site") {
-    handleGetAdminSite(req, res, url);
-    return;
-  }
-
   if (req.method === "POST" && url.pathname === "/api/admin/site") {
     handlePostAdminSite(req, res);
     return;
@@ -781,9 +808,14 @@ function handleInit(client, message) {
 
   if (site) {
     const now = Date.now();
+    const firstVerify = !site.verifiedAt;
+    const lastSavedSeenAt = site.lastSeenAt || 0;
     site.lastSeenAt = now;
     site.verifiedAt = site.verifiedAt || now;
-    saveSites();
+
+    if (firstVerify || now - lastSavedSeenAt > LAST_SEEN_SAVE_INTERVAL_MS) {
+      saveSites();
+    }
   }
 
   broadcast(scene, { type: "join", peer: snapshotIdentity(identity) }, { exceptConnectionId: client.connectionId });

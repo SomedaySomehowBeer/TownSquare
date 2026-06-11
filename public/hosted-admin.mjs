@@ -1,33 +1,116 @@
+const loginView = document.getElementById("login-view");
+const adminView = document.getElementById("admin-view");
+const loginForm = document.getElementById("login-form");
+const loginTokenEl = document.getElementById("login-token");
+const loginSubmitButton = document.getElementById("login-submit");
+const loginStatusEl = document.getElementById("login-status");
+const signOutButton = document.getElementById("sign-out");
 const statusEl = document.getElementById("admin-status");
 const metaEl = document.getElementById("site-meta");
-const installSection = document.getElementById("install-section");
-const moderationSection = document.getElementById("moderation-section");
 const snippetEl = document.getElementById("embed-snippet");
 const copyButton = document.getElementById("copy-snippet");
-const refreshButton = document.getElementById("refresh-site");
 const chatDisabledInput = document.getElementById("chat-disabled");
 const clearMessagesButton = document.getElementById("clear-messages");
 const disableSiteButton = document.getElementById("disable-site");
 const visitorList = document.getElementById("visitor-list");
 
+const STORAGE_KEY = "townsquare-admin-session";
+const REFRESH_INTERVAL_MS = 5000;
+
 let currentSite = null;
 let siteKey = "";
 let adminToken = "";
+let refreshTimer = null;
 
-function readCredentialsFromUrl() {
-  const queryParams = new URLSearchParams(window.location.search);
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-
-  siteKey = queryParams.get("siteKey") || hashParams.get("siteKey") || "";
-  adminToken = hashParams.get("adminToken") || queryParams.get("adminToken") || "";
-
-  if (siteKey || adminToken) {
-    window.history.replaceState({}, document.title, "/admin");
-  }
+function setLoginStatus(message, isError = false) {
+  loginStatusEl.textContent = message;
+  loginStatusEl.hidden = !message;
+  loginStatusEl.classList.toggle("hosted-status--error", isError);
 }
 
-function setStatus(message) {
+function setStatus(message, isError = false) {
   statusEl.textContent = message;
+  statusEl.classList.toggle("hosted-status--error", isError);
+}
+
+function readStoredCredentials() {
+  try {
+    const stored = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    if (stored && typeof stored.adminToken === "string") {
+      return { siteKey: stored.siteKey || "", adminToken: stored.adminToken };
+    }
+  } catch {
+    // fall through to empty credentials
+  }
+  return { siteKey: "", adminToken: "" };
+}
+
+function readCredentials() {
+  const queryParams = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+  const urlSiteKey = queryParams.get("siteKey") || hashParams.get("siteKey") || "";
+  const urlAdminToken = hashParams.get("adminToken") || queryParams.get("adminToken") || "";
+
+  if (urlSiteKey || urlAdminToken) {
+    window.history.replaceState({}, document.title, "/admin");
+    return { siteKey: urlSiteKey, adminToken: urlAdminToken };
+  }
+
+  return readStoredCredentials();
+}
+
+function storeCredentials() {
+  sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ siteKey, adminToken }));
+}
+
+function clearCredentials() {
+  siteKey = "";
+  adminToken = "";
+  currentSite = null;
+  sessionStorage.removeItem(STORAGE_KEY);
+}
+
+function showLogin(message = "", isError = false) {
+  stopAutoRefresh();
+  adminView.hidden = true;
+  loginView.hidden = false;
+  setLoginStatus(message, isError);
+  loginTokenEl.focus();
+}
+
+function showAdmin() {
+  loginView.hidden = true;
+  adminView.hidden = false;
+  startAutoRefresh();
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setInterval(() => {
+    if (!document.hidden) {
+      loadSite({ silent: true });
+    }
+  }, REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+  if (!refreshTimer) return;
+  clearInterval(refreshTimer);
+  refreshTimer = null;
+}
+
+async function api(path, payload) {
+  try {
+    const response = await fetch(path, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const body = await response.json();
+    return { ok: response.ok, status: response.status, body };
+  } catch {
+    return { ok: false, status: 0, body: { error: "Could not reach the server." } };
+  }
 }
 
 function formatTime(value) {
@@ -47,10 +130,6 @@ function render(data) {
   currentSite = data.site;
   const scene = data.scene;
 
-  metaEl.hidden = false;
-  installSection.hidden = false;
-  moderationSection.hidden = false;
-
   metaEl.innerHTML = `
     <dl>
       <div><dt>Site</dt><dd>${escapeHtml(currentSite.name)}</dd></div>
@@ -62,7 +141,9 @@ function render(data) {
     </dl>
   `;
 
-  snippetEl.value = data.embedSnippet;
+  if (document.activeElement !== snippetEl) {
+    snippetEl.value = data.embedSnippet;
+  }
   chatDisabledInput.checked = currentSite.chatDisabled;
   disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
 
@@ -98,75 +179,104 @@ function render(data) {
     visitorList.appendChild(row);
   }
 
-  setStatus(currentSite.verifiedAt ? "Installed and active." : "Waiting for the snippet to load from your site.");
+  if (currentSite.disabled) {
+    setStatus("Site is disabled. Visitors cannot connect.", true);
+  } else if (currentSite.verifiedAt) {
+    setStatus("Installed and active. Updates automatically.");
+  } else {
+    setStatus("Waiting for the snippet to load from your site. Updates automatically.");
+  }
 }
 
-async function loadSite() {
+async function loadSite({ silent = false } = {}) {
   if (!adminToken) {
-    setStatus("Missing admin token.");
+    showLogin();
     return;
   }
 
   if (!siteKey) {
-    const loginResponse = await fetch("/api/admin/login", {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ adminToken }),
-    });
-    const loginBody = await loginResponse.json();
-    if (!loginResponse.ok) {
-      setStatus(loginBody.error || "Could not load this site.");
+    const login = await api("/api/admin/login", { adminToken });
+    if (!login.ok) {
+      clearCredentials();
+      showLogin(login.body.error || "Could not open admin with that token.", true);
       return;
     }
-    siteKey = loginBody.site.siteKey;
+    siteKey = login.body.site.siteKey;
   }
 
-  const response = await fetch("/api/admin/site", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ siteKey, adminToken }),
-  });
-  const body = await response.json();
-  if (!response.ok) {
-    setStatus(body.error || "Could not load this site.");
+  const result = await api("/api/admin/site", { siteKey, adminToken });
+  if (!result.ok) {
+    if (result.status === 403) {
+      clearCredentials();
+      showLogin("That admin token no longer works.", true);
+      return;
+    }
+    if (!silent) {
+      setStatus(result.body.error || "Could not load this site.", true);
+    }
     return;
   }
 
-  render(body);
+  storeCredentials();
+  showAdmin();
+  render(result.body);
 }
 
 async function action(name, data = {}) {
-  const response = await fetch("/api/admin/action", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ siteKey, adminToken, action: name, ...data }),
-  });
-
-  const body = await response.json();
-  if (!response.ok) {
-    setStatus(body.error || "Action failed.");
+  const result = await api("/api/admin/action", { siteKey, adminToken, action: name, ...data });
+  if (!result.ok) {
+    setStatus(result.body.error || "Action failed.", true);
     return;
   }
 
   await loadSite();
 }
 
-copyButton.addEventListener("click", async () => {
-  try {
-    await navigator.clipboard.writeText(snippetEl.value);
-    copyButton.textContent = "Copied";
-    setTimeout(() => {
-      copyButton.textContent = "Copy snippet";
-    }, 1200);
-  } catch {
-    setStatus("Copy failed. Select the snippet manually.");
+loginForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  loginSubmitButton.disabled = true;
+  setLoginStatus("Checking token...");
+
+  adminToken = loginTokenEl.value.trim();
+  siteKey = "";
+  await loadSite();
+
+  loginSubmitButton.disabled = false;
+  if (!adminView.hidden) {
+    loginForm.reset();
+    setLoginStatus("");
   }
 });
 
-refreshButton.addEventListener("click", loadSite);
+signOutButton.addEventListener("click", () => {
+  clearCredentials();
+  showLogin("Signed out. Your token was forgotten on this device.");
+});
+
+copyButton.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(snippetEl.value);
+  } catch {
+    snippetEl.focus();
+    snippetEl.select();
+    return;
+  }
+  copyButton.textContent = "Copied";
+  setTimeout(() => {
+    copyButton.textContent = "Copy snippet";
+  }, 1200);
+});
+
 chatDisabledInput.addEventListener("change", () => action("setChatDisabled", { disabled: chatDisabledInput.checked }));
 clearMessagesButton.addEventListener("click", () => action("clearMessages"));
 disableSiteButton.addEventListener("click", () => action("disableSite", { disabled: !currentSite.disabled }));
 
-readCredentialsFromUrl();
-loadSite();
+const credentials = readCredentials();
+siteKey = credentials.siteKey;
+adminToken = credentials.adminToken;
+
+if (adminToken) {
+  loadSite();
+} else {
+  showLogin();
+}
