@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TownSquare admin</title>
+    <link rel="stylesheet" href="/widget.css" />
+  </head>
+  <body>
+    <main class="hosted-shell">
+      <section class="hosted-panel" aria-labelledby="admin-title">
+        <p class="eyebrow">TownSquare admin</p>
+        <h1 id="admin-title">Site settings</h1>
+        <p class="hosted-status" id="admin-status" role="status">Loading...</p>
+
+        <section class="hosted-meta" id="site-meta" hidden></section>
+
+        <section class="hosted-section" id="install-section" hidden>
+          <h2>Embed snippet</h2>
+          <textarea id="embed-snippet" readonly rows="8"></textarea>
+          <div class="hosted-actions">
+            <button type="button" id="copy-snippet">Copy snippet</button>
+            <button type="button" id="refresh-site">Refresh</button>
+          </div>
+        </section>
+
+        <section class="hosted-section" id="moderation-section" hidden>
+          <div class="hosted-section-head">
+            <h2>Moderation</h2>
+            <label class="hosted-toggle">
+              <input type="checkbox" id="chat-disabled" />
+              <span>Disable chat</span>
+            </label>
+          </div>
+          <div class="hosted-actions">
+            <button type="button" id="clear-messages">Clear recent messages</button>
+            <button type="button" id="disable-site">Disable site</button>
+          </div>
+          <div class="visitor-list" id="visitor-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <script type="module" src="/hosted-admin.mjs"></script>
+  </body>
+</html>

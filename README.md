@@ -8,6 +8,7 @@ This repo currently contains a narrow but real slice:
 - simple left/right walking
 - lightweight real-time chat
 - one first bench prop with a sit interaction
+- no-account hosted site registration
 - ephemeral in-memory server state
 
 The codebase is intentionally small. The main goal right now is to make the product boundary clear enough that TownSquare can be self-hosted cleanly and later grow into a hosted shared service without rewriting the core widget.
@@ -21,6 +22,8 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 - `public/widget.css` — widget and demo styling
 - `public/demo.mjs` — local demo bootstrap
 - `public/index.html` — demo host page for local development
+- `public/register.html` — no-account hosted site registration page
+- `public/admin.html` — token-protected hosted site admin page
 - `public/dev.html` — local simulation page for configurable walking/talking characters
 - `public/walk-sandbox.html` — local walk-cycle inspection sandbox
 - `scripts/smoke-test.js` — automated websocket smoke test
@@ -122,8 +125,39 @@ A site can embed the widget by loading the CSS plus the module from the TownSqua
 Notes:
 - `serverOrigin` is the realtime/backend origin the widget should connect to.
 - `socketPath` defaults to `/live`; set it explicitly when your reverse proxy exposes TownSquare on a different websocket path such as `/townsquare/live`.
+- `siteKey` is only needed when using one hosted TownSquare server for multiple registered sites.
 - The host page owns placement and surrounding layout.
 - TownSquare owns the scene, movement, chat, and realtime transport inside the mount root.
+
+## Hosted registration
+
+TownSquare can also run as a tiny hosted service.
+Open:
+
+```text
+https://your-townsquare-host/register.html
+```
+
+The flow is intentionally accountless:
+- enter a website URL
+- receive an embed snippet with a public site key
+- receive a private admin link with an admin token
+- paste the snippet into the website
+
+The public `siteKey` routes visitors into that site's isolated scene.
+The private admin token is the password for settings and moderation, so keep the admin link private.
+
+The admin page can:
+- show install/seen status
+- show active visitors
+- kick or block active visitors
+- disable chat
+- disable the site
+- clear recent in-memory messages
+
+Registered sites are stored in `.data/sites.json` by default.
+Set `DATA_DIR` if the registry should live somewhere else.
+Set `PUBLIC_ORIGIN` in production so generated snippets use the public HTTPS origin.
 
 ## Deploy updates to the shared Hetzner host
 
@@ -203,14 +237,15 @@ Included now:
 - one bench prop with simple sit interaction
 - lightweight chat with small per-character recovery tray
 - self-hostable single-process server
+- accountless hosted site registration with isolated scenes
+- token-protected hosted admin/moderation page
 
 Not included yet:
 - persistence
-- accounts
-- moderation systems
+- accounts or admin-link recovery
+- heavy moderation systems
 - multiple scenes
 - cross-site travel
-- site registration/tenant management
 - packaged integrations for major site builders
 
 ## Direction

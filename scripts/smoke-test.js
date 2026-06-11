@@ -1,10 +1,18 @@
 const WebSocket = require("ws");
 
 const SERVER_URL = process.env.TOWNSQUARE_WS_URL || "ws://127.0.0.1:8787/live";
+const HTTP_ORIGIN = process.env.TOWNSQUARE_HTTP_ORIGIN || "http://127.0.0.1:8787";
 
-function connect({ x, browserId }) {
+function siteSocketUrl(siteKey) {
+  if (!siteKey) return SERVER_URL;
+  const url = new URL(SERVER_URL);
+  url.searchParams.set("siteKey", siteKey);
+  return url.toString();
+}
+
+function connect({ x, browserId, siteKey = "", origin = "" }) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(SERVER_URL);
+    const ws = new WebSocket(siteSocketUrl(siteKey), origin ? { headers: { Origin: origin } } : undefined);
     const seen = [];
 
     ws.on("open", () => {
@@ -21,6 +29,19 @@ function connect({ x, browserId }) {
 
     ws.on("error", reject);
   });
+}
+
+async function createSite(name) {
+  const response = await fetch(`${HTTP_ORIGIN}/api/sites`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ name, origin: HTTP_ORIGIN }),
+  });
+  const body = await response.json();
+  assert(response.ok, body.error || "site registration failed");
+  assert(body.site.siteKey, "registered site did not include a site key");
+  assert(body.adminToken, "registered site did not include an admin token");
+  return body;
 }
 
 async function delay(ms) {
@@ -113,6 +134,29 @@ async function main() {
   await delay(1700);
 
   assert(first.seen.some((message) => message.type === "leave" && message.id === third.id), "first client did not observe different-browser leave");
+
+  const hostedA = await createSite("Smoke A");
+  const hostedB = await createSite("Smoke B");
+  const siteAVisitor = await connect({
+    x: 0.3,
+    browserId: "hosted-a",
+    siteKey: hostedA.site.siteKey,
+    origin: HTTP_ORIGIN,
+  });
+  const siteBVisitor = await connect({
+    x: 0.7,
+    browserId: "hosted-b",
+    siteKey: hostedB.site.siteKey,
+    origin: HTTP_ORIGIN,
+  });
+
+  await delay(100);
+
+  assert(siteAVisitor.hello.peers.length === 0, "hosted site A saw visitors from another site");
+  assert(siteBVisitor.hello.peers.length === 0, "hosted site B saw visitors from another site");
+
+  siteAVisitor.ws.close();
+  siteBVisitor.ws.close();
 
   console.log("Smoke test passed.");
   first.ws.close();

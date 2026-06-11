@@ -8,6 +8,7 @@ It covers the clean self-hosted shape first.
 One Node process that:
 - serves the widget assets
 - serves the local demo page
+- serves accountless hosted registration/admin pages
 - exposes a WebSocket endpoint for realtime presence/chat
 - exposes `/healthz` for simple health checks
 
@@ -19,6 +20,8 @@ Current defaults:
 Configure with environment variables:
 - `HOST`
 - `PORT`
+- `DATA_DIR` for hosted site registry storage
+- `PUBLIC_ORIGIN` for generated hosted snippets/admin links
 
 ## Local run
 
@@ -66,6 +69,33 @@ This is the core self-hosting contract:
 Self-hosting does not have to mean permanent isolation.
 A future self-hosted TownSquare may also choose to communicate with other TownSquares and join the wider network while still remaining independently operated.
 
+## Hosted registration
+
+For a shared hosted server, open:
+
+```text
+https://your-townsquare-host/register.html
+```
+
+The hosted flow does not require an owner account:
+- the site owner enters a website URL
+- TownSquare issues a public `siteKey` in the embed snippet
+- TownSquare issues a private admin link containing an admin token
+- the site is marked seen/verified when the snippet connects from the registered origin
+
+The admin link is the password for moderation.
+Keep it private.
+
+The admin page supports the first hosted operations:
+- view install status and active visitors
+- kick/block active visitors
+- disable chat
+- disable the site
+- clear recent in-memory messages
+
+Registered site records are stored in `.data/sites.json` by default.
+For production, set `DATA_DIR` to a persistent directory and `PUBLIC_ORIGIN` to the public HTTPS origin.
+
 ## Reverse proxy notes
 
 For a normal production deployment, put TownSquare behind nginx, Caddy, or another reverse proxy.
@@ -108,10 +138,9 @@ ok
 ## What this deployment shape does not do yet
 
 Not yet included:
-- persistence
 - accounts
-- site registration
-- tenant management
+- admin-link recovery
+- billing or tenant dashboards
 - hosted multi-site control plane
 
 That is intentional.

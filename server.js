@@ -1,4 +1,5 @@
 const http = require("http");
+const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
@@ -23,6 +24,8 @@ const { WebSocketServer } = require("ws");
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8787);
 const PUBLIC_DIR = path.join(__dirname, "public");
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
+const SITES_FILE = path.join(DATA_DIR, "sites.json");
 const ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS || "");
 const DEFAULT_DEV_ORIGINS = new Set([
   `http://${HOST}:${PORT}`,
@@ -37,6 +40,8 @@ const MAX_BROWSER_ID_LEN = 80;
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
 const MAX_MESSAGE_LEN = 140;
 const MAX_RECENT_MESSAGES = 5;
+const MAX_SITE_NAME_LEN = 80;
+const MAX_ORIGIN_LEN = 240;
 const MOVE_THROTTLE_MS = 40;
 const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
@@ -120,10 +125,12 @@ const MESSAGE_HANDLERS = {
 };
 
 /** @returns {{connectionId:number,ws:any,identity:any,joined:boolean,lastMoveAt:number,lastChatAt:number}} */
-function createClient(connectionId, ws) {
+function createClient(connectionId, ws, scene, site) {
   return {
     connectionId,
     ws,
+    scene,
+    site,
     identity: null,
     joined: false,
     lastMoveAt: 0,
@@ -162,6 +169,21 @@ function sanitizeMessage(text) {
   return text.trim().slice(0, MAX_MESSAGE_LEN);
 }
 
+function sanitizeSiteName(name, origin) {
+  const cleanName = typeof name === "string" ? name.trim().slice(0, MAX_SITE_NAME_LEN) : "";
+  if (cleanName) return cleanName;
+
+  try {
+    return new URL(origin).hostname;
+  } catch {
+    return "Untitled site";
+  }
+}
+
+function createToken(prefix, bytes = 18) {
+  return `${prefix}_${crypto.randomBytes(bytes).toString("base64url")}`;
+}
+
 function getContentType(filePath) {
   return MIME_TYPES[path.extname(filePath)] || "application/octet-stream";
 }
@@ -180,6 +202,181 @@ function resolvePublicFile(requestUrl, hostHeader) {
   return filePath;
 }
 
+function readJsonBody(req, res, callback) {
+  let raw = "";
+
+  req.on("data", (chunk) => {
+    raw += chunk;
+    if (raw.length > 4096) {
+      res.writeHead(413, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "request too large" }));
+      req.destroy();
+    }
+  });
+
+  req.on("end", () => {
+    if (!raw) {
+      callback({});
+      return;
+    }
+
+    try {
+      const parsed = JSON.parse(raw);
+      callback(isPlainObject(parsed) ? parsed : {});
+    } catch {
+      res.writeHead(400, { "content-type": "application/json; charset=utf-8" });
+      res.end(JSON.stringify({ error: "invalid json" }));
+    }
+  });
+}
+
+function sendJson(res, status, body) {
+  res.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(body));
+}
+
+function getAdminSite(url) {
+  const siteKey = url.searchParams.get("siteKey") || "";
+  const adminToken = url.searchParams.get("adminToken") || "";
+  const site = sitesByKey.get(siteKey);
+  if (!site || site.adminToken !== adminToken) return null;
+  return site;
+}
+
+function buildEmbedSnippet(req, site) {
+  const serverOrigin = normalizeOrigin(
+    process.env.PUBLIC_ORIGIN || `http://${req.headers.host || `${HOST}:${PORT}`}`,
+  );
+
+  return `<link rel="stylesheet" href="${serverOrigin}/widget.css" />
+<div id="townsquare-root"></div>
+<script type="module">
+  import { mountTownSquare } from "${serverOrigin}/townsquare.mjs";
+
+  mountTownSquare(document.getElementById("townsquare-root"), {
+    serverOrigin: "${serverOrigin}",
+    siteKey: "${site.siteKey}"
+  });
+</script>`;
+}
+
+function buildAdminUrl(req, site) {
+  const serverOrigin = normalizeOrigin(
+    process.env.PUBLIC_ORIGIN || `http://${req.headers.host || `${HOST}:${PORT}`}`,
+  );
+  const url = new URL("/admin.html", `${serverOrigin}/`);
+  url.searchParams.set("siteKey", site.siteKey);
+  url.searchParams.set("adminToken", site.adminToken);
+  return url.toString();
+}
+
+function handleRegisterSite(req, res) {
+  readJsonBody(req, res, (body) => {
+    const origin = normalizeOrigin(String(body.origin || "").slice(0, MAX_ORIGIN_LEN));
+    if (!origin) {
+      sendJson(res, 400, { error: "Enter a valid website origin, like https://example.com." });
+      return;
+    }
+
+    const site = createSiteRecord({ name: body.name, origin });
+    sitesByKey.set(site.siteKey, site);
+    saveSites();
+
+    sendJson(res, 201, {
+      site: publicSite(site),
+      adminToken: site.adminToken,
+      adminUrl: buildAdminUrl(req, site),
+      embedSnippet: buildEmbedSnippet(req, site),
+    });
+  });
+}
+
+function handleGetAdminSite(req, res, url) {
+  const site = getAdminSite(url);
+  if (!site) {
+    sendJson(res, 403, { error: "Invalid site key or admin token." });
+    return;
+  }
+
+  sendJson(res, 200, {
+    site: publicSite(site),
+    adminUrl: buildAdminUrl(req, site),
+    embedSnippet: buildEmbedSnippet(req, site),
+    scene: getSceneStats(getScene(site.siteKey)),
+  });
+}
+
+function handleAdminAction(req, res) {
+  readJsonBody(req, res, (body) => {
+    const site = sitesByKey.get(String(body.siteKey || ""));
+    if (!site || site.adminToken !== body.adminToken) {
+      sendJson(res, 403, { error: "Invalid site key or admin token." });
+      return;
+    }
+
+    const action = String(body.action || "");
+    const scene = getScene(site.siteKey);
+
+    if (action === "setChatDisabled") {
+      site.chatDisabled = Boolean(body.disabled);
+      site.updatedAt = Date.now();
+      saveSites();
+      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
+      return;
+    }
+
+    if (action === "kickVisitor") {
+      const visitorId = Number(body.visitorId);
+      const identity = scene.identities.get(visitorId);
+      if (identity) {
+        for (const client of Array.from(identity.clients)) {
+          client.ws.close(4001, "kicked");
+        }
+      }
+      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
+      return;
+    }
+
+    if (action === "blockVisitor") {
+      const visitorId = Number(body.visitorId);
+      const identity = scene.identities.get(visitorId);
+      if (identity && !site.blockedBrowserIds.includes(identity.browserId)) {
+        site.blockedBrowserIds.push(identity.browserId);
+        site.updatedAt = Date.now();
+        saveSites();
+        for (const client of Array.from(identity.clients)) {
+          client.ws.close(4003, "blocked");
+        }
+      }
+      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
+      return;
+    }
+
+    if (action === "clearMessages") {
+      for (const identity of scene.identities.values()) {
+        identity.messages = [];
+      }
+      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
+      return;
+    }
+
+    if (action === "disableSite") {
+      site.disabled = Boolean(body.disabled);
+      site.updatedAt = Date.now();
+      saveSites();
+      if (site.disabled) {
+        for (const client of Array.from(scene.clients.values())) {
+          client.ws.close(4003, "site disabled");
+        }
+      }
+      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
+      return;
+    }
+
+    sendJson(res, 400, { error: "Unknown action." });
+  });
+}
+
 function send(ws, message) {
   if (ws.readyState !== ws.OPEN) return;
   ws.send(JSON.stringify(message));
@@ -188,6 +385,7 @@ function send(ws, message) {
 function snapshotIdentity(identity) {
   return {
     id: identity.id,
+    browserId: identity.browserId,
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
@@ -201,16 +399,16 @@ function clearLeaveTimer(identity) {
   identity.leaveTimer = null;
 }
 
-function removeIdentity(identity) {
-  identities.delete(identity.id);
-  identityByBrowser.delete(identity.browserId);
+function removeIdentity(scene, identity) {
+  scene.identities.delete(identity.id);
+  scene.identityByBrowser.delete(identity.browserId);
 }
 
-function broadcast(message, options = {}) {
+function broadcast(scene, message, options = {}) {
   const { exceptConnectionId = null } = options;
   const payload = JSON.stringify(message);
 
-  for (const client of clients.values()) {
+  for (const client of scene.clients.values()) {
     if (!client.joined) continue;
     if (client.connectionId === exceptConnectionId) continue;
     if (client.ws.readyState !== client.ws.OPEN) continue;
@@ -219,6 +417,7 @@ function broadcast(message, options = {}) {
 }
 
 function emitIdentityState(identity, options = {}) {
+  const { scene } = identity;
   const { exceptConnectionId = null } = options;
   const message = {
     type: "move",
@@ -228,19 +427,20 @@ function emitIdentityState(identity, options = {}) {
     propId: identity.propId,
   };
 
-  broadcast(message, { exceptConnectionId });
+  broadcast(scene, message, { exceptConnectionId });
 }
 
-function getOrCreateIdentity(browserId, fallbackX, connectionId) {
+function getOrCreateIdentity(scene, browserId, fallbackX, connectionId) {
   const key = sanitizeBrowserId(browserId) || `connection-${connectionId}`;
-  const existing = identityByBrowser.get(key);
+  const existing = scene.identityByBrowser.get(key);
   if (existing) {
     return existing;
   }
 
-  const identity = createIdentity(nextIdentityId++, key, fallbackX);
-  identities.set(identity.id, identity);
-  identityByBrowser.set(key, identity);
+  const identity = createIdentity(scene.nextIdentityId++, key, fallbackX);
+  identity.scene = scene;
+  scene.identities.set(identity.id, identity);
+  scene.identityByBrowser.set(key, identity);
   return identity;
 }
 
@@ -249,10 +449,10 @@ function clearPose(identity) {
   identity.propId = null;
 }
 
-function findAvailableBenchSeatX(requestedX, excludeIdentityId = null) {
+function findAvailableBenchSeatX(scene, requestedX, excludeIdentityId = null) {
   const takenSeats = new Set();
 
-  for (const identity of identities.values()) {
+  for (const identity of scene.identities.values()) {
     if (!identity.joined || identity.propId !== BENCH.id) continue;
     if (identity.id === excludeIdentityId) continue;
 
@@ -275,19 +475,124 @@ function findAvailableBenchSeatX(requestedX, excludeIdentityId = null) {
   )).x;
 }
 
-const clients = new Map();
-const identities = new Map();
-const identityByBrowser = new Map();
-let nextIdentityId = 1;
+function createScene(key) {
+  return {
+    key,
+    clients: new Map(),
+    identities: new Map(),
+    identityByBrowser: new Map(),
+    nextIdentityId: 1,
+  };
+}
+
+function createSiteRecord({ name, origin }) {
+  const now = Date.now();
+  return {
+    siteKey: createToken("site", 12),
+    adminToken: createToken("admin", 24),
+    name: sanitizeSiteName(name, origin),
+    origin,
+    disabled: false,
+    chatDisabled: false,
+    verifiedAt: null,
+    lastSeenAt: null,
+    createdAt: now,
+    updatedAt: now,
+    blockedBrowserIds: [],
+  };
+}
+
+function loadSites() {
+  try {
+    const raw = fs.readFileSync(SITES_FILE, "utf8");
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed.sites)) return new Map();
+    return new Map(parsed.sites.map((site) => [site.siteKey, site]));
+  } catch (error) {
+    if (error.code !== "ENOENT") {
+      console.warn(`Could not load sites registry: ${error.message}`);
+    }
+    return new Map();
+  }
+}
+
+function saveSites() {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const sites = Array.from(sitesByKey.values());
+  fs.writeFileSync(SITES_FILE, `${JSON.stringify({ sites }, null, 2)}\n`);
+}
+
+function publicSite(site) {
+  return {
+    siteKey: site.siteKey,
+    name: site.name,
+    origin: site.origin,
+    disabled: site.disabled,
+    chatDisabled: site.chatDisabled,
+    verifiedAt: site.verifiedAt,
+    lastSeenAt: site.lastSeenAt,
+    createdAt: site.createdAt,
+    blockedCount: site.blockedBrowserIds.length,
+  };
+}
+
+function getScene(sceneKey) {
+  const existing = scenes.get(sceneKey);
+  if (existing) return existing;
+
+  const scene = createScene(sceneKey);
+  scenes.set(sceneKey, scene);
+  return scene;
+}
+
+function getSceneStats(scene) {
+  const visitors = Array.from(scene.identities.values())
+    .filter((identity) => identity.joined)
+    .map((identity) => ({
+      id: identity.id,
+      browserId: identity.browserId,
+      x: identity.x,
+      pose: identity.pose,
+      propId: identity.propId,
+      clientCount: identity.clients.size,
+      messages: identity.messages,
+    }));
+
+  return { activeVisitors: visitors.length, visitors };
+}
+
+function validateSiteAccess(reqUrl) {
+  const url = new URL(reqUrl, `http://${HOST}:${PORT}`);
+  const siteKey = url.searchParams.get("siteKey") || "";
+  if (!siteKey) {
+    return { ok: true, scene: getScene("default"), site: null };
+  }
+
+  const site = sitesByKey.get(siteKey);
+  if (!site || site.disabled) {
+    return { ok: false, status: 403, reason: "site disabled or unknown" };
+  }
+
+  return { ok: true, scene: getScene(site.siteKey), site };
+}
+
+function isOriginAllowedForSite(origin, site) {
+  if (!site) return true;
+  const normalized = normalizeOrigin(origin);
+  return Boolean(normalized && normalized === site.origin);
+}
+
+const sitesByKey = loadSites();
+const scenes = new Map();
 let nextConnectionId = 1;
 
 function finalizeDisconnect(identity) {
   if (identity.clients.size > 0) return;
   const hadJoined = identity.joined;
-  removeIdentity(identity);
+  removeIdentity(identity.scene, identity);
 
   if (hadJoined) {
-    broadcast({ type: "leave", id: identity.id });
+    broadcast(identity.scene, { type: "leave", id: identity.id });
   }
 }
 
@@ -295,6 +600,23 @@ const server = http.createServer((req, res) => {
   if (req.url === "/healthz") {
     res.writeHead(200, { "content-type": "text/plain; charset=utf-8" });
     res.end("ok");
+    return;
+  }
+
+  const url = new URL(req.url || "/", `http://${req.headers.host || `${HOST}:${PORT}`}`);
+
+  if (req.method === "POST" && url.pathname === "/api/sites") {
+    handleRegisterSite(req, res);
+    return;
+  }
+
+  if (req.method === "GET" && url.pathname === "/api/admin/site") {
+    handleGetAdminSite(req, res, url);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/admin/action") {
+    handleAdminAction(req, res);
     return;
   }
 
@@ -328,12 +650,24 @@ const wss = new WebSocketServer({
   path: "/live",
   maxPayload: MAX_WS_PAYLOAD_BYTES,
   verifyClient(info, done) {
-    if (clients.size >= MAX_CONNECTIONS) {
+    const access = validateSiteAccess(info.req.url || "/live");
+    const connectionCount = access.ok ? access.scene.clients.size : 0;
+
+    if (!access.ok) {
+      done(false, access.status, access.reason);
+      return;
+    }
+
+    if (connectionCount >= MAX_CONNECTIONS) {
       done(false, 503, "full");
       return;
     }
 
-    if (!isAllowedOrigin(info.origin, info.req.headers.host)) {
+    const originAllowed = access.site
+      ? isOriginAllowedForSite(info.origin, access.site)
+      : isAllowedOrigin(info.origin, info.req.headers.host);
+
+    if (!originAllowed) {
       done(false, 403, "origin not allowed");
       return;
     }
@@ -347,15 +681,21 @@ function handleInit(client, message) {
 
   const nextX = clampPosition(message.x);
   const fallbackX = nextX ?? 0.5;
+  const { scene, site } = client;
 
-  const identity = getOrCreateIdentity(message.browserId, fallbackX, client.connectionId);
+  if (site && site.blockedBrowserIds.includes(sanitizeBrowserId(message.browserId))) {
+    client.ws.close(4003, "blocked");
+    return;
+  }
+
+  const identity = getOrCreateIdentity(scene, message.browserId, fallbackX, client.connectionId);
   clearLeaveTimer(identity);
 
   client.identity = identity;
   client.joined = true;
   identity.clients.add(client);
 
-  const peers = Array.from(identities.values())
+  const peers = Array.from(scene.identities.values())
     .filter((peer) => peer.joined && peer.id !== identity.id)
     .map(snapshotIdentity);
 
@@ -374,7 +714,15 @@ function handleInit(client, message) {
   }
 
   identity.joined = true;
-  broadcast({ type: "join", peer: snapshotIdentity(identity) }, { exceptConnectionId: client.connectionId });
+
+  if (site) {
+    const now = Date.now();
+    site.lastSeenAt = now;
+    site.verifiedAt = site.verifiedAt || now;
+    saveSites();
+  }
+
+  broadcast(scene, { type: "join", peer: snapshotIdentity(identity) }, { exceptConnectionId: client.connectionId });
 }
 
 function handleMove(client, message) {
@@ -400,7 +748,7 @@ function handleSettle(client, message) {
   const identity = client.identity;
   if (Math.abs(identity.x - BENCH.x) > BENCH.zoneRadius) return;
 
-  const seatX = findAvailableBenchSeatX(identity.x, identity.id);
+  const seatX = findAvailableBenchSeatX(client.scene, identity.x, identity.id);
   if (seatX === null) return;
 
   identity.x = seatX;
@@ -412,6 +760,7 @@ function handleSettle(client, message) {
 
 function handleSay(client, message) {
   if (!client.identity) return;
+  if (client.site?.chatDisabled) return;
 
   const now = Date.now();
   if (now - client.lastChatAt < CHAT_THROTTLE_MS) return;
@@ -424,6 +773,7 @@ function handleSay(client, message) {
   client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
 
   broadcast(
+    client.scene,
     {
       type: "say",
       id: client.identity.id,
@@ -472,24 +822,32 @@ function handleClientClose(client) {
 }
 
 const heartbeatTimer = setInterval(() => {
-  for (const client of clients.values()) {
-    if (client.ws.readyState !== client.ws.OPEN) continue;
+  for (const scene of scenes.values()) {
+    for (const client of scene.clients.values()) {
+      if (client.ws.readyState !== client.ws.OPEN) continue;
 
-    if (!client.ws.isAlive) {
-      client.ws.terminate();
-      continue;
+      if (!client.ws.isAlive) {
+        client.ws.terminate();
+        continue;
+      }
+
+      client.ws.isAlive = false;
+      client.ws.ping();
     }
-
-    client.ws.isAlive = false;
-    client.ws.ping();
   }
 }, HEARTBEAT_INTERVAL_MS);
 
 heartbeatTimer.unref?.();
 
-wss.on("connection", (ws) => {
-  const client = createClient(nextConnectionId++, ws);
-  clients.set(client.connectionId, client);
+wss.on("connection", (ws, req) => {
+  const access = validateSiteAccess(req.url || "/live");
+  if (!access.ok) {
+    ws.close(4003, access.reason);
+    return;
+  }
+
+  const client = createClient(nextConnectionId++, ws, access.scene, access.site);
+  access.scene.clients.set(client.connectionId, client);
   ws.isAlive = true;
 
   ws.on("message", (raw) => handleClientMessage(client, raw));
@@ -497,7 +855,7 @@ wss.on("connection", (ws) => {
     ws.isAlive = true;
   });
   ws.on("close", () => {
-    clients.delete(client.connectionId);
+    client.scene.clients.delete(client.connectionId);
     handleClientClose(client);
   });
   ws.on("error", () => {
