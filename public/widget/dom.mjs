@@ -20,6 +20,11 @@ import { figureMarkup } from "./figure.mjs";
  * @property {HTMLElement} tray Hover surface listing recent history.
  * @property {HTMLElement} trayList Container the history rows render into.
  * @property {Array<{ text: string, at: number }>} history Recent messages, newest last.
+ * @property {number} [bubbleShift] Applied column nudge in px (see bubble-layout.mjs).
+ * @property {number} [tailShift] Applied tail base counter-shift in px (see bubble-layout.mjs).
+ * @property {number} [tailTip] Applied tail tip lean in px (see bubble-layout.mjs).
+ * @property {number} [bubbleScale] Applied proximity scale (see bubble-layout.mjs).
+ * @property {number} [bubbleFade] Applied proximity opacity (see bubble-layout.mjs).
  * @property {HTMLElement} [below] Container for the nameplate / composer (self only).
  * @property {HTMLButtonElement} [plate] The "you · say something" way-in.
  * @property {HTMLFormElement} [composer]

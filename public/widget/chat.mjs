@@ -18,6 +18,9 @@ import { createBubble, createTrayRow } from "./dom.mjs";
 
 const FADE_MS = 320;
 
+// Monotonic speak order so overlapping bubble columns stack newest-on-top.
+let speakOrder = 1;
+
 /**
  * Re-apply ghost classes by each bubble's distance from the newest line.
  * Bubbles that are fading out are left alone.
@@ -82,6 +85,7 @@ export function sayMessage(avatar, message) {
   recordMessage(avatar, message);
 
   for (const existing of avatar.messages) existing.solid = false;
+  avatar.el.style.setProperty("--speak-order", String(speakOrder++));
 
   const el = createBubble(message.text);
   avatar.above.appendChild(el);
