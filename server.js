@@ -1104,9 +1104,6 @@ const wss = new WebSocketServer({
   server,
   path: "/live",
   maxPayload: MAX_WS_PAYLOAD_BYTES,
-  verifyClient(_info, done) {
-    done(true);
-  },
 });
 
 function handleInit(client, message) {
