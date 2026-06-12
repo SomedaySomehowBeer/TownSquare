@@ -39,7 +39,7 @@ function describeDisconnectMessage(event, { joined, opened }) {
     return "This TownSquare isn't available right now.";
   }
   if (reason === "origin not allowed") {
-    return "This page isn't allowed to connect to that TownSquare.";
+    return "This page isn't registered to TownSquare yet.";
   }
 
   if (!opened || (!joined && event.code === 1006)) {
