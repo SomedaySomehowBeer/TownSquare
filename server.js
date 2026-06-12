@@ -592,6 +592,41 @@ function handleAdminLogin(req, res) {
   });
 }
 
+const ADMIN_ACTIONS = {
+  setChatDisabled(site, scene, body) {
+    site.chatDisabled = Boolean(body.disabled);
+    touchSite(site);
+  },
+  kickVisitor(site, scene, body) {
+    const identity = scene.identities.get(Number(body.visitorId));
+    if (identity) {
+      closeIdentityClients(identity, 4001, "kicked");
+    }
+  },
+  blockVisitor(site, scene, body) {
+    const identity = scene.identities.get(Number(body.visitorId));
+    if (identity && !site.blockedBrowserIds.includes(identity.browserId)) {
+      site.blockedBrowserIds.push(identity.browserId);
+      touchSite(site);
+      closeIdentityClients(identity, 4003, "blocked");
+    }
+  },
+  clearMessages(site, scene) {
+    for (const identity of scene.identities.values()) {
+      identity.messages = [];
+    }
+  },
+  disableSite(site, scene, body) {
+    site.disabled = Boolean(body.disabled);
+    touchSite(site);
+    if (site.disabled) {
+      for (const client of Array.from(scene.clients.values())) {
+        client.ws.close(4003, "site disabled");
+      }
+    }
+  },
+};
+
 function handleAdminAction(req, res) {
   readJsonBody(req, res, (body) => {
     const ip = getRequestIp(req);
@@ -609,65 +644,14 @@ function handleAdminAction(req, res) {
 
     clearAuthFailures(adminAuthFailuresByIp, ip);
     const action = String(body.action || "");
+    if (!Object.hasOwn(ADMIN_ACTIONS, action)) {
+      sendJson(res, 400, { error: "Unknown action." });
+      return;
+    }
+
     const scene = getScene(site.siteKey);
-
-    if (action === "setChatDisabled") {
-      site.chatDisabled = Boolean(body.disabled);
-      site.updatedAt = Date.now();
-      saveSites();
-      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
-      return;
-    }
-
-    if (action === "kickVisitor") {
-      const visitorId = Number(body.visitorId);
-      const identity = scene.identities.get(visitorId);
-      if (identity) {
-        for (const client of Array.from(identity.clients)) {
-          client.ws.close(4001, "kicked");
-        }
-      }
-      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
-      return;
-    }
-
-    if (action === "blockVisitor") {
-      const visitorId = Number(body.visitorId);
-      const identity = scene.identities.get(visitorId);
-      if (identity && !site.blockedBrowserIds.includes(identity.browserId)) {
-        site.blockedBrowserIds.push(identity.browserId);
-        site.updatedAt = Date.now();
-        saveSites();
-        for (const client of Array.from(identity.clients)) {
-          client.ws.close(4003, "blocked");
-        }
-      }
-      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
-      return;
-    }
-
-    if (action === "clearMessages") {
-      for (const identity of scene.identities.values()) {
-        identity.messages = [];
-      }
-      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
-      return;
-    }
-
-    if (action === "disableSite") {
-      site.disabled = Boolean(body.disabled);
-      site.updatedAt = Date.now();
-      saveSites();
-      if (site.disabled) {
-        for (const client of Array.from(scene.clients.values())) {
-          client.ws.close(4003, "site disabled");
-        }
-      }
-      sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
-      return;
-    }
-
-    sendJson(res, 400, { error: "Unknown action." });
+    ADMIN_ACTIONS[action](site, scene, body);
+    sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene) });
   });
 }
 
@@ -734,6 +718,39 @@ function handleServiceAdminSites(req, res) {
   });
 }
 
+/** Each handler mutates the site and returns the JSON response body. */
+const SERVICE_ADMIN_ACTIONS = {
+  resetAdminToken(req, site) {
+    const adminToken = createToken("admin", 24);
+    site.adminTokenHash = hashAdminToken(adminToken);
+    touchSite(site);
+    return {
+      site: serviceAdminSite(site),
+      adminToken,
+      adminUrl: buildAdminUrl(req, adminToken),
+    };
+  },
+  setSiteDisabled(req, site, body) {
+    site.disabled = Boolean(body.disabled);
+    touchSite(site);
+    if (site.disabled) {
+      closeSiteScene(site.siteKey, 4003, "site disabled");
+    }
+    return { site: serviceAdminSite(site) };
+  },
+  setChatDisabled(req, site, body) {
+    site.chatDisabled = Boolean(body.disabled);
+    touchSite(site);
+    return { site: serviceAdminSite(site) };
+  },
+  deleteSite(req, site) {
+    closeSiteScene(site.siteKey, 4003, "site deleted");
+    sitesByKey.delete(site.siteKey);
+    saveSites();
+    return { deletedSiteKey: site.siteKey };
+  },
+};
+
 function handleServiceAdminAction(req, res) {
   readJsonBody(req, res, (body) => {
     if (!isServiceAdminAuthorized(req, body, res)) return;
@@ -746,48 +763,12 @@ function handleServiceAdminAction(req, res) {
     }
 
     const action = String(body.action || "");
-
-    if (action === "resetAdminToken") {
-      const adminToken = createToken("admin", 24);
-      site.adminTokenHash = hashAdminToken(adminToken);
-      site.updatedAt = Date.now();
-      saveSites();
-      sendJson(res, 200, {
-        site: serviceAdminSite(site),
-        adminToken,
-        adminUrl: buildAdminUrl(req, adminToken),
-      });
+    if (!Object.hasOwn(SERVICE_ADMIN_ACTIONS, action)) {
+      sendJson(res, 400, { error: "Unknown action." });
       return;
     }
 
-    if (action === "setSiteDisabled") {
-      site.disabled = Boolean(body.disabled);
-      site.updatedAt = Date.now();
-      saveSites();
-      if (site.disabled) {
-        closeSiteScene(site.siteKey, 4003, "site disabled");
-      }
-      sendJson(res, 200, { site: serviceAdminSite(site) });
-      return;
-    }
-
-    if (action === "setChatDisabled") {
-      site.chatDisabled = Boolean(body.disabled);
-      site.updatedAt = Date.now();
-      saveSites();
-      sendJson(res, 200, { site: serviceAdminSite(site) });
-      return;
-    }
-
-    if (action === "deleteSite") {
-      closeSiteScene(site.siteKey, 4003, "site deleted");
-      sitesByKey.delete(site.siteKey);
-      saveSites();
-      sendJson(res, 200, { deletedSiteKey: site.siteKey });
-      return;
-    }
-
-    sendJson(res, 400, { error: "Unknown action." });
+    sendJson(res, 200, SERVICE_ADMIN_ACTIONS[action](req, site, body));
   });
 }
 
@@ -958,6 +939,17 @@ function saveSites() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const sites = Array.from(sitesByKey.values());
   fs.writeFileSync(SITES_FILE, `${JSON.stringify({ sites }, null, 2)}\n`);
+}
+
+function touchSite(site) {
+  site.updatedAt = Date.now();
+  saveSites();
+}
+
+function closeIdentityClients(identity, code, reason) {
+  for (const client of Array.from(identity.clients)) {
+    client.ws.close(code, reason);
+  }
 }
 
 function publicSite(site) {
@@ -1288,13 +1280,11 @@ function handleClientMessage(client, raw) {
 
   if (!isPlainObject(message)) return;
   if (typeof message.type !== "string") return;
-
-  const handler = MESSAGE_HANDLERS[message.type];
-  if (typeof handler !== "function") return;
+  if (!Object.hasOwn(MESSAGE_HANDLERS, message.type)) return;
 
   if (message.type !== "init" && !client.joined) return;
 
-  handler(client, message);
+  MESSAGE_HANDLERS[message.type](client, message);
 }
 
 function handleClientClose(client) {
