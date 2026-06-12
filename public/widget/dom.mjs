@@ -106,11 +106,11 @@ export function renderShell(container) {
   helpTitle.textContent = "TownSquare";
 
   const description = document.createElement("p");
-  description.textContent =
-    "A tiny shared place for people visiting this site. Not yet optimized for mobile — desktop works best. Working on it.";
+  description.textContent = "A tiny shared place for people visiting this site.";
 
   const instructions = document.createElement("p");
-  instructions.textContent = "Move with the left and right arrow keys. Click your nameplate to chat.";
+  instructions.textContent =
+    "Move with the arrow keys, or tap where you want to walk. Tap your nameplate to chat, and tap a character to see their recent messages.";
 
   const link = document.createElement("a");
   link.href = TOWNSQUARE_URL;
@@ -185,10 +185,14 @@ export function wireHelpPanel(helpButton, helpPanel) {
 /**
  * Create an avatar figure with optional self-only chat controls.
  *
- * @param {{ isSelf: boolean, onSubmitChat?: () => void }} options
+ * On touch devices the floating composer under the figure is fragile (edge
+ * clipping, virtual keyboard cover), so callers can pass `composerHost` to
+ * dock the composer as a bar at the bottom of the widget instead.
+ *
+ * @param {{ isSelf: boolean, onSubmitChat?: () => void, composerHost?: HTMLElement }} options
  * @returns {AvatarView}
  */
-export function createAvatar({ isSelf, onSubmitChat }) {
+export function createAvatar({ isSelf, onSubmitChat, composerHost }) {
   const el = document.createElement("div");
   el.className = `avatar ${isSelf ? "avatar--self" : "avatar--peer"}`;
   el.innerHTML = figureMarkup('aria-hidden="true"');
@@ -256,7 +260,13 @@ export function createAvatar({ isSelf, onSubmitChat }) {
   send.setAttribute("aria-label", "Send message");
 
   composer.append(input, send);
-  below.append(plate, composer);
+  if (composerHost) {
+    composer.classList.add("avatar__composer--docked");
+    below.append(plate);
+    composerHost.appendChild(composer);
+  } else {
+    below.append(plate, composer);
+  }
   el.appendChild(below);
 
   /** @type {AvatarView} */
@@ -268,6 +278,12 @@ export function createAvatar({ isSelf, onSubmitChat }) {
     input.value = "";
     setSendReady(selfAvatar, false);
     input.focus();
+    if (composerHost) {
+      // Keep the input visible once the virtual keyboard pushes the page around.
+      setTimeout(() => {
+        if (!composer.hidden) input.scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 250);
+    }
   };
 
   const closeComposer = () => {
@@ -299,7 +315,14 @@ export function createAvatar({ isSelf, onSubmitChat }) {
   composer.addEventListener("submit", (event) => {
     event.preventDefault();
     onSubmitChat?.();
-    closeComposer();
+    if (composerHost) {
+      // Docked bar stays open for back-and-forth; reopening costs a tiny tap.
+      input.value = "";
+      setSendReady(selfAvatar, false);
+      input.focus();
+    } else {
+      closeComposer();
+    }
   });
 
   return selfAvatar;

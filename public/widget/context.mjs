@@ -15,6 +15,7 @@
  * @property {number} x
  * @property {boolean} movingLeft
  * @property {boolean} movingRight
+ * @property {number | null} targetX Tap-to-walk destination; null when none.
  * @property {number} lastSentX
  * @property {number} lastSendAt
  * @property {string | null} pose
@@ -59,6 +60,7 @@
  * @property {number | null} frameHandle
  * @property {(event: KeyboardEvent) => void} onKeyDown
  * @property {(event: KeyboardEvent) => void} onKeyUp
+ * @property {(event: MouseEvent) => void} onStageClick
  */
 
 export {};

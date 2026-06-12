@@ -16,7 +16,15 @@ import {
   wireHelpPanel,
   updatePose,
 } from "./widget/dom.mjs";
-import { startGameLoop, stopGameLoop, unwireKeyboard, wireKeyboard } from "./widget/movement.mjs";
+import {
+  closeTrays,
+  startGameLoop,
+  stopGameLoop,
+  unwireKeyboard,
+  unwireStagePointer,
+  wireKeyboard,
+  wireStagePointer,
+} from "./widget/movement.mjs";
 import { updateStatus } from "./widget/presence.mjs";
 import { wireSocket } from "./widget/protocol.mjs";
 import { buildSocketUrl, getBrowserId, normalizeOrigin } from "./widget/utils.mjs";
@@ -58,6 +66,8 @@ export function mountTownSquare(root, options = {}) {
   const browserId = getBrowserId();
   const spawnX = randomSpawnX();
   const peers = new Map();
+  const coarsePointer = typeof window.matchMedia === "function"
+    && window.matchMedia("(pointer: coarse)").matches;
 
   root.replaceChildren();
 
@@ -93,6 +103,7 @@ export function mountTownSquare(root, options = {}) {
       x: spawnX,
       movingLeft: false,
       movingRight: false,
+      targetX: null,
       lastSentX: spawnX,
       lastSendAt: 0,
       pose: null,
@@ -103,6 +114,7 @@ export function mountTownSquare(root, options = {}) {
       avatar: createAvatar({
         isSelf: true,
         onSubmitChat: () => submitChat(ctx),
+        composerHost: coarsePointer ? app : undefined,
       }),
       walkTimer: null,
     },
@@ -114,9 +126,22 @@ export function mountTownSquare(root, options = {}) {
     frameHandle: null,
     onKeyDown: () => {},
     onKeyUp: () => {},
+    onStageClick: () => {},
   };
 
+  // Expanded mode overlays the host page, so lock its scroll while open and
+  // restore whatever inline overflow it had before.
+  let hostBodyOverflow = "";
+
   const setExpanded = (expanded) => {
+    if (expanded !== ctx.expanded) {
+      if (expanded) {
+        hostBodyOverflow = document.body.style.overflow;
+        document.body.style.overflow = "hidden";
+      } else {
+        document.body.style.overflow = hostBodyOverflow;
+      }
+    }
     ctx.expanded = expanded;
     ctx.app.classList.toggle("townsquare--expanded", expanded);
     ctx.expandButton.classList.toggle("townsquare__control--active", expanded);
@@ -146,6 +171,26 @@ export function mountTownSquare(root, options = {}) {
   });
   const unwireHelpPanel = wireHelpPanel(helpButton, helpPanel);
 
+  const onWindowKeyDown = (event) => {
+    if (event.key !== "Escape" || !ctx.expanded) return;
+    if (event.target instanceof HTMLInputElement) return;
+    setExpanded(false);
+  };
+  window.addEventListener("keydown", onWindowKeyDown);
+
+  // While the virtual keyboard is up, expose how much of the layout viewport it
+  // hides so the docked composer can ride above it in expanded mode.
+  const viewport = window.visualViewport;
+  const onViewportChange = () => {
+    if (!viewport) return;
+    const hidden = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+    app.style.setProperty("--ts-keyboard", `${Math.round(hidden)}px`);
+  };
+  if (coarsePointer && viewport) {
+    viewport.addEventListener("resize", onViewportChange);
+    viewport.addEventListener("scroll", onViewportChange);
+  }
+
   stage.appendChild(ctx.self.avatar.el);
   renderAvatar(ctx.self.avatar, ctx.self.x);
   updatePose(ctx.self.avatar, ctx.self.pose);
@@ -153,6 +198,7 @@ export function mountTownSquare(root, options = {}) {
 
   wireSocket(ctx);
   wireKeyboard(ctx);
+  wireStagePointer(ctx);
   startGameLoop(ctx);
 
   return {
@@ -160,7 +206,14 @@ export function mountTownSquare(root, options = {}) {
       ctx.disposed = true;
       stopGameLoop(ctx);
       unwireKeyboard(ctx);
+      unwireStagePointer(ctx);
       unwireHelpPanel();
+      closeTrays(ctx);
+      window.removeEventListener("keydown", onWindowKeyDown);
+      if (coarsePointer && viewport) {
+        viewport.removeEventListener("resize", onViewportChange);
+        viewport.removeEventListener("scroll", onViewportChange);
+      }
       setExpanded(false);
       ctx.socket.close();
       root.replaceChildren();
