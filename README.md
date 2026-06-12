@@ -1,8 +1,11 @@
 # TownSquare
 
+**NOTE**: This project has been mostly vibe-coded
+
 TownSquare is a tiny presence layer for websites.
 
 This repo currently contains a narrow but real slice:
+
 - embeddable browser widget
 - real-time shared presence
 - simple left/right walking
@@ -71,27 +74,22 @@ http://127.0.0.1:8787/healthz
 ## Development workflow
 
 1. Start the server:
-
-   ```bash
+  ```bash
    npm start
-   ```
-
+  ```
 2. Open the demo page:
-
-   ```text
+  ```text
    http://127.0.0.1:8787
-   ```
-
+  ```
 3. Open it in two windows or two browsers.
-
 4. Verify the current slice manually:
-   - two tabs from the same browser still share one visitor
-   - a different browser or browser profile shows a second visitor
-   - arrow keys move your figure left/right
-   - movement is reflected in the other window
-   - pausing by the bench settles the visitor into a seat
-   - chat messages appear above the figure and also enter the recent-message tray
-   - closing one tab does not remove the visitor if another tab from that browser is still open
+  - two tabs from the same browser still share one visitor
+  - a different browser or browser profile shows a second visitor
+  - arrow keys move your figure left/right
+  - movement is reflected in the other window
+  - pausing by the bench settles the visitor into a seat
+  - chat messages appear above the figure and also enter the recent-message tray
+  - closing one tab does not remove the visitor if another tab from that browser is still open
 
 For local scene stress testing with one controllable local user plus simulated visitors, use:
 
@@ -124,6 +122,7 @@ A site can embed the widget by loading the CSS plus the module from the TownSqua
 ```
 
 Notes:
+
 - `serverOrigin` is the realtime/backend origin the widget should connect to.
 - `socketPath` defaults to `/live`; set it explicitly when your reverse proxy exposes TownSquare on a different websocket path such as `/townsquare/live`.
 - `siteKey` is only needed when using one hosted TownSquare server for multiple registered sites.
@@ -140,6 +139,7 @@ https://your-townsquare-host/register
 ```
 
 The flow is intentionally accountless:
+
 - enter a website URL
 - receive an embed snippet with a public site key
 - receive a private admin token and admin link
@@ -152,6 +152,7 @@ Generated admin links keep the token in the URL fragment so it is not sent in HT
 Only an admin token hash is stored in the site registry.
 
 The admin page can:
+
 - show install/seen status
 - show active visitors
 - kick or block active visitors
@@ -194,6 +195,7 @@ scripts/deploy.sh --env-file ./ops/my-deploy.env
 ```
 
 The script:
+
 - runs local syntax checks unless skipped
 - archives the chosen git ref
 - uploads it to the server for remote deploys, or deploys directly in local mode
@@ -239,6 +241,7 @@ npm run smoke
 ```
 
 The smoke test verifies:
+
 - hello/initial peer snapshot
 - join
 - move
@@ -249,6 +252,7 @@ The smoke test verifies:
 ## Current scope
 
 Included now:
+
 - one embeddable widget module
 - one default scene
 - presence
@@ -260,6 +264,7 @@ Included now:
 - token-protected hosted admin/moderation page
 
 Not included yet:
+
 - persistence
 - accounts or admin-link recovery
 - heavy moderation systems
@@ -270,6 +275,7 @@ Not included yet:
 ## Direction
 
 The next serious product boundary is:
+
 1. **single-site self-hosting that feels clean**
 2. **clear separation between widget, realtime service, and site registration concerns**
 3. **only then a hosted multi-site TownSquare service**
