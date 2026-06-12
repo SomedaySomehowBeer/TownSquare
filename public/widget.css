@@ -295,6 +295,30 @@
 .avatar--self { color: var(--you); }
 .avatar--peer { color: var(--other); }
 
+/* peers are clickable (recent-message tray); the cursor also marks the slim
+   figure as interactive, and on iOS Safari makes taps produce click events */
+.avatar--peer { cursor: pointer; }
+
+/* widen the 18px figure's click/tap zone so "click a person" doesn't need
+   precision — clicks here open their tray instead of walking */
+.avatar--peer::before {
+  content: "";
+  position: absolute;
+  inset: -8px -14px;
+}
+
+/* a character's lingering bubbles are part of "them": clicking one opens
+   their tray (the container keeps pointer-events: none for walk taps) */
+.avatar--peer .avatar__bubble {
+  pointer-events: auto;
+  cursor: pointer;
+}
+
+/* while the tray is open the faded-out bubbles must not block clicks on it */
+.avatar--tray-open .avatar__bubble {
+  pointer-events: none;
+}
+
 /* reading a character's tray outranks any neighbour's speak-order stacking */
 .avatar--has-history:hover,
 .avatar--has-history:focus-within,
@@ -514,7 +538,8 @@
 
 /* hovering to read history yields the live stack to the tray */
 .avatar--has-history:hover .avatar__above,
-.avatar--has-history:focus-within .avatar__above { opacity: 0; }
+.avatar--has-history:focus-within .avatar__above,
+.avatar--tray-open .avatar__above { opacity: 0; }
 
 .avatar__bubble {
   position: relative;
@@ -797,10 +822,8 @@
     padding: 9px 15px 9px 13px;
   }
 
-  /* widen the 18px figure's tap zone so "tap a person" doesn't need precision */
+  /* fingers need an even wider tap zone than mouse pointers */
   .avatar--peer::before {
-    content: "";
-    position: absolute;
-    inset: -8px -16px;
+    inset: -10px -20px;
   }
 }
