@@ -61,6 +61,7 @@ export function mountTownSquare(root, options = {}) {
   const {
     app,
     stage,
+    statusRow,
     status: statusEl,
     quietButton,
     expandButton,
@@ -78,6 +79,7 @@ export function mountTownSquare(root, options = {}) {
     peers,
     app,
     stage,
+    statusRowEl: statusRow,
     statusEl,
     quietButton,
     expandButton,

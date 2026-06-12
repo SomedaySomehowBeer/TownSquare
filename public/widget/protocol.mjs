@@ -8,6 +8,7 @@ import {
   applyPeerState,
   applySelfState,
   removePeer,
+  setStatusMessage,
   updateStatus,
 } from "./presence.mjs";
 
@@ -60,7 +61,7 @@ function bumpWalking(presence) {
  * @param {WidgetContext} ctx
  */
 export function wireSocket(ctx) {
-  const { socket, browserId, self, peers, statusEl } = ctx;
+  const { socket, browserId, self, peers } = ctx;
   let opened = false;
 
   socket.addEventListener("open", () => {
@@ -70,7 +71,7 @@ export function wireSocket(ctx) {
 
   socket.addEventListener("error", () => {
     if (!self.id) {
-      statusEl.textContent = "Couldn't connect to TownSquare. Check your connection and try again.";
+      setStatusMessage(ctx, "Couldn't connect to TownSquare. Check your connection and try again.");
     }
   });
 
@@ -149,9 +150,9 @@ export function wireSocket(ctx) {
   });
 
   socket.addEventListener("close", (event) => {
-    statusEl.textContent = describeDisconnectMessage(event, {
+    setStatusMessage(ctx, describeDisconnectMessage(event, {
       joined: Boolean(self.id),
       opened,
-    });
+    }));
   });
 }

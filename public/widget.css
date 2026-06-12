@@ -21,7 +21,6 @@
 .townsquare {
   position: relative;
   min-height: 224px;
-  border-top: 1px solid var(--line);
   overflow: hidden;
 }
 
@@ -123,12 +122,23 @@
 }
 
 .townsquare__status {
+  position: absolute;
+  z-index: 2147483001;
+  top: 8px;
+  left: 4px;
+  right: 124px;
   display: flex;
-  justify-content: space-between;
+  align-items: center;
   gap: 12px;
-  padding: 10px 124px 12px 4px;
+  padding: 0;
   color: var(--muted);
   font-size: 0.9rem;
+  line-height: 1.3;
+  pointer-events: none;
+}
+
+.townsquare__status[hidden] {
+  display: none;
 }
 
 .townsquare__stage {
@@ -200,6 +210,12 @@
 .townsquare--expanded .townsquare__controls {
   top: 10px;
   right: 18px;
+}
+
+.townsquare--expanded .townsquare__status {
+  top: 10px;
+  left: 18px;
+  right: 148px;
 }
 
 .townsquare--expanded .townsquare__stage {

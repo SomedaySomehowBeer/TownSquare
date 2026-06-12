@@ -46,6 +46,7 @@
  * @property {Map<string, PeerState>} peers
  * @property {HTMLElement} app
  * @property {HTMLElement} stage
+ * @property {HTMLElement} statusRowEl
  * @property {HTMLElement} statusEl
  * @property {HTMLButtonElement} quietButton
  * @property {HTMLButtonElement} expandButton

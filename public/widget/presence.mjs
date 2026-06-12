@@ -12,12 +12,29 @@ import { createAvatar, renderAvatar, setFacing, updatePose, updatePropEffects } 
 
 /**
  * @param {WidgetContext} ctx
+ * @param {string | null} message
+ */
+export function setStatusMessage(ctx, message) {
+  if (!message) {
+    ctx.statusRowEl.hidden = true;
+    ctx.statusEl.textContent = "";
+    return;
+  }
+
+  ctx.statusRowEl.hidden = false;
+  ctx.statusEl.textContent = message;
+}
+
+/**
+ * @param {WidgetContext} ctx
  */
 export function updateStatus(ctx) {
-  const count = ctx.peers.size + (ctx.self.id ? 1 : 0);
-  ctx.statusEl.textContent = ctx.self.id
-    ? `${count} ${count === 1 ? "visitor" : "visitors"} here right now`
-    : "Connecting…";
+  if (ctx.self.id) {
+    setStatusMessage(ctx, null);
+    return;
+  }
+
+  setStatusMessage(ctx, "Connecting…");
 }
 
 /**

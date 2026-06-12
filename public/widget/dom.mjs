@@ -63,7 +63,7 @@ const TOWNSQUARE_URL = "https://townsquare.cauenapier.com/";
  * Mount the widget shell into the host root.
  *
  * @param {HTMLElement} container
- * @returns {{ app: HTMLElement, stage: HTMLElement, status: HTMLElement, quietButton: HTMLButtonElement, expandButton: HTMLButtonElement }}
+ * @returns {{ app: HTMLElement, stage: HTMLElement, statusRow: HTMLElement, status: HTMLElement, quietButton: HTMLButtonElement, expandButton: HTMLButtonElement }}
  */
 export function renderShell(container) {
   const element = document.createElement("section");
@@ -137,7 +137,7 @@ export function renderShell(container) {
 
   element.append(controls, statusRow, stageEl);
   container.appendChild(element);
-  return { app: element, stage: stageEl, status, quietButton, expandButton };
+  return { app: element, stage: stageEl, statusRow, status, quietButton, expandButton };
 }
 
 /**
