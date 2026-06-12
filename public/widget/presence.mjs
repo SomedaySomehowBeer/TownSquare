@@ -3,7 +3,7 @@
  */
 
 import { recordMessage } from "./chat.mjs";
-import { createAvatar, renderAvatar, setFacing, updatePose } from "./dom.mjs";
+import { createAvatar, renderAvatar, setFacing, updatePose, updatePropEffects } from "./dom.mjs";
 
 /**
  * @typedef {import("./context.mjs").WidgetContext} WidgetContext
@@ -71,13 +71,15 @@ export function applySelfState(ctx, state) {
   ctx.self.x = state.x;
   ctx.self.pose = state.pose || null;
   ctx.self.propId = state.propId || null;
-  ctx.self.benchRequested = false;
-  ctx.self.benchZoneEnteredAt = 0;
+  ctx.self.settleRequested = false;
+  ctx.self.settlePropId = null;
+  ctx.self.propZoneEnteredAt = 0;
   renderAvatar(ctx.self.avatar, ctx.self.x);
   if (ctx.self.x !== previousX) {
     setFacing(ctx.self.avatar, ctx.self.x < previousX);
   }
   updatePose(ctx.self.avatar, ctx.self.pose);
+  updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
 }
 
 /**
@@ -97,5 +99,6 @@ export function applyPeerState(ctx, peerState) {
     setFacing(peer.avatar, peer.x < previousX);
   }
   updatePose(peer.avatar, peer.pose);
+  updatePropEffects(peer.avatar, peer.x, peer.propId);
   return peer;
 }

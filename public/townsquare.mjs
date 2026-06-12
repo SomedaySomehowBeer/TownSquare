@@ -10,7 +10,7 @@ import { submitChat } from "./widget/chat.mjs";
 import {
   createAvatar,
   renderAvatar,
-  renderBench,
+  renderProps,
   renderShell,
   updatePose,
 } from "./widget/dom.mjs";
@@ -24,7 +24,6 @@ import { buildSocketUrl, getBrowserId, normalizeOrigin } from "./widget/utils.mj
  * @property {string} [serverOrigin] TownSquare server origin for static assets and WebSocket traffic.
  * @property {string} [socketPath="/live"] WebSocket path on the server origin.
  * @property {string} [siteKey] Hosted TownSquare site key. Self-hosted embeds can omit it.
- * @property {string} [instructions] Status-row helper text shown beside the visitor count.
  */
 
 /**
@@ -67,7 +66,7 @@ export function mountTownSquare(root, options = {}) {
     expandButton,
   } = renderShell(root);
 
-  renderBench(stage);
+  renderProps(stage);
 
   /** @type {import("./widget/context.mjs").WidgetContext} */
   const ctx = {
@@ -91,8 +90,9 @@ export function mountTownSquare(root, options = {}) {
       lastSendAt: 0,
       pose: null,
       propId: null,
-      benchZoneEnteredAt: 0,
-      benchRequested: false,
+      propZoneEnteredAt: 0,
+      settlePropId: null,
+      settleRequested: false,
       avatar: createAvatar({
         isSelf: true,
         onSubmitChat: () => submitChat(ctx),

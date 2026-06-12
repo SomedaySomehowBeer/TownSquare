@@ -7,9 +7,9 @@ Each item has a concrete "done when" bar.
 
 ## Where we are
 
-First playable slice works: widget, presence, movement, chat, one bench, deployable server.
+First playable slice works: widget, presence, movement, chat, bench and tree props, deployable server.
 
-Still thin: scene feels like a demo strip; one prop; anonymous visitors; deployment docs lack production examples; embed API not yet stable.
+Still thin: scene feels like a demo strip; anonymous visitors; deployment docs lack production examples; embed API not yet stable.
 
 ## Done
 
@@ -17,6 +17,7 @@ Still thin: scene feels like a demo strip; one prop; anonymous visitors; deploym
 - [x] **Left/right movement**: responsive, readable, not game-like
 - [x] **Lightweight chat**: speech bubbles + per-character recovery tray
 - [x] **Bench prop**: pause to sit; consistent seat ownership
+- [x] **Tree prop**: pause to rest; consistent seat ownership
 - [x] **Shared visitor across tabs**: one character per browser
 - [x] **Reusable embed module**: widget separate from demo bootstrap
 - [x] **Self-hostable server**: assets, WebSocket, `/healthz`, Docker
@@ -27,7 +28,7 @@ Focus: **scene legibility** and **credible self-host on a real site**.
 
 ### Scene
 
-- [ ] **Default props**: trees and lamps join the bench
+- [ ] **Default props**: lamps and a few more quiet scene props join the bench and tree
 - [ ] **Distinct behaviors**: one obvious interaction per prop, no instructions needed
 - [ ] **Busy-scene readability**: capped bubbles per character, overflow to tray, basic collision avoidance
 

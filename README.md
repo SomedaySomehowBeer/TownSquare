@@ -10,7 +10,7 @@ This repo currently contains a narrow but real slice:
 - real-time shared presence
 - simple left/right walking
 - lightweight real-time chat
-- one first bench prop with a sit interaction
+- bench and tree props with simple seat interactions
 - no-account hosted site registration
 - ephemeral in-memory server state
 
@@ -87,7 +87,7 @@ http://127.0.0.1:8787/healthz
   - a different browser or browser profile shows a second visitor
   - arrow keys move your figure left/right
   - movement is reflected in the other window
-  - pausing by the bench settles the visitor into a seat
+  - pausing by the bench or tree settles the visitor into a seat
   - chat messages appear above the figure and also enter the recent-message tray
   - closing one tab does not remove the visitor if another tab from that browser is still open
 
@@ -257,7 +257,7 @@ Included now:
 - one default scene
 - presence
 - walking
-- one bench prop with simple sit interaction
+- bench and tree props with simple seat interactions
 - lightweight chat with small per-character recovery tray
 - self-hostable single-process server
 - accountless hosted site registration with isolated scenes

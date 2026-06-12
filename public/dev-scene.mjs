@@ -3,13 +3,14 @@ import { sayMessage } from "./widget/chat.mjs";
 import {
   createAvatar,
   renderAvatar,
-  renderBench,
+  renderProps,
   renderShell,
   setFacing,
   setWalking,
   updatePose,
+  updatePropEffects,
 } from "./widget/dom.mjs";
-import { BENCH, BENCH_SETTLE_MS, MAX_X, MIN_X, MOVEMENT_SPEED } from "./widget/constants.mjs";
+import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS } from "./widget/constants.mjs";
 
 const DEFAULT_CHARACTER_COUNT = 12;
 const MAX_CHARACTER_COUNT = 60;
@@ -131,7 +132,9 @@ function createSelf(stage) {
     movingLeft: false,
     movingRight: false,
     pose: null,
-    benchZoneEnteredAt: 0,
+    propId: null,
+    propZoneEnteredAt: 0,
+    settlePropId: null,
     avatar: null,
   };
 
@@ -153,7 +156,12 @@ function createSelf(stage) {
 }
 
 function resetSelfSettle(self) {
-  self.benchZoneEnteredAt = 0;
+  self.propZoneEnteredAt = 0;
+  self.settlePropId = null;
+}
+
+function findSettleProp(x) {
+  return INTERACTIVE_PROPS.find((prop) => Math.abs(x - prop.x) < prop.zoneRadius);
 }
 
 function stepSelf(self, now, dt) {
@@ -161,34 +169,41 @@ function stepSelf(self, now, dt) {
 
   if (direction !== 0) {
     self.pose = null;
+    self.propId = null;
     resetSelfSettle(self);
     updatePose(self.avatar, self.pose);
     self.x = clamp(self.x + direction * MOVEMENT_SPEED * dt, MIN_X, MAX_X);
     renderAvatar(self.avatar, self.x);
     setFacing(self.avatar, direction < 0);
+    updatePropEffects(self.avatar, self.x, self.propId);
     setWalking(self.avatar, true);
     return;
   }
 
   setWalking(self.avatar, false);
-  if (self.pose === "sitting") return;
+  updatePropEffects(self.avatar, self.x, self.propId);
+  if (self.pose) return;
 
-  if (Math.abs(self.x - BENCH.x) >= BENCH.zoneRadius) {
+  const prop = findSettleProp(self.x);
+  if (!prop) {
     resetSelfSettle(self);
     return;
   }
 
-  if (!self.benchZoneEnteredAt) {
-    self.benchZoneEnteredAt = now;
+  if (self.settlePropId !== prop.id) {
+    self.settlePropId = prop.id;
+    self.propZoneEnteredAt = now;
     return;
   }
 
-  if (now - self.benchZoneEnteredAt < BENCH_SETTLE_MS) return;
+  if (now - self.propZoneEnteredAt < PROP_SETTLE_MS) return;
 
-  self.x = BENCH.x;
-  self.pose = "sitting";
+  self.x = prop.x + (prop.seats?.[0] || 0);
+  self.pose = prop.pose;
+  self.propId = prop.id;
   renderAvatar(self.avatar, self.x);
   updatePose(self.avatar, self.pose);
+  updatePropEffects(self.avatar, self.x, self.propId);
 }
 
 function mountDevScene(count, walking) {
@@ -196,7 +211,7 @@ function mountDevScene(count, walking) {
 
   const { stage, status } = renderShell(root);
 
-  renderBench(stage);
+  renderProps(stage);
   status.textContent = `You plus ${count} simulated ${count === 1 ? "character" : "characters"}`;
 
   const random = seededRandom(count * 9973);

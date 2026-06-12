@@ -74,9 +74,9 @@ export function wireSocket(ctx) {
 
     if (message.type === "move") {
       if (message.id === self.id) {
-        const wasSitting = self.pose === "sitting";
+        const hadPose = Boolean(self.pose);
         applySelfState(ctx, message);
-        if (!self.pose && !wasSitting) {
+        if (!self.pose && !hadPose) {
           bumpWalking(self);
         }
         return;

@@ -341,6 +341,12 @@ body {
   min-height: 0;
 }
 
+.prop--tree .canopy,
+.prop--tree .trunk {
+  fill: currentColor;
+  fill-opacity: 0.15;
+}
+
 .dev-page {
   min-height: 100vh;
 }
@@ -582,6 +588,9 @@ body {
 .avatar--has-history:focus-within { z-index: 2147483000; }
 .avatar.walking { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
 .avatar--sitting { bottom: 44px; }
+.avatar--resting { bottom: 42px; }
+.avatar--shaded { filter: brightness(0.88); }
+.avatar.walking.avatar--shaded { filter: brightness(0.88) drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
 
 /* Walk-sandbox preview: fills the preview box instead of standing on a stage. */
 .avatar--preview {
@@ -737,7 +746,8 @@ body {
   85% { transform: rotate(-10deg); }
 }
 
-.avatar--sitting svg :is(g.figure-core, g.joint) {
+.avatar--sitting svg :is(g.figure-core, g.joint),
+.avatar--resting svg :is(g.figure-core, g.joint) {
   animation: none !important;
   transition: transform 220ms ease;
 }
@@ -751,6 +761,16 @@ body {
 .avatar--sitting svg g.arm-r { transform: rotate(16deg); }
 .avatar--sitting svg g.elbow-l { transform: rotate(24deg); }
 .avatar--sitting svg g.elbow-r { transform: rotate(-24deg); }
+
+.avatar--resting svg g.figure-core { transform: translateY(0) rotate(-10deg); }
+.avatar--resting svg g.leg-l { transform: rotate(120deg); }
+.avatar--resting svg g.leg-r { transform: rotate(118deg); }
+.avatar--resting svg g.knee-l { transform: rotate(-88deg); }
+.avatar--resting svg g.knee-r { transform: rotate(-85deg); }
+.avatar--resting svg g.arm-l,
+.avatar--resting svg g.arm-r { transform: rotate(45deg); }
+.avatar--resting svg g.elbow-l { transform: rotate(10deg); }
+.avatar--resting svg g.elbow-r { transform: rotate(-30deg); }
 
 /* ── Ghost stack: history lives in the scene as fading bubbles above the figure ── */
 .avatar__above {

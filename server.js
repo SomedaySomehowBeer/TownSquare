@@ -13,7 +13,7 @@ loadEnvFile();
  * - serve the demo page and widget assets from ./public
  * - keep a short-lived in-memory list of connected visitors
  * - treat multiple tabs from the same browser as one visitor identity
- * - arbitrate the first bench prop so seat ownership stays consistent
+ * - arbitrate interactive props so seat ownership stays consistent
  * - broadcast movement/chat/presence events over WebSocket
  *
  * Non-goals for this first slice:
@@ -82,13 +82,23 @@ function loadEnvFile(filePath = path.join(__dirname, ".env")) {
   }
 }
 
-const BENCH = {
-  id: "bench",
-  x: 0.2,
-  zoneRadius: 0.035,
-  pose: "sitting",
-  seats: [-0.01, 0.01],
-};
+const PROPS = [
+  {
+    id: "bench",
+    x: 0.2,
+    zoneRadius: 0.035,
+    pose: "sitting",
+    seats: [-0.01, 0.01],
+  },
+  {
+    id: "tree",
+    x: 0.8,
+    zoneRadius: 0.015,
+    pose: "resting",
+    seats: [-0.008, 0.008],
+  },
+];
+const PROPS_BY_ID = new Map(PROPS.map((prop) => [prop.id, prop]));
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -770,21 +780,22 @@ function clearPose(identity) {
   identity.propId = null;
 }
 
-function findAvailableBenchSeatX(scene, requestedX, excludeIdentityId = null) {
+function findAvailableSeatX(scene, prop, requestedX, excludeIdentityId = null) {
+  const seats = Array.isArray(prop.seats) && prop.seats.length > 0 ? prop.seats : [0];
   const takenSeats = new Set();
 
   for (const identity of scene.identities.values()) {
-    if (!identity.joined || identity.propId !== BENCH.id) continue;
+    if (!identity.joined || identity.propId !== prop.id) continue;
     if (identity.id === excludeIdentityId) continue;
 
-    const seatIndex = BENCH.seats.findIndex((offset) => Math.abs(identity.x - (BENCH.x + offset)) < 0.005);
+    const seatIndex = seats.findIndex((offset) => Math.abs(identity.x - (prop.x + offset)) < 0.005);
     if (seatIndex !== -1) {
       takenSeats.add(seatIndex);
     }
   }
 
-  const freeSeats = BENCH.seats
-    .map((offset, index) => ({ index, x: BENCH.x + offset }))
+  const freeSeats = seats
+    .map((offset, index) => ({ index, x: prop.x + offset }))
     .filter((seat) => !takenSeats.has(seat.index));
 
   if (freeSeats.length === 0) {
@@ -1099,17 +1110,18 @@ function handleMove(client, message) {
 
 function handleSettle(client, message) {
   if (!client.identity) return;
-  if (message.propId !== BENCH.id) return;
+  const prop = PROPS_BY_ID.get(message.propId);
+  if (!prop?.pose) return;
 
   const identity = client.identity;
-  if (Math.abs(identity.x - BENCH.x) > BENCH.zoneRadius) return;
+  if (Math.abs(identity.x - prop.x) > prop.zoneRadius) return;
 
-  const seatX = findAvailableBenchSeatX(client.scene, identity.x, identity.id);
+  const seatX = findAvailableSeatX(client.scene, prop, identity.x, identity.id);
   if (seatX === null) return;
 
   identity.x = seatX;
-  identity.pose = BENCH.pose;
-  identity.propId = BENCH.id;
+  identity.pose = prop.pose;
+  identity.propId = prop.id;
 
   emitIdentityState(identity);
 }

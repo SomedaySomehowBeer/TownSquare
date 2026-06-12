@@ -262,6 +262,41 @@ async function main() {
   assert(thirdSeatState, "second visitor did not settle onto the bench");
   assert(Math.abs(thirdSeatState.x - firstBenchState.x) > 0.005, "bench seat allocation reused an occupied seat");
 
+  secondSameBrowser.ws.send(JSON.stringify({ type: "move", x: 0.8 }));
+  await delay(100);
+  secondSameBrowser.ws.send(JSON.stringify({ type: "settle", propId: "tree" }));
+  await delay(100);
+
+  const firstTreeState = findLast(first.seen, (message) => (
+    message.type === "move"
+    && message.id === first.id
+    && message.pose === "resting"
+    && message.propId === "tree"
+  ));
+  const thirdTreeState = findLast(third.seen, (message) => (
+    message.type === "move"
+    && message.id === first.id
+    && message.pose === "resting"
+    && message.propId === "tree"
+  ));
+
+  assert(firstTreeState, "same-browser tree settle did not propagate to sibling tab");
+  assert(thirdTreeState, "tree settle did not propagate to other visitors");
+
+  third.ws.send(JSON.stringify({ type: "move", x: 0.8 }));
+  await delay(100);
+  third.ws.send(JSON.stringify({ type: "settle", propId: "tree" }));
+  await delay(100);
+
+  const thirdTreeSeatState = findLast(first.seen, (message) => (
+    message.type === "move"
+    && message.id === third.id
+    && message.pose === "resting"
+    && message.propId === "tree"
+  ));
+  assert(thirdTreeSeatState, "second visitor did not settle under the tree");
+  assert(Math.abs(thirdTreeSeatState.x - firstTreeState.x) > 0.005, "tree seat allocation reused an occupied seat");
+
   secondSameBrowser.ws.close();
   await delay(100);
 

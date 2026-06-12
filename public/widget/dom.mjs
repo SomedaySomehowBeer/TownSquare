@@ -2,7 +2,7 @@
  * DOM construction and avatar/scene rendering for the TownSquare widget.
  */
 
-import { BENCH } from "./constants.mjs";
+import { PROPS } from "./constants.mjs";
 import { figureMarkup } from "./figure.mjs";
 
 /**
@@ -276,14 +276,16 @@ function setSendReady(avatar, ready) {
 /**
  * @param {HTMLElement} container
  */
-export function renderBench(container) {
-  const bench = document.createElement("div");
-  bench.className = "prop prop--bench";
-  bench.style.left = `${(BENCH.x * 100).toFixed(2)}%`;
-  bench.style.width = `${BENCH.width}px`;
-  bench.style.height = `${BENCH.height}px`;
-  bench.innerHTML = BENCH.svg;
-  container.appendChild(bench);
+export function renderProps(container) {
+  for (const prop of PROPS) {
+    const el = document.createElement("div");
+    el.className = `prop prop--${prop.id}`;
+    el.style.left = `${(prop.x * 100).toFixed(2)}%`;
+    el.style.width = `${prop.width}px`;
+    el.style.height = `${prop.height}px`;
+    el.innerHTML = prop.svg;
+    container.appendChild(el);
+  }
 }
 
 /**
@@ -316,9 +318,27 @@ export function setWalking(avatar, walking) {
  */
 export function updatePose(avatar, pose) {
   avatar.el.classList.toggle("avatar--sitting", pose === "sitting");
-  if (pose === "sitting") {
+  avatar.el.classList.toggle("avatar--resting", pose === "resting");
+  if (pose) {
     setWalking(avatar, false);
   }
+}
+
+/**
+ * @param {AvatarView} avatar
+ * @param {number} x
+ * @param {string | null} propId
+ */
+export function updatePropEffects(avatar, x, propId) {
+  const activeProp = PROPS.find((prop) => prop.id === propId);
+  if (activeProp?.faceAway) {
+    setFacing(avatar, x >= activeProp.x);
+  }
+
+  avatar.el.classList.toggle(
+    "avatar--shaded",
+    PROPS.some((prop) => prop.shadeRadius && Math.abs(x - prop.x) < prop.shadeRadius),
+  );
 }
 
 /**

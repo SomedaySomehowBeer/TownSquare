@@ -6,7 +6,7 @@
 
 export const BUBBLE_TTL_MS = 6000;
 export const BROWSER_ID_KEY = "townsquare-browser-id";
-export const BENCH_SETTLE_MS = 700;
+export const PROP_SETTLE_MS = 700;
 export const MAX_RECENT_MESSAGES = 5;
 /** Most bubbles kept visible in a figure's ghost stack (live + lingering ghosts). */
 export const GHOST_STACK_MAX = 4;
@@ -15,22 +15,59 @@ export const SEND_INTERVAL_MS = 45;
 export const MIN_X = 0.02;
 export const MAX_X = 0.98;
 
-/** @type {{ id: string, x: number, zoneRadius: number, width: number, height: number, svg: string }} */
-export const BENCH = {
-  id: "bench",
-  x: 0.2,
-  zoneRadius: 0.035,
-  width: 52,
-  height: 18,
-  svg: `
-    <svg viewBox="0 0 50 18" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
-      <line x1="8" y1="8" x2="6" y2="17"></line>
-      <line x1="42" y1="8" x2="44" y2="17"></line>
-      <line x1="3" y1="8" x2="47" y2="8"></line>
-      <line x1="6" y1="1" x2="6" y2="8"></line>
-      <line x1="44" y1="1" x2="44" y2="8"></line>
-      <line x1="6" y1="2" x2="44" y2="2"></line>
-      <line x1="6" y1="5" x2="44" y2="5"></line>
-    </svg>
-  `,
-};
+/**
+ * @typedef {Object} SceneProp
+ * @property {string} id
+ * @property {number} x
+ * @property {number} zoneRadius
+ * @property {number} width
+ * @property {number} height
+ * @property {string} [pose]
+ * @property {Array<number>} [seats]
+ * @property {boolean} [faceAway]
+ * @property {number} [shadeRadius]
+ * @property {string} svg
+ */
+
+/** @type {Array<SceneProp>} */
+export const PROPS = [
+  {
+    id: "bench",
+    x: 0.2,
+    zoneRadius: 0.035,
+    width: 52,
+    height: 18,
+    pose: "sitting",
+    seats: [-0.01, 0.01],
+    svg: `
+      <svg viewBox="0 0 50 18" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+        <line x1="8" y1="8" x2="6" y2="17"></line>
+        <line x1="42" y1="8" x2="44" y2="17"></line>
+        <line x1="3" y1="8" x2="47" y2="8"></line>
+        <line x1="6" y1="1" x2="6" y2="8"></line>
+        <line x1="44" y1="1" x2="44" y2="8"></line>
+        <line x1="6" y1="2" x2="44" y2="2"></line>
+        <line x1="6" y1="5" x2="44" y2="5"></line>
+      </svg>
+    `,
+  },
+  {
+    id: "tree",
+    x: 0.8,
+    zoneRadius: 0.015,
+    width: 56,
+    height: 76,
+    pose: "resting",
+    seats: [-0.008, 0.008],
+    faceAway: true,
+    shadeRadius: 0.045,
+    svg: `
+      <svg viewBox="0 0 56 76" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+        <path class="canopy" d="M13 44 C4 39 0 30 4 21 C7 14 12 9 17 8 C20 4 23 2 25 4 C27 1 29 1 31 4 C33 2 36 4 39 8 C44 9 49 14 52 21 C56 30 52 39 43 44 Z"></path>
+        <path class="trunk" d="M25 44 L25 75 L31 75 L31 44 Z"></path>
+      </svg>
+    `,
+  },
+];
+
+export const INTERACTIVE_PROPS = PROPS.filter((prop) => prop.pose && prop.zoneRadius > 0);

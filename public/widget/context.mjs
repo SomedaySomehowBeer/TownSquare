@@ -19,8 +19,9 @@
  * @property {number} lastSendAt
  * @property {string | null} pose
  * @property {string | null} propId
- * @property {number} benchZoneEnteredAt
- * @property {boolean} benchRequested
+ * @property {number} propZoneEnteredAt
+ * @property {string | null} settlePropId
+ * @property {boolean} settleRequested
  * @property {AvatarView} avatar
  * @property {ReturnType<typeof setTimeout> | null} walkTimer
  */

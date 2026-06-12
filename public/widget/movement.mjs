@@ -3,8 +3,8 @@
  */
 
 import { layoutBubbleColumns } from "./bubble-layout.mjs";
-import { BENCH, BENCH_SETTLE_MS, MAX_X, MIN_X, MOVEMENT_SPEED, SEND_INTERVAL_MS } from "./constants.mjs";
-import { renderAvatar, setFacing, setWalking, updatePose } from "./dom.mjs";
+import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, SEND_INTERVAL_MS } from "./constants.mjs";
+import { renderAvatar, setFacing, setWalking, updatePose, updatePropEffects } from "./dom.mjs";
 
 /**
  * @typedef {import("./context.mjs").WidgetContext} WidgetContext
@@ -21,36 +21,41 @@ export function clampSelfX(x) {
 /**
  * @param {WidgetContext} ctx
  */
-export function resetBenchSettle(ctx) {
-  ctx.self.benchZoneEnteredAt = 0;
-  ctx.self.benchRequested = false;
+export function resetPropSettle(ctx) {
+  ctx.self.propZoneEnteredAt = 0;
+  ctx.self.settlePropId = null;
+  ctx.self.settleRequested = false;
 }
 
 /**
  * @param {WidgetContext} ctx
  * @param {number} now
  */
-export function maybeRequestBenchSettle(ctx, now) {
+export function maybeRequestPropSettle(ctx, now) {
   const { self, socket } = ctx;
-  if (self.pose === "sitting") return;
+  if (self.pose) return;
   if (socket.readyState !== WebSocket.OPEN) return;
 
-  const isNearBench = Math.abs(self.x - BENCH.x) < BENCH.zoneRadius;
-  if (!isNearBench) {
-    resetBenchSettle(ctx);
+  const prop = INTERACTIVE_PROPS.find((candidate) => (
+    Math.abs(self.x - candidate.x) < candidate.zoneRadius
+  ));
+  if (!prop) {
+    resetPropSettle(ctx);
     return;
   }
 
-  if (!self.benchZoneEnteredAt) {
-    self.benchZoneEnteredAt = now;
+  if (self.settlePropId !== prop.id) {
+    self.propZoneEnteredAt = now;
+    self.settlePropId = prop.id;
+    self.settleRequested = false;
   }
 
-  if (self.benchRequested || now - self.benchZoneEnteredAt < BENCH_SETTLE_MS) {
+  if (self.settleRequested || now - self.propZoneEnteredAt < PROP_SETTLE_MS) {
     return;
   }
 
-  self.benchRequested = true;
-  socket.send(JSON.stringify({ type: "settle", propId: BENCH.id }));
+  self.settleRequested = true;
+  socket.send(JSON.stringify({ type: "settle", propId: prop.id }));
 }
 
 /**
@@ -91,18 +96,20 @@ export function tick(ctx, now) {
 
   const direction = Number(ctx.self.movingRight) - Number(ctx.self.movingLeft);
   if (direction !== 0) {
-    resetBenchSettle(ctx);
+    resetPropSettle(ctx);
     ctx.self.pose = null;
     ctx.self.propId = null;
     updatePose(ctx.self.avatar, ctx.self.pose);
     ctx.self.x = clampSelfX(ctx.self.x + direction * MOVEMENT_SPEED * dt);
     renderAvatar(ctx.self.avatar, ctx.self.x);
     setFacing(ctx.self.avatar, direction < 0);
+    updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
     setWalking(ctx.self.avatar, true);
     maybeSendMove(ctx);
   } else {
     setWalking(ctx.self.avatar, false);
-    maybeRequestBenchSettle(ctx, now);
+    updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
+    maybeRequestPropSettle(ctx, now);
   }
 
   layoutBubbleColumns(ctx.stage, [ctx.self, ...ctx.peers.values()], ctx.self.x);
