@@ -4,6 +4,9 @@ node_modules/
 # Local deploy config
 .env.deploy.local
 
+# Local hosted-site registry
+.data/
+
 # Logs
 npm-debug.log*
 
