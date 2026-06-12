@@ -292,7 +292,10 @@
   fill: currentColor;
 }
 
-.avatar--self { color: var(--you); }
+.avatar--self {
+  color: var(--you);
+  z-index: 2147483001;
+}
 .avatar--peer { color: var(--other); }
 
 /* peers are clickable (recent-message tray); the cursor also marks the slim
