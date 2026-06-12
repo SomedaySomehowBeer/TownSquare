@@ -229,8 +229,32 @@
   fill-opacity: 0.15;
 }
 
+.prop--lamp {
+  z-index: 1;
+}
+
+.prop__light {
+  position: absolute;
+  top: 16%;
+  left: 75%;
+  width: 90px;
+  height: 88%;
+  transform: translateX(-50%);
+  clip-path: polygon(38% 0%, 62% 0%, 100% 100%, 0% 100%);
+  background: linear-gradient(
+    to bottom,
+    rgba(253, 230, 160, 0.5) 0%,
+    rgba(253, 230, 160, 0.2) 42%,
+    rgba(253, 230, 160, 0.04) 100%
+  );
+  opacity: 0.34;
+}
+
 .avatar {
   --walk-cycle: 0.8s;
+  --avatar-walk-filter: ;
+  --avatar-shade-filter: ;
+  --avatar-light-filter: ;
   position: absolute;
   bottom: 53px;
   width: 18px;
@@ -271,11 +295,16 @@
 /* reading a character's tray outranks any neighbour's speak-order stacking */
 .avatar--has-history:hover,
 .avatar--has-history:focus-within { z-index: 2147483000; }
-.avatar.walking { filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
+.avatar:is(.walking, .avatar--shaded, .avatar--lit) {
+  filter: var(--avatar-shade-filter) var(--avatar-walk-filter) var(--avatar-light-filter);
+}
+.avatar.walking { --avatar-walk-filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
 .avatar--sitting { bottom: 44px; }
 .avatar--resting { bottom: 42px; }
-.avatar--shaded { filter: brightness(0.88); }
-.avatar.walking.avatar--shaded { filter: brightness(0.88) drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
+.avatar--shaded { --avatar-shade-filter: brightness(0.88); }
+.avatar--lit {
+  --avatar-light-filter: drop-shadow(0 0 3px rgba(253, 230, 160, 0.7)) drop-shadow(0 0 6px rgba(253, 230, 160, 0.25));
+}
 
 /* Walk-sandbox preview: fills the preview box instead of standing on a stage. */
 .avatar--preview {

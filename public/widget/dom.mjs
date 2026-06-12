@@ -284,6 +284,12 @@ export function renderProps(container) {
     el.style.width = `${prop.width}px`;
     el.style.height = `${prop.height}px`;
     el.innerHTML = prop.svg;
+    if (prop.lightRadius) {
+      const light = document.createElement("div");
+      light.className = "prop__light";
+      light.setAttribute("aria-hidden", "true");
+      el.appendChild(light);
+    }
     container.appendChild(el);
   }
 }
@@ -338,6 +344,10 @@ export function updatePropEffects(avatar, x, propId) {
   avatar.el.classList.toggle(
     "avatar--shaded",
     PROPS.some((prop) => prop.shadeRadius && Math.abs(x - prop.x) < prop.shadeRadius),
+  );
+  avatar.el.classList.toggle(
+    "avatar--lit",
+    PROPS.some((prop) => prop.lightRadius && Math.abs(x - prop.x) < prop.lightRadius),
   );
 }
 

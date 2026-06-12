@@ -26,6 +26,7 @@ export const MAX_X = 0.98;
  * @property {Array<number>} [seats]
  * @property {boolean} [faceAway]
  * @property {number} [shadeRadius]
+ * @property {number} [lightRadius]
  * @property {string} svg
  */
 
@@ -48,6 +49,23 @@ export const PROPS = [
         <line x1="44" y1="1" x2="44" y2="8"></line>
         <line x1="6" y1="2" x2="44" y2="2"></line>
         <line x1="6" y1="5" x2="44" y2="5"></line>
+      </svg>
+    `,
+  },
+  {
+    id: "lamp",
+    x: 0.13,
+    zoneRadius: 0,
+    width: 20,
+    height: 56,
+    lightRadius: 0.045,
+    svg: `
+      <svg viewBox="0 0 20 56" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
+        <line x1="3" y1="55" x2="11" y2="55"></line>
+        <line x1="7" y1="55" x2="7" y2="10"></line>
+        <path d="M7 10 C7 4 9 2 15 2"></path>
+        <line x1="15" y1="2" x2="15" y2="5"></line>
+        <path d="M12 5 L11 9 L19 9 L18 5 Z"></path>
       </svg>
     `,
   },
