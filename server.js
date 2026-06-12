@@ -26,6 +26,8 @@ loadEnvFile();
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8787);
 const SERVICE_ADMIN_PASSWORD = process.env.SERVICE_ADMIN_PASSWORD || "";
+const TELEGRAM_BOT_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
+const TELEGRAM_CHAT_ID = String(process.env.TELEGRAM_CHAT_ID || "").trim();
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
 const SITES_FILE = path.join(DATA_DIR, "sites.json");
@@ -54,6 +56,7 @@ const MOVE_THROTTLE_MS = 40;
 const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
 const HEARTBEAT_INTERVAL_MS = 30000;
+const TELEGRAM_API_TIMEOUT_MS = 5000;
 
 function loadEnvFile(filePath = path.join(__dirname, ".env")) {
   try {
@@ -354,6 +357,55 @@ function getPublicOrigin(req) {
   const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
   const proto = forwardedProto === "https" ? "https" : "http";
   return normalizeOrigin(`${proto}://${req.headers.host || `${HOST}:${PORT}`}`);
+}
+
+function escapeTelegramMarkdown(text) {
+  return String(text || "").replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
+}
+
+function buildTelegramMessage(site, identity, text, at) {
+  const siteLabel = site
+    ? `${site.name} (${site.origin})`
+    : "default scene";
+
+  return [
+    "*TownSquare message*",
+    `Site: ${escapeTelegramMarkdown(siteLabel)}`,
+    `Visitor: ${escapeTelegramMarkdown(String(identity.id))}`,
+    `Browser: ${escapeTelegramMarkdown(identity.browserId)}`,
+    `At: ${escapeTelegramMarkdown(new Date(at).toISOString())}`,
+    "",
+    escapeTelegramMarkdown(text),
+  ].join("\n");
+}
+
+async function sendTelegramChatNotification(site, identity, text, at) {
+  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TELEGRAM_API_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+      method: "POST",
+      headers: { "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: buildTelegramMessage(site, identity, text, at),
+        parse_mode: "MarkdownV2",
+        disable_web_page_preview: true,
+      }),
+      signal: controller.signal,
+    });
+
+    if (!response.ok) {
+      console.warn(`Telegram notification failed with ${response.status}`);
+    }
+  } catch (error) {
+    console.warn(`Telegram notification failed: ${error.message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function buildEmbedSnippet(req, site) {
@@ -1123,6 +1175,8 @@ function handleSay(client, message) {
   client.lastChatAt = now;
   client.identity.messages.push({ text, at: now });
   client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
+
+  void sendTelegramChatNotification(client.site, client.identity, text, now);
 
   broadcast(
     client.scene,

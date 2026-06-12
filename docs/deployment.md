@@ -25,6 +25,7 @@ Configure with environment variables:
 - `REGISTRATIONS_PER_HOUR` per-IP registration rate limit (default 20, `0` disables)
 - `AUTH_FAILURES_PER_HOUR` per-IP failed admin sign-in throttle (default 30, `0` disables)
 - `SERVICE_ADMIN_PASSWORD` to enable the service admin page
+- `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to send Telegram notifications for chat messages
 
 For local runs, `server.js` also reads `.env` if it exists.
 Real environment variables take precedence over `.env` values.

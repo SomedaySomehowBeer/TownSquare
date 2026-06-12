@@ -167,6 +167,7 @@ Set `DATA_DIR` if the registry should live somewhere else.
 Set `PUBLIC_ORIGIN` in production so generated snippets use the public HTTPS origin.
 Set `AUTH_FAILURES_PER_HOUR` to tune per-IP failed admin sign-in throttling; `0` disables it.
 Set `SERVICE_ADMIN_PASSWORD` to enable `/service-admin`, where the service operator can list registered sites, reset site admin tokens, disable sites or chat, and delete site records.
+Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to send a Telegram notification whenever a chat message is sent.
 For local runs, `server.js` also reads `.env` if it exists; real environment variables win over `.env` values.
 
 ## Deploy updates to the shared Hetzner host
