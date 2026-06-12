@@ -124,15 +124,6 @@ export function readCurrentPage(root, options = {}) {
 }
 
 /**
- * @param {HTMLElement} root
- * @param {{ readingLabel?: string }} options
- * @returns {string}
- */
-export function readCurrentPageLabel(root, options = {}) {
-  return readCurrentPage(root, options).readingLabel;
-}
-
-/**
  * @returns {{ displayName: string, color: string }}
  */
 export function getStoredProfile() {
