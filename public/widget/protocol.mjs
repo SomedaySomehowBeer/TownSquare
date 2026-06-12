@@ -17,6 +17,37 @@ import {
 
 const WALK_BUMP_MS = 120;
 
+/**
+ * @param {CloseEvent} event
+ * @param {{ joined: boolean, opened: boolean }} state
+ * @returns {string}
+ */
+function describeDisconnectMessage(event, { joined, opened }) {
+  const reason = event.reason || "";
+
+  if (reason === "full") {
+    return "Square is full right now. Try again later.";
+  }
+  if (reason === "kicked") {
+    return "You were removed from the square.";
+  }
+  if (reason === "blocked") {
+    return "You can't join this square right now.";
+  }
+  if (reason === "site disabled" || reason === "site disabled or unknown") {
+    return "This TownSquare isn't available right now.";
+  }
+  if (reason === "origin not allowed") {
+    return "This page isn't allowed to connect to that TownSquare.";
+  }
+
+  if (!opened || (!joined && event.code === 1006)) {
+    return "Couldn't connect to TownSquare. Check your connection and try again.";
+  }
+
+  return "Disconnected. Refresh to rejoin the square.";
+}
+
 function bumpWalking(presence) {
   setWalking(presence.avatar, true);
   clearTimeout(presence.walkTimer);
@@ -30,9 +61,17 @@ function bumpWalking(presence) {
  */
 export function wireSocket(ctx) {
   const { socket, browserId, self, peers, statusEl } = ctx;
+  let opened = false;
 
   socket.addEventListener("open", () => {
+    opened = true;
     socket.send(JSON.stringify({ type: "init", browserId, x: self.x }));
+  });
+
+  socket.addEventListener("error", () => {
+    if (!self.id) {
+      statusEl.textContent = "Couldn't connect to TownSquare. Check your connection and try again.";
+    }
   });
 
   socket.addEventListener("message", (event) => {
@@ -110,8 +149,9 @@ export function wireSocket(ctx) {
   });
 
   socket.addEventListener("close", (event) => {
-    statusEl.textContent = event.code === 1006 || event.reason === "full"
-      ? "Square is full right now. Try again later."
-      : "Disconnected. Refresh to rejoin the square.";
+    statusEl.textContent = describeDisconnectMessage(event, {
+      joined: Boolean(self.id),
+      opened,
+    });
   });
 }

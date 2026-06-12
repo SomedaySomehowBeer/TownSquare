@@ -1011,29 +1011,7 @@ const wss = new WebSocketServer({
   server,
   path: "/live",
   maxPayload: MAX_WS_PAYLOAD_BYTES,
-  verifyClient(info, done) {
-    const access = validateSiteAccess(info.req.url || "/live");
-    const connectionCount = access.ok ? access.scene.clients.size : 0;
-
-    if (!access.ok) {
-      done(false, access.status, access.reason);
-      return;
-    }
-
-    if (connectionCount >= MAX_CONNECTIONS) {
-      done(false, 503, "full");
-      return;
-    }
-
-    const originAllowed = access.site
-      ? isOriginAllowedForSite(info.origin, access.site)
-      : isAllowedOrigin(info.origin, info.req.headers.host);
-
-    if (!originAllowed) {
-      done(false, 403, "origin not allowed");
-      return;
-    }
-
+  verifyClient(_info, done) {
     done(true);
   },
 });
@@ -1211,6 +1189,20 @@ wss.on("connection", (ws, req) => {
   const access = validateSiteAccess(req.url || "/live");
   if (!access.ok) {
     ws.close(4003, access.reason);
+    return;
+  }
+
+  const originAllowed = access.site
+    ? isOriginAllowedForSite(req.headers.origin, access.site)
+    : isAllowedOrigin(req.headers.origin, req.headers.host);
+
+  if (!originAllowed) {
+    ws.close(4003, "origin not allowed");
+    return;
+  }
+
+  if (access.scene.clients.size >= MAX_CONNECTIONS) {
+    ws.close(1013, "full");
     return;
   }
 
