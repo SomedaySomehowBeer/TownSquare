@@ -145,6 +145,8 @@
   height: 180px;
   border-radius: var(--r) var(--r) 0 0;
   background: transparent;
+  /* taps move the avatar; keep page panning, drop double-tap zoom */
+  touch-action: manipulation;
 }
 
 .townsquare__ground {
@@ -201,9 +203,10 @@
   padding: 0 18px 18px;
   border-top: 0;
   border-radius: 0;
-  background: transparent;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  /* opaque: expanded mode sits in front of the host page, not blended into it */
+  background: var(--page);
+  display: flex;
+  flex-direction: column;
 }
 
 .townsquare--expanded .townsquare__controls {
@@ -218,6 +221,7 @@
 }
 
 .townsquare--expanded .townsquare__stage {
+  flex: 1 1 auto;
   height: auto;
   min-height: 0;
 }
@@ -293,7 +297,8 @@
 
 /* reading a character's tray outranks any neighbour's speak-order stacking */
 .avatar--has-history:hover,
-.avatar--has-history:focus-within { z-index: 2147483000; }
+.avatar--has-history:focus-within,
+.avatar--tray-open { z-index: 2147483000; }
 .avatar:is(.walking, .avatar--shaded, .avatar--lit) {
   filter: var(--avatar-shade-filter) var(--avatar-walk-filter) var(--avatar-light-filter);
 }
@@ -593,7 +598,8 @@
 }
 
 .avatar--has-history:hover .avatar__tray,
-.avatar--has-history:focus-within .avatar__tray {
+.avatar--has-history:focus-within .avatar__tray,
+.avatar--tray-open .avatar__tray {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, 0);
@@ -752,4 +758,49 @@
 @media (max-width: 640px) {
   .townsquare__status { flex-direction: column; gap: 4px; }
   .avatar__composer { min-width: min(260px, 80vw); }
+}
+
+/* ── Touch: docked composer ──
+   On coarse pointers the composer detaches from the figure and docks as a bar
+   at the bottom of the widget, where the virtual keyboard can't clip it. */
+.avatar__composer.avatar__composer--docked {
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2147483002;
+  min-width: 0;
+  max-width: none;
+}
+
+/* in expanded (fixed) mode the page can't scroll, so ride above the keyboard */
+.townsquare--expanded .avatar__composer.avatar__composer--docked {
+  bottom: calc(10px + var(--ts-keyboard, 0px));
+}
+
+@media (pointer: coarse) {
+  .townsquare__control {
+    width: 40px;
+    height: 40px;
+  }
+
+  .townsquare__control svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .townsquare__status {
+    right: 152px;
+  }
+
+  .avatar__plate {
+    padding: 9px 15px 9px 13px;
+  }
+
+  /* widen the 18px figure's tap zone so "tap a person" doesn't need precision */
+  .avatar--peer::before {
+    content: "";
+    position: absolute;
+    inset: -8px -16px;
+  }
 }

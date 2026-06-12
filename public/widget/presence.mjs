@@ -88,6 +88,10 @@ export function applySelfState(ctx, state) {
   ctx.self.x = state.x;
   ctx.self.pose = state.pose || null;
   ctx.self.propId = state.propId || null;
+  if (ctx.self.pose) {
+    // The server snapped us onto a seat; abandon any pending tap destination.
+    ctx.self.targetX = null;
+  }
   ctx.self.settleRequested = false;
   ctx.self.settlePropId = null;
   ctx.self.propZoneEnteredAt = 0;

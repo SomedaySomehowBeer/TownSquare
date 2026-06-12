@@ -1,5 +1,5 @@
 /**
- * Keyboard input, local movement animation, and prop settle requests.
+ * Keyboard and stage tap input, local movement animation, and prop settle requests.
  */
 
 import { layoutBubbleColumns } from "./bubble-layout.mjs";
@@ -89,18 +89,35 @@ export function tick(ctx, now) {
   if (ctx.quiet) {
     ctx.self.movingLeft = false;
     ctx.self.movingRight = false;
+    ctx.self.targetX = null;
     setWalking(ctx.self.avatar, false);
     ctx.frameHandle = requestAnimationFrame((nextNow) => tick(ctx, nextNow));
     return;
   }
 
-  const direction = Number(ctx.self.movingRight) - Number(ctx.self.movingLeft);
+  // Held arrow keys always win over a pending tap destination.
+  const held = Number(ctx.self.movingRight) - Number(ctx.self.movingLeft);
+  if (held !== 0) {
+    ctx.self.targetX = null;
+  }
+
+  let direction = held;
+  let arrived = false;
+  if (direction === 0 && ctx.self.targetX !== null) {
+    const delta = ctx.self.targetX - ctx.self.x;
+    direction = delta < 0 ? -1 : 1;
+    arrived = Math.abs(delta) <= MOVEMENT_SPEED * dt;
+  }
+
   if (direction !== 0) {
     resetPropSettle(ctx);
     ctx.self.pose = null;
     ctx.self.propId = null;
     updatePose(ctx.self.avatar, ctx.self.pose);
-    ctx.self.x = clampSelfX(ctx.self.x + direction * MOVEMENT_SPEED * dt);
+    ctx.self.x = clampSelfX(arrived ? ctx.self.targetX : ctx.self.x + direction * MOVEMENT_SPEED * dt);
+    if (arrived) {
+      ctx.self.targetX = null;
+    }
     renderAvatar(ctx.self.avatar, ctx.self.x);
     setFacing(ctx.self.avatar, direction < 0);
     updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
@@ -161,4 +178,54 @@ export function wireKeyboard(ctx) {
 export function unwireKeyboard(ctx) {
   window.removeEventListener("keydown", ctx.onKeyDown);
   window.removeEventListener("keyup", ctx.onKeyUp);
+}
+
+/**
+ * @param {WidgetContext} ctx
+ */
+export function closeTrays(ctx) {
+  for (const peer of ctx.peers.values()) {
+    peer.avatar.el.classList.remove("avatar--tray-open");
+  }
+}
+
+/**
+ * Tap input on the stage: tapping ground walks there, tapping a character
+ * toggles their recent-message tray. Click fires for both mouse and touch and
+ * is suppressed by the browser during scroll gestures, so page scrolling
+ * through the embed keeps working.
+ *
+ * @param {WidgetContext} ctx
+ */
+export function wireStagePointer(ctx) {
+  ctx.onStageClick = (event) => {
+    if (ctx.quiet) return;
+
+    const target = event.target instanceof Element ? event.target : null;
+    const avatarEl = target?.closest(".avatar");
+    if (avatarEl) {
+      // Self taps are handled by the nameplate/composer; peers toggle the tray.
+      if (avatarEl.classList.contains("avatar--self")) return;
+      const open = !avatarEl.classList.contains("avatar--tray-open");
+      closeTrays(ctx);
+      if (open && avatarEl.classList.contains("avatar--has-history")) {
+        avatarEl.classList.add("avatar--tray-open");
+      }
+      return;
+    }
+
+    closeTrays(ctx);
+    const rect = ctx.stage.getBoundingClientRect();
+    if (rect.width <= 0) return;
+    ctx.self.targetX = clampSelfX((event.clientX - rect.left) / rect.width);
+  };
+
+  ctx.stage.addEventListener("click", ctx.onStageClick);
+}
+
+/**
+ * @param {WidgetContext} ctx
+ */
+export function unwireStagePointer(ctx) {
+  ctx.stage.removeEventListener("click", ctx.onStageClick);
 }
