@@ -96,23 +96,8 @@ function loadEnvFile(filePath = path.join(__dirname, ".env")) {
   }
 }
 
-const PROPS = [
-  {
-    id: "bench",
-    x: 0.2,
-    zoneRadius: 0.035,
-    pose: "sitting",
-    seats: [-0.01, 0.01],
-  },
-  {
-    id: "tree",
-    x: 0.8,
-    zoneRadius: 0.015,
-    pose: "resting",
-    seats: [-0.008, 0.008],
-  },
-];
-const PROPS_BY_ID = new Map(PROPS.map((prop) => [prop.id, prop]));
+/** @type {Map<string, import("./public/scene-props.mjs").SceneProp>} */
+let PROPS_BY_ID = new Map();
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -1335,6 +1320,16 @@ wss.on("close", () => {
   clearInterval(heartbeatTimer);
 });
 
-server.listen(PORT, HOST, () => {
-  console.log(`TownSquare server running at http://${HOST}:${PORT}`);
+async function startServer() {
+  const { PROPS } = await import("./public/scene-props.mjs");
+  PROPS_BY_ID = new Map(PROPS.map((prop) => [prop.id, prop]));
+
+  server.listen(PORT, HOST, () => {
+    console.log(`TownSquare server running at http://${HOST}:${PORT}`);
+  });
+}
+
+startServer().catch((error) => {
+  console.error(`Failed to start TownSquare server: ${error.message}`);
+  process.exit(1);
 });
