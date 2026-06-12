@@ -88,6 +88,7 @@ The admin token is the password for moderation.
 Save it; the admin page asks for it to sign back in later, and keeps it in
 `sessionStorage` for the duration of the browser session.
 Generated admin links keep the token in the URL fragment so it is not sent in HTTP requests.
+Only an admin token hash is stored in the site registry.
 
 The admin page supports the first hosted operations:
 - view install status and active visitors

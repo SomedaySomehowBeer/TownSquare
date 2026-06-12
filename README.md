@@ -148,6 +148,7 @@ The public `siteKey` routes visitors into that site's isolated scene.
 The private admin token is the password for settings and moderation.
 Save it; the admin page asks for it to sign back in later.
 Generated admin links keep the token in the URL fragment so it is not sent in HTTP requests.
+Only an admin token hash is stored in the site registry.
 
 The admin page can:
 - show install/seen status
@@ -239,6 +240,7 @@ The smoke test verifies:
 - move
 - say
 - leave
+- hosted site isolation and admin token hashing
 
 ## Current scope
 

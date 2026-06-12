@@ -26,7 +26,7 @@ TownSquare currently has three practical surfaces:
 4. **Hosted registration/admin surface**
    - accountless site registration
    - public site key for embed routing
-   - private admin token for moderation/settings
+   - private admin token for moderation/settings, stored as a hash
    - small JSON site registry
 
 That separation is now reflected directly in the repo:

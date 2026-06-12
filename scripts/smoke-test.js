@@ -1,7 +1,11 @@
+const fs = require("fs");
+const path = require("path");
 const WebSocket = require("ws");
 
 const SERVER_URL = process.env.TOWNSQUARE_WS_URL || "ws://127.0.0.1:8787/live";
 const HTTP_ORIGIN = process.env.TOWNSQUARE_HTTP_ORIGIN || "http://127.0.0.1:8787";
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", ".data");
+const SITES_FILE = path.join(DATA_DIR, "sites.json");
 
 function siteSocketUrl(siteKey) {
   if (!siteKey) return SERVER_URL;
@@ -57,6 +61,20 @@ async function loginWithAdminToken(adminToken) {
   assert(adminUrl.searchParams.get("adminToken") === null, "admin URL leaked the token in query params");
   assert(adminUrl.hash.includes("adminToken="), "admin token login did not return a fragment admin URL");
   return body;
+}
+
+function assertAdminTokenStoredAsHash(siteKey, adminToken) {
+  const raw = fs.readFileSync(SITES_FILE, "utf8");
+  assert(!raw.includes(adminToken), "site registry persisted the plaintext admin token");
+
+  const parsed = JSON.parse(raw);
+  const site = parsed.sites.find((record) => record.siteKey === siteKey);
+  assert(site, "site registry did not include the registered site");
+  assert(!Object.hasOwn(site, "adminToken"), "site registry kept a plaintext admin token field");
+  assert(
+    typeof site.adminTokenHash === "string" && site.adminTokenHash.startsWith("sha256:"),
+    "site registry did not store an admin token hash",
+  );
 }
 
 async function assertEmbeddableAssetsAreCrossOriginLoadable() {
@@ -163,6 +181,8 @@ async function main() {
 
   const hostedA = await createSite("Smoke A");
   const hostedB = await createSite("Smoke B");
+  assertAdminTokenStoredAsHash(hostedA.site.siteKey, hostedA.adminToken);
+  assertAdminTokenStoredAsHash(hostedB.site.siteKey, hostedB.adminToken);
   const hostedALogin = await loginWithAdminToken(hostedA.adminToken);
   assert(hostedALogin.site.siteKey === hostedA.site.siteKey, "admin token login returned the wrong site");
 

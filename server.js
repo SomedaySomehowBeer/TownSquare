@@ -186,11 +186,29 @@ function createToken(prefix, bytes = 18) {
   return `${prefix}_${crypto.randomBytes(bytes).toString("base64url")}`;
 }
 
+function hashAdminToken(adminToken, salt = crypto.randomBytes(16).toString("base64url")) {
+  const digest = crypto.createHash("sha256").update(`${salt}:${adminToken}`).digest("base64url");
+  return `sha256:${salt}:${digest}`;
+}
+
 function tokensMatch(expected, provided) {
   const a = Buffer.from(String(expected || ""));
   const b = Buffer.from(String(provided || ""));
   if (a.length === 0 || a.length !== b.length) return false;
   return crypto.timingSafeEqual(a, b);
+}
+
+function adminTokenMatches(site, adminToken) {
+  const token = typeof adminToken === "string" ? adminToken.trim() : "";
+  if (!site || !token) return false;
+
+  if (site.adminTokenHash) {
+    const [algorithm, salt] = String(site.adminTokenHash).split(":");
+    if (algorithm !== "sha256" || !salt) return false;
+    return tokensMatch(site.adminTokenHash, hashAdminToken(token, salt));
+  }
+
+  return tokensMatch(site.adminToken, token);
 }
 
 function getContentType(filePath) {
@@ -263,7 +281,7 @@ function sendJson(res, status, body) {
 
 function getAdminSiteByCredentials(siteKey, adminToken) {
   const site = sitesByKey.get(siteKey);
-  if (!site || !tokensMatch(site.adminToken, adminToken)) return null;
+  if (!adminTokenMatches(site, adminToken)) return null;
   return site;
 }
 
@@ -272,7 +290,7 @@ function findSiteByAdminToken(adminToken) {
   if (!token) return null;
 
   for (const site of sitesByKey.values()) {
-    if (tokensMatch(site.adminToken, token)) return site;
+    if (adminTokenMatches(site, token)) return site;
   }
 
   return null;
@@ -303,10 +321,10 @@ function buildEmbedSnippet(req, site) {
 </script>`;
 }
 
-function buildAdminUrl(req, site) {
+function buildAdminUrl(req, adminToken) {
   const serverOrigin = getPublicOrigin(req);
   const url = new URL("/admin", `${serverOrigin}/`);
-  url.hash = new URLSearchParams({ adminToken: site.adminToken }).toString();
+  url.hash = new URLSearchParams({ adminToken }).toString();
   return url.toString();
 }
 
@@ -346,20 +364,20 @@ function handleRegisterSite(req, res) {
       return;
     }
 
-    const site = createSiteRecord({ name: body.name, origin });
+    const { site, adminToken } = createSiteRecord({ name: body.name, origin });
     sitesByKey.set(site.siteKey, site);
     saveSites();
 
     sendJson(res, 201, {
       site: publicSite(site),
-      adminToken: site.adminToken,
-      adminUrl: buildAdminUrl(req, site),
+      adminToken,
+      adminUrl: buildAdminUrl(req, adminToken),
       embedSnippet: buildEmbedSnippet(req, site),
     });
   });
 }
 
-function sendAdminSite(req, res, site) {
+function sendAdminSite(req, res, site, adminToken) {
   if (!site) {
     sendJson(res, 403, { error: "Invalid site key or admin token." });
     return;
@@ -367,7 +385,7 @@ function sendAdminSite(req, res, site) {
 
   sendJson(res, 200, {
     site: publicSite(site),
-    adminUrl: buildAdminUrl(req, site),
+    adminUrl: buildAdminUrl(req, adminToken),
     embedSnippet: buildEmbedSnippet(req, site),
     scene: getSceneStats(getScene(site.siteKey)),
   });
@@ -375,14 +393,16 @@ function sendAdminSite(req, res, site) {
 
 function handlePostAdminSite(req, res) {
   readJsonBody(req, res, (body) => {
-    const site = getAdminSiteByCredentials(String(body.siteKey || ""), String(body.adminToken || ""));
-    sendAdminSite(req, res, site);
+    const adminToken = String(body.adminToken || "").trim();
+    const site = getAdminSiteByCredentials(String(body.siteKey || ""), adminToken);
+    sendAdminSite(req, res, site, adminToken);
   });
 }
 
 function handleAdminLogin(req, res) {
   readJsonBody(req, res, (body) => {
-    const site = findSiteByAdminToken(body.adminToken);
+    const adminToken = String(body.adminToken || "").trim();
+    const site = findSiteByAdminToken(adminToken);
     if (!site) {
       sendJson(res, 403, { error: "Invalid admin token." });
       return;
@@ -390,7 +410,7 @@ function handleAdminLogin(req, res) {
 
     sendJson(res, 200, {
       site: publicSite(site),
-      adminUrl: buildAdminUrl(req, site),
+      adminUrl: buildAdminUrl(req, adminToken),
     });
   });
 }
@@ -576,27 +596,42 @@ function createScene(key) {
 
 function createSiteRecord({ name, origin }) {
   const now = Date.now();
+  const adminToken = createToken("admin", 24);
   return {
-    siteKey: createToken("site", 12),
-    adminToken: createToken("admin", 24),
-    name: sanitizeSiteName(name, origin),
-    origin,
-    disabled: false,
-    chatDisabled: false,
-    verifiedAt: null,
-    lastSeenAt: null,
-    createdAt: now,
-    updatedAt: now,
-    blockedBrowserIds: [],
+    adminToken,
+    site: {
+      siteKey: createToken("site", 12),
+      adminTokenHash: hashAdminToken(adminToken),
+      name: sanitizeSiteName(name, origin),
+      origin,
+      disabled: false,
+      chatDisabled: false,
+      verifiedAt: null,
+      lastSeenAt: null,
+      createdAt: now,
+      updatedAt: now,
+      blockedBrowserIds: [],
+    },
   };
 }
+
+let sitesMigratedOnLoad = false;
 
 function loadSites() {
   try {
     const raw = fs.readFileSync(SITES_FILE, "utf8");
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed.sites)) return new Map();
-    return new Map(parsed.sites.map((site) => [site.siteKey, site]));
+    return new Map(parsed.sites.map((site) => {
+      if (site.adminToken) {
+        if (!site.adminTokenHash) {
+          site.adminTokenHash = hashAdminToken(site.adminToken);
+        }
+        delete site.adminToken;
+        sitesMigratedOnLoad = true;
+      }
+      return [site.siteKey, site];
+    }));
   } catch (error) {
     if (error.code !== "ENOENT") {
       console.warn(`Could not load sites registry: ${error.message}`);
@@ -672,6 +707,9 @@ function isOriginAllowedForSite(origin, site) {
 }
 
 const sitesByKey = loadSites();
+if (sitesMigratedOnLoad) {
+  saveSites();
+}
 const scenes = new Map();
 let nextConnectionId = 1;
 
