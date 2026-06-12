@@ -99,6 +99,7 @@ export function wireSocket(ctx) {
         displayName: self.displayName,
         color: self.color,
         readingLabel: self.readingLabel,
+        readingUrl: self.readingUrl,
       }));
     });
 

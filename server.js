@@ -46,6 +46,7 @@ const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
 const MAX_MESSAGE_LEN = 140;
 const MAX_DISPLAY_NAME_LEN = 18;
 const MAX_READING_LABEL_LEN = 42;
+const MAX_READING_URL_LEN = 240;
 const MAX_RECENT_MESSAGES = 5;
 const MAX_SITE_NAME_LEN = 80;
 const MAX_ORIGIN_LEN = 240;
@@ -185,7 +186,7 @@ function createClient(connectionId, ws, scene, site) {
   };
 }
 
-/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
@@ -196,6 +197,7 @@ function createIdentity(id, browserId, x) {
     displayName: "",
     color: "#c8641f",
     readingLabel: "",
+    readingUrl: "",
     clients: new Set(),
     joined: false,
     leaveTimer: null,
@@ -231,6 +233,16 @@ function sanitizeDisplayName(displayName) {
 function sanitizeReadingLabel(readingLabel) {
   if (typeof readingLabel !== "string") return "";
   return readingLabel.trim().replace(/\s+/g, " ").slice(0, MAX_READING_LABEL_LEN);
+}
+
+function sanitizeReadingUrl(readingUrl) {
+  if (typeof readingUrl !== "string") return "";
+  try {
+    const url = new URL(readingUrl.slice(0, MAX_READING_URL_LEN));
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
 }
 
 function sanitizeCharacterColor(color) {
@@ -795,6 +807,7 @@ function snapshotIdentity(identity) {
     displayName: identity.displayName,
     color: identity.color,
     readingLabel: identity.readingLabel,
+    readingUrl: identity.readingUrl,
     messages: identity.messages,
   };
 }
@@ -834,6 +847,7 @@ function emitIdentityState(identity, options = {}) {
     displayName: identity.displayName,
     color: identity.color,
     readingLabel: identity.readingLabel,
+    readingUrl: identity.readingUrl,
   };
 
   broadcast(scene, message, { exceptConnectionId });
@@ -1111,8 +1125,12 @@ function handleInit(client, message) {
   const identity = getOrCreateIdentity(scene, message.browserId, fallbackX, client.connectionId);
   clearLeaveTimer(identity);
   const previousReadingLabel = identity.readingLabel;
+  const previousReadingUrl = identity.readingUrl;
   if (Object.hasOwn(message, "readingLabel")) {
     identity.readingLabel = sanitizeReadingLabel(message.readingLabel);
+  }
+  if (Object.hasOwn(message, "readingUrl")) {
+    identity.readingUrl = sanitizeReadingUrl(message.readingUrl);
   }
 
   if (!identity.joined) {
@@ -1137,16 +1155,18 @@ function handleInit(client, message) {
     displayName: identity.displayName,
     color: identity.color,
     readingLabel: identity.readingLabel,
+    readingUrl: identity.readingUrl,
     messages: identity.messages,
     peers,
   });
 
   if (identity.joined) {
-    if (identity.readingLabel !== previousReadingLabel) {
+    if (identity.readingLabel !== previousReadingLabel || identity.readingUrl !== previousReadingUrl) {
       broadcast(scene, {
         type: "reading",
         id: identity.id,
         readingLabel: identity.readingLabel,
+        readingUrl: identity.readingUrl,
       }, { exceptConnectionId: client.connectionId });
     }
     return;
@@ -1203,13 +1223,16 @@ function handleReading(client, message) {
   if (!client.identity) return;
 
   const readingLabel = sanitizeReadingLabel(message.readingLabel);
-  if (readingLabel === client.identity.readingLabel) return;
+  const readingUrl = sanitizeReadingUrl(message.readingUrl);
+  if (readingLabel === client.identity.readingLabel && readingUrl === client.identity.readingUrl) return;
 
   client.identity.readingLabel = readingLabel;
+  client.identity.readingUrl = readingUrl;
   broadcast(client.scene, {
     type: "reading",
     id: client.identity.id,
     readingLabel,
+    readingUrl,
   });
 }
 

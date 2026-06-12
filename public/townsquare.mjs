@@ -33,7 +33,7 @@ import {
   getBrowserId,
   getStoredProfile,
   normalizeOrigin,
-  readCurrentPageLabel,
+  readCurrentPage,
   saveStoredProfile,
 } from "./widget/utils.mjs";
 
@@ -43,6 +43,7 @@ import {
  * @property {string} [socketPath="/live"] WebSocket path on the server origin.
  * @property {string} [siteKey] Hosted TownSquare site key. Self-hosted embeds can omit it.
  * @property {string} [readingLabel] Explicit page label. Defaults to the page heading, then document title.
+ * @property {string} [readingUrl] Explicit page URL. Defaults to the current browser URL.
  */
 
 /**
@@ -74,7 +75,7 @@ export function mountTownSquare(root, options = {}) {
   const socketUrl = buildSocketUrl(serverOrigin, options.socketPath || "/live", siteKey);
   const browserId = getBrowserId();
   const profile = getStoredProfile();
-  const readingLabel = readCurrentPageLabel(root, options);
+  const { readingLabel, readingUrl } = readCurrentPage(root, options);
   const spawnX = randomSpawnX();
   const peers = new Map();
   const coarsePointer = typeof window.matchMedia === "function"
@@ -122,12 +123,13 @@ export function mountTownSquare(root, options = {}) {
       displayName: profile.displayName,
       color: profile.color,
       readingLabel,
+      readingUrl,
       propZoneEnteredAt: 0,
       settlePropId: null,
       settleRequested: false,
       avatar: createAvatar({
         isSelf: true,
-        profile: { ...profile, readingLabel },
+        profile: { ...profile, readingLabel, readingUrl },
         colors: CHARACTER_COLORS,
         onProfileChange: (nextProfile) => {
           const saved = saveStoredProfile(nextProfile);
@@ -206,13 +208,14 @@ export function mountTownSquare(root, options = {}) {
   let readingUpdateTimer = null;
   const sendReadingLabel = () => {
     readingUpdateTimer = null;
-    const nextLabel = readCurrentPageLabel(root, options);
-    if (nextLabel === ctx.self.readingLabel) return;
+    const nextPage = readCurrentPage(root, options);
+    if (nextPage.readingLabel === ctx.self.readingLabel && nextPage.readingUrl === ctx.self.readingUrl) return;
 
-    ctx.self.readingLabel = nextLabel;
+    ctx.self.readingLabel = nextPage.readingLabel;
+    ctx.self.readingUrl = nextPage.readingUrl;
     setAvatarProfile(ctx.self.avatar, ctx.self);
     if (ctx.socket.readyState === WebSocket.OPEN && ctx.self.id) {
-      ctx.socket.send(JSON.stringify({ type: "reading", readingLabel: nextLabel }));
+      ctx.socket.send(JSON.stringify({ type: "reading", ...nextPage }));
     }
   };
   const queueReadingUpdate = () => {

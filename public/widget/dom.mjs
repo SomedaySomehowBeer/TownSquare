@@ -27,7 +27,7 @@ import { figureMarkup } from "./figure.mjs";
  * @property {number} [bubbleFade] Applied proximity opacity (see bubble-layout.mjs).
  * @property {HTMLElement} [below] Container for the nameplate / composer.
  * @property {HTMLElement} [nameEl] Visible name label.
- * @property {HTMLElement} [readingEl] Visible current page label.
+ * @property {HTMLAnchorElement} [readingEl] Visible current page link.
  * @property {HTMLButtonElement} [plate] The "you · say something" way-in.
  * @property {HTMLElement} [dot]
  * @property {HTMLButtonElement} [profileButton]
@@ -206,7 +206,7 @@ export function wireHelpPanel(helpButton, helpPanel) {
  *
  * @param {{
  *   isSelf: boolean,
- *   profile?: { displayName?: string, color?: string, readingLabel?: string },
+ *   profile?: { displayName?: string, color?: string, readingLabel?: string, readingUrl?: string },
  *   colors?: Array<string>,
  *   onProfileChange?: (profile: { displayName: string, color: string }) => void,
  *   onSubmitChat?: () => void,
@@ -255,8 +255,11 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
     const nameEl = document.createElement("span");
     nameEl.className = "avatar__peer-name";
 
-    const readingEl = document.createElement("span");
+    const readingEl = document.createElement("a");
     readingEl.className = "avatar__reading avatar__reading--peer";
+    readingEl.target = "_blank";
+    readingEl.rel = "noopener noreferrer";
+    readingEl.addEventListener("click", (event) => event.stopPropagation());
 
     label.append(nameEl, readingEl);
     below.appendChild(label);
@@ -503,7 +506,7 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
 
 /**
  * @param {AvatarView} avatar
- * @param {{ displayName?: string, color?: string, readingLabel?: string }} profile
+ * @param {{ displayName?: string, color?: string, readingLabel?: string, readingUrl?: string }} profile
  */
 export function setAvatarProfile(avatar, profile = {}) {
   const displayName = typeof profile.displayName === "string"
@@ -514,17 +517,25 @@ export function setAvatarProfile(avatar, profile = {}) {
   const readingLabel = hasReadingLabel && typeof profile.readingLabel === "string"
     ? profile.readingLabel.trim().replace(/\s+/g, " ").slice(0, READING_LABEL_MAX)
     : avatar.readingEl?.textContent || "";
+  const readingUrl = typeof profile.readingUrl === "string" ? profile.readingUrl : avatar.readingEl?.href || "";
   avatar.el.dataset.color = color;
   avatar.el.style.color = color || "";
   if (avatar.dot) {
     avatar.dot.style.background = color || "";
   }
   if (avatar.nameEl) {
-    avatar.nameEl.textContent = displayName || (readingLabel && avatar.el.classList.contains("avatar--peer") ? "visitor" : "you");
+    avatar.nameEl.textContent = displayName || "you";
     avatar.nameEl.dataset.value = displayName;
+    avatar.nameEl.toggleAttribute("hidden", !displayName && avatar.el.classList.contains("avatar--peer"));
   }
   if (avatar.readingEl) {
     avatar.readingEl.textContent = readingLabel;
+    avatar.readingEl.title = readingLabel;
+    if (readingUrl) {
+      avatar.readingEl.href = readingUrl;
+    } else {
+      avatar.readingEl.removeAttribute("href");
+    }
     avatar.readingEl.toggleAttribute("hidden", !readingLabel);
   }
   if (avatar.below && avatar.el.classList.contains("avatar--peer")) {

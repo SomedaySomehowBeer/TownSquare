@@ -706,7 +706,7 @@
 
 .avatar__below--peer {
   top: calc(100% + 7px);
-  pointer-events: none;
+  pointer-events: auto;
 }
 
 .avatar__plate-row {
@@ -779,6 +779,8 @@
   text-transform: lowercase;
 }
 
+.avatar__peer-name[hidden] { display: none; }
+
 .avatar__reading {
   display: inline-block;
   max-width: 150px;
@@ -789,6 +791,14 @@
   font-weight: 620;
   letter-spacing: 0;
   line-height: 1.15;
+  text-decoration: none;
+}
+
+.avatar__reading:hover,
+.avatar__reading:focus-visible {
+  color: currentColor;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .avatar__reading[hidden] { display: none; }

@@ -39,7 +39,7 @@ export function updateStatus(ctx) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, messages?: Array<{ text: string, at?: number }> }} peer
+ * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string, messages?: Array<{ text: string, at?: number }> }} peer
  * @returns {PeerState}
  */
 export function getOrCreatePeer(ctx, peer) {
@@ -57,6 +57,7 @@ export function getOrCreatePeer(ctx, peer) {
     displayName: peer.displayName || "",
     color: peer.color || "",
     readingLabel: peer.readingLabel || "",
+    readingUrl: peer.readingUrl || "",
     avatar,
     walkTimer: null,
   };
@@ -84,7 +85,7 @@ export function removePeer(ctx, id) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string }} state
+ * @param {{ x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string }} state
  */
 export function applySelfState(ctx, state) {
   const previousX = ctx.self.x;
@@ -94,6 +95,7 @@ export function applySelfState(ctx, state) {
   if (typeof state.displayName === "string") ctx.self.displayName = state.displayName;
   if (typeof state.color === "string") ctx.self.color = state.color;
   if (typeof state.readingLabel === "string") ctx.self.readingLabel = state.readingLabel;
+  if (typeof state.readingUrl === "string") ctx.self.readingUrl = state.readingUrl;
   if (ctx.self.pose) {
     // The server snapped us onto a seat; abandon any pending tap destination.
     ctx.self.targetX = null;
@@ -112,7 +114,7 @@ export function applySelfState(ctx, state) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string }} peerState
+ * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string }} peerState
  * @returns {PeerState}
  */
 export function applyPeerState(ctx, peerState) {
@@ -125,6 +127,7 @@ export function applyPeerState(ctx, peerState) {
   if (typeof peerState.displayName === "string") peer.displayName = peerState.displayName;
   if (typeof peerState.color === "string") peer.color = peerState.color;
   if (typeof peerState.readingLabel === "string") peer.readingLabel = peerState.readingLabel;
+  if (typeof peerState.readingUrl === "string") peer.readingUrl = peerState.readingUrl;
   renderAvatar(peer.avatar, peer.x);
   setAvatarProfile(peer.avatar, peer);
   if (hadPeer && peer.x !== previousX) {
@@ -156,11 +159,12 @@ export function applyProfileState(ctx, profile) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, readingLabel?: string }} state
+ * @param {{ id: string, readingLabel?: string, readingUrl?: string }} state
  */
 export function applyReadingState(ctx, state) {
   if (state.id === ctx.self.id) {
     if (typeof state.readingLabel === "string") ctx.self.readingLabel = state.readingLabel;
+    if (typeof state.readingUrl === "string") ctx.self.readingUrl = state.readingUrl;
     setAvatarProfile(ctx.self.avatar, ctx.self);
     return;
   }
@@ -168,5 +172,6 @@ export function applyReadingState(ctx, state) {
   const peer = ctx.peers.get(state.id);
   if (!peer) return;
   if (typeof state.readingLabel === "string") peer.readingLabel = state.readingLabel;
+  if (typeof state.readingUrl === "string") peer.readingUrl = state.readingUrl;
   setAvatarProfile(peer.avatar, peer);
 }

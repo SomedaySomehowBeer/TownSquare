@@ -60,19 +60,75 @@ export function normalizeReadingLabel(value) {
 }
 
 /**
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function normalizeReadingUrl(value) {
+  if (typeof value !== "string") return "";
+  try {
+    const url = new URL(value, window.location.href);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * @param {string} title
+ * @returns {string}
+ */
+function cleanDocumentTitle(title) {
+  const siteNames = new Set([
+    window.location.hostname.replace(/^www\./, ""),
+    document.querySelector("article h1, main h1, h1")?.textContent?.trim().toLowerCase() || "",
+  ]);
+  const parts = title.split(/\s+(?:[|–—-]|·)\s+/).map((part) => normalizeReadingLabel(part));
+  return parts.find((part) => part && !siteNames.has(part.toLowerCase())) || "";
+}
+
+/**
+ * @returns {string}
+ */
+function labelFromPath() {
+  const segment = window.location.pathname.split("/").filter(Boolean).pop() || "";
+  if (!segment) return "";
+  try {
+    return normalizeReadingLabel(decodeURIComponent(segment)
+      .replace(/\.[a-z0-9]+$/i, "")
+      .replace(/[-_]+/g, " "));
+  } catch {
+    return normalizeReadingLabel(segment.replace(/[-_]+/g, " "));
+  }
+}
+
+/**
+ * @param {HTMLElement} root
+ * @param {{ readingLabel?: string, readingUrl?: string }} options
+ * @returns {{ readingLabel: string, readingUrl: string }}
+ */
+export function readCurrentPage(root, options = {}) {
+  const explicit = normalizeReadingLabel(options.readingLabel || root.dataset.townsquareReadingLabel || "");
+  const documentTitle = cleanDocumentTitle(document.title);
+  const pathLabel = labelFromPath();
+  const metaTitle = normalizeReadingLabel(
+    document.querySelector('meta[property="og:title"], meta[name="twitter:title"]')?.getAttribute("content") || "",
+  );
+  const heading = document.querySelector("article h1, main h1, h1");
+  const headingLabel = normalizeReadingLabel(heading?.textContent || "");
+
+  return {
+    readingLabel: explicit || documentTitle || pathLabel || metaTitle || headingLabel || normalizeReadingLabel(document.title),
+    readingUrl: normalizeReadingUrl(options.readingUrl || root.dataset.townsquareReadingUrl || window.location.href),
+  };
+}
+
+/**
  * @param {HTMLElement} root
  * @param {{ readingLabel?: string }} options
  * @returns {string}
  */
 export function readCurrentPageLabel(root, options = {}) {
-  const explicit = normalizeReadingLabel(options.readingLabel || root.dataset.townsquareReadingLabel || "");
-  if (explicit) return explicit;
-
-  const heading = document.querySelector("article h1, main h1, h1");
-  const headingLabel = normalizeReadingLabel(heading?.textContent || "");
-  if (headingLabel) return headingLabel;
-
-  return normalizeReadingLabel(document.title);
+  return readCurrentPage(root, options).readingLabel;
 }
 
 /**
