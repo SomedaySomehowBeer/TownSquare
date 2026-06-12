@@ -782,10 +782,11 @@
 .avatar__peer-name[hidden] { display: none; }
 
 .avatar__reading {
-  display: inline-block;
-  max-width: 150px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 3px;
+  max-width: 170px;
   overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--ink-faint);
   font-size: 10.5px;
   font-weight: 620;
@@ -794,9 +795,15 @@
   text-decoration: none;
 }
 
-.avatar__reading::before {
-  content: "visiting ";
+.avatar__reading-prefix {
+  flex: 0 0 auto;
   font-weight: 520;
+}
+
+.avatar__reading-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .avatar__reading:hover,

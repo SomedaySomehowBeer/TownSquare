@@ -261,6 +261,14 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
     readingEl.rel = "noopener noreferrer";
     readingEl.addEventListener("click", (event) => event.stopPropagation());
 
+    const readingPrefix = document.createElement("span");
+    readingPrefix.className = "avatar__reading-prefix";
+    readingPrefix.textContent = "visiting";
+
+    const readingLabelEl = document.createElement("span");
+    readingLabelEl.className = "avatar__reading-label";
+
+    readingEl.append(readingPrefix, readingLabelEl);
     label.append(nameEl, readingEl);
     below.appendChild(label);
     el.appendChild(below);
@@ -516,7 +524,7 @@ export function setAvatarProfile(avatar, profile = {}) {
   const hasReadingLabel = Object.hasOwn(profile, "readingLabel");
   const readingLabel = hasReadingLabel && typeof profile.readingLabel === "string"
     ? profile.readingLabel.trim().replace(/\s+/g, " ").slice(0, READING_LABEL_MAX)
-    : avatar.readingEl?.textContent || "";
+    : avatar.readingEl?.querySelector(".avatar__reading-label")?.textContent || "";
   const readingUrl = typeof profile.readingUrl === "string" ? profile.readingUrl : avatar.readingEl?.href || "";
   avatar.el.dataset.color = color;
   avatar.el.style.color = color || "";
@@ -529,7 +537,12 @@ export function setAvatarProfile(avatar, profile = {}) {
     avatar.nameEl.toggleAttribute("hidden", !displayName && avatar.el.classList.contains("avatar--peer"));
   }
   if (avatar.readingEl) {
-    avatar.readingEl.textContent = readingLabel;
+    const readingLabelEl = avatar.readingEl.querySelector(".avatar__reading-label");
+    if (readingLabelEl) {
+      readingLabelEl.textContent = readingLabel;
+    } else {
+      avatar.readingEl.textContent = readingLabel;
+    }
     avatar.readingEl.title = readingLabel;
     if (readingUrl) {
       avatar.readingEl.href = readingUrl;
