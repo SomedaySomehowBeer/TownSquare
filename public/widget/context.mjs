@@ -20,6 +20,8 @@
  * @property {number} lastSendAt
  * @property {string | null} pose
  * @property {string | null} propId
+ * @property {string} displayName
+ * @property {string} color
  * @property {number} propZoneEnteredAt
  * @property {string | null} settlePropId
  * @property {boolean} settleRequested
@@ -33,6 +35,8 @@
  * @property {number} x
  * @property {string | null} pose
  * @property {string | null} propId
+ * @property {string} displayName
+ * @property {string} color
  * @property {AvatarView} avatar
  * @property {ReturnType<typeof setTimeout> | null} walkTimer
  */

@@ -6,6 +6,7 @@ import { recordMessage, sayMessage } from "./chat.mjs";
 import { setWalking } from "./dom.mjs";
 import {
   applyPeerState,
+  applyProfileState,
   applySelfState,
   removePeer,
   setStatusMessage,
@@ -66,7 +67,13 @@ export function wireSocket(ctx) {
 
   socket.addEventListener("open", () => {
     opened = true;
-    socket.send(JSON.stringify({ type: "init", browserId, x: self.x }));
+    socket.send(JSON.stringify({
+      type: "init",
+      browserId,
+      x: self.x,
+      displayName: self.displayName,
+      color: self.color,
+    }));
   });
 
   socket.addEventListener("error", () => {
@@ -146,6 +153,11 @@ export function wireSocket(ctx) {
         return;
       }
       sayMessage(peer.avatar, { text: message.text, at: message.at });
+      return;
+    }
+
+    if (message.type === "profile") {
+      applyProfileState(ctx, message);
     }
   });
 

@@ -44,6 +44,7 @@ const MAX_CONNECTIONS = Number(process.env.MAX_CONNECTIONS || 100);
 const MAX_BROWSER_ID_LEN = 80;
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
 const MAX_MESSAGE_LEN = 140;
+const MAX_DISPLAY_NAME_LEN = 18;
 const MAX_RECENT_MESSAGES = 5;
 const MAX_SITE_NAME_LEN = 80;
 const MAX_ORIGIN_LEN = 240;
@@ -57,6 +58,14 @@ const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
 const HEARTBEAT_INTERVAL_MS = 30000;
 const TELEGRAM_API_TIMEOUT_MS = 5000;
+const CHARACTER_COLORS = new Set([
+  "#c8641f",
+  "#3f7f63",
+  "#3f6fb5",
+  "#8a5fb1",
+  "#b44f6f",
+  "#5f6b73",
+]);
 
 function loadEnvFile(filePath = path.join(__dirname, ".env")) {
   try {
@@ -170,6 +179,7 @@ function isPlainObject(value) {
 const MESSAGE_HANDLERS = {
   init: handleInit,
   move: handleMove,
+  profile: handleProfile,
   settle: handleSettle,
   say: handleSay,
 };
@@ -188,7 +198,7 @@ function createClient(connectionId, ws, scene, site) {
   };
 }
 
-/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
@@ -196,6 +206,8 @@ function createIdentity(id, browserId, x) {
     x,
     pose: null,
     propId: null,
+    displayName: "",
+    color: "#c8641f",
     clients: new Set(),
     joined: false,
     leaveTimer: null,
@@ -221,6 +233,15 @@ function sanitizeBrowserId(browserId) {
 function sanitizeMessage(text) {
   if (typeof text !== "string") return "";
   return text.trim().slice(0, MAX_MESSAGE_LEN);
+}
+
+function sanitizeDisplayName(displayName) {
+  if (typeof displayName !== "string") return "";
+  return displayName.trim().replace(/\s+/g, " ").slice(0, MAX_DISPLAY_NAME_LEN);
+}
+
+function sanitizeCharacterColor(color) {
+  return CHARACTER_COLORS.has(color) ? color : "#c8641f";
 }
 
 function sanitizeSiteName(name, origin) {
@@ -778,6 +799,8 @@ function snapshotIdentity(identity) {
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
+    displayName: identity.displayName,
+    color: identity.color,
     messages: identity.messages,
   };
 }
@@ -814,6 +837,8 @@ function emitIdentityState(identity, options = {}) {
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
+    displayName: identity.displayName,
+    color: identity.color,
   };
 
   broadcast(scene, message, { exceptConnectionId });
@@ -959,6 +984,8 @@ function getSceneStats(scene) {
       x: identity.x,
       pose: identity.pose,
       propId: identity.propId,
+      displayName: identity.displayName,
+      color: identity.color,
       clientCount: identity.clients.size,
       messages: identity.messages,
     }));
@@ -1089,6 +1116,11 @@ function handleInit(client, message) {
   const identity = getOrCreateIdentity(scene, message.browserId, fallbackX, client.connectionId);
   clearLeaveTimer(identity);
 
+  if (!identity.joined) {
+    identity.displayName = sanitizeDisplayName(message.displayName);
+    identity.color = sanitizeCharacterColor(message.color);
+  }
+
   client.identity = identity;
   client.joined = true;
   identity.clients.add(client);
@@ -1103,6 +1135,8 @@ function handleInit(client, message) {
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
+    displayName: identity.displayName,
+    color: identity.color,
     messages: identity.messages,
     peers,
   });
@@ -1142,6 +1176,20 @@ function handleMove(client, message) {
   clearPose(client.identity);
 
   emitIdentityState(client.identity, { exceptConnectionId: client.connectionId });
+}
+
+function handleProfile(client, message) {
+  if (!client.identity) return;
+
+  client.identity.displayName = sanitizeDisplayName(message.displayName);
+  client.identity.color = sanitizeCharacterColor(message.color);
+
+  broadcast(client.scene, {
+    type: "profile",
+    id: client.identity.id,
+    displayName: client.identity.displayName,
+    color: client.identity.color,
+  });
 }
 
 function handleSettle(client, message) {

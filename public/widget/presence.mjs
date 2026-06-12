@@ -3,7 +3,7 @@
  */
 
 import { recordMessage } from "./chat.mjs";
-import { createAvatar, renderAvatar, setFacing, updatePose, updatePropEffects } from "./dom.mjs";
+import { createAvatar, renderAvatar, setAvatarProfile, setFacing, updatePose, updatePropEffects } from "./dom.mjs";
 
 /**
  * @typedef {import("./context.mjs").WidgetContext} WidgetContext
@@ -39,7 +39,7 @@ export function updateStatus(ctx) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, messages?: Array<{ text: string, at?: number }> }} peer
+ * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, messages?: Array<{ text: string, at?: number }> }} peer
  * @returns {PeerState}
  */
 export function getOrCreatePeer(ctx, peer) {
@@ -48,12 +48,14 @@ export function getOrCreatePeer(ctx, peer) {
     return existing;
   }
 
-  const avatar = createAvatar({ isSelf: false });
+  const avatar = createAvatar({ isSelf: false, profile: peer });
   const nextPeer = {
     id: peer.id,
     x: 0,
     pose: null,
     propId: null,
+    displayName: peer.displayName || "",
+    color: peer.color || "",
     avatar,
     walkTimer: null,
   };
@@ -81,13 +83,15 @@ export function removePeer(ctx, id) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ x: number, pose?: string | null, propId?: string | null }} state
+ * @param {{ x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string }} state
  */
 export function applySelfState(ctx, state) {
   const previousX = ctx.self.x;
   ctx.self.x = state.x;
   ctx.self.pose = state.pose || null;
   ctx.self.propId = state.propId || null;
+  if (typeof state.displayName === "string") ctx.self.displayName = state.displayName;
+  if (typeof state.color === "string") ctx.self.color = state.color;
   if (ctx.self.pose) {
     // The server snapped us onto a seat; abandon any pending tap destination.
     ctx.self.targetX = null;
@@ -96,6 +100,7 @@ export function applySelfState(ctx, state) {
   ctx.self.settlePropId = null;
   ctx.self.propZoneEnteredAt = 0;
   renderAvatar(ctx.self.avatar, ctx.self.x);
+  setAvatarProfile(ctx.self.avatar, ctx.self);
   if (ctx.self.x !== previousX) {
     setFacing(ctx.self.avatar, ctx.self.x < previousX);
   }
@@ -105,7 +110,7 @@ export function applySelfState(ctx, state) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, x: number, pose?: string | null, propId?: string | null }} peerState
+ * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string }} peerState
  * @returns {PeerState}
  */
 export function applyPeerState(ctx, peerState) {
@@ -115,11 +120,33 @@ export function applyPeerState(ctx, peerState) {
   peer.x = peerState.x;
   peer.pose = peerState.pose || null;
   peer.propId = peerState.propId || null;
+  if (typeof peerState.displayName === "string") peer.displayName = peerState.displayName;
+  if (typeof peerState.color === "string") peer.color = peerState.color;
   renderAvatar(peer.avatar, peer.x);
+  setAvatarProfile(peer.avatar, peer);
   if (hadPeer && peer.x !== previousX) {
     setFacing(peer.avatar, peer.x < previousX);
   }
   updatePose(peer.avatar, peer.pose);
   updatePropEffects(peer.avatar, peer.x, peer.propId);
   return peer;
+}
+
+/**
+ * @param {WidgetContext} ctx
+ * @param {{ id: string, displayName?: string, color?: string }} profile
+ */
+export function applyProfileState(ctx, profile) {
+  if (profile.id === ctx.self.id) {
+    if (typeof profile.displayName === "string") ctx.self.displayName = profile.displayName;
+    if (typeof profile.color === "string") ctx.self.color = profile.color;
+    setAvatarProfile(ctx.self.avatar, ctx.self);
+    return;
+  }
+
+  const peer = ctx.peers.get(profile.id);
+  if (!peer) return;
+  if (typeof profile.displayName === "string") peer.displayName = profile.displayName;
+  if (typeof profile.color === "string") peer.color = profile.color;
+  setAvatarProfile(peer.avatar, peer);
 }

@@ -25,8 +25,14 @@ import { figureMarkup } from "./figure.mjs";
  * @property {number} [tailTip] Applied tail tip lean in px (see bubble-layout.mjs).
  * @property {number} [bubbleScale] Applied proximity scale (see bubble-layout.mjs).
  * @property {number} [bubbleFade] Applied proximity opacity (see bubble-layout.mjs).
- * @property {HTMLElement} [below] Container for the nameplate / composer (self only).
+ * @property {HTMLElement} [below] Container for the nameplate / composer.
+ * @property {HTMLElement} [nameEl] Visible name label.
  * @property {HTMLButtonElement} [plate] The "you · say something" way-in.
+ * @property {HTMLElement} [dot]
+ * @property {HTMLButtonElement} [profileButton]
+ * @property {HTMLFormElement} [profileForm]
+ * @property {HTMLInputElement} [profileInput]
+ * @property {Array<HTMLButtonElement>} [colorSwatches]
  * @property {HTMLFormElement} [composer]
  * @property {HTMLInputElement} [input]
  * @property {HTMLButtonElement} [send]
@@ -54,6 +60,14 @@ const EXPAND_ICON = `
     <path d="M16 4h4v4"></path>
     <path d="M20 16v4h-4"></path>
     <path d="M4 16v4h4"></path>
+  </svg>
+`;
+
+const PENCIL_ICON = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <path d="M12 20h9"></path>
+    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path>
   </svg>
 `;
 
@@ -189,10 +203,17 @@ export function wireHelpPanel(helpButton, helpPanel) {
  * clipping, virtual keyboard cover), so callers can pass `composerHost` to
  * dock the composer as a bar at the bottom of the widget instead.
  *
- * @param {{ isSelf: boolean, onSubmitChat?: () => void, composerHost?: HTMLElement }} options
+ * @param {{
+ *   isSelf: boolean,
+ *   profile?: { displayName?: string, color?: string },
+ *   colors?: Array<string>,
+ *   onProfileChange?: (profile: { displayName: string, color: string }) => void,
+ *   onSubmitChat?: () => void,
+ *   composerHost?: HTMLElement
+ * }} options
  * @returns {AvatarView}
  */
-export function createAvatar({ isSelf, onSubmitChat, composerHost }) {
+export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChange, onSubmitChat, composerHost }) {
   const el = document.createElement("div");
   el.className = `avatar ${isSelf ? "avatar--self" : "avatar--peer"}`;
   el.innerHTML = figureMarkup('aria-hidden="true"');
@@ -224,23 +245,89 @@ export function createAvatar({ isSelf, onSubmitChat, composerHost }) {
   };
 
   if (!isSelf) {
-    return avatar;
+    const below = document.createElement("div");
+    below.className = "avatar__below avatar__below--peer";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = "avatar__peer-name";
+    below.appendChild(nameEl);
+    el.appendChild(below);
+
+    const peerAvatar = { ...avatar, below, nameEl };
+    setAvatarProfile(peerAvatar, profile);
+    return peerAvatar;
   }
 
-  // Self carries a persistent nameplate at its base — identity and the always-
-  // there way in. Clicking it morphs the plate into the full composer in place.
+  const color = profile.color || "";
+
+  // Self carries a persistent nameplate at its base: identity, the chat way in,
+  // and a compact profile editor for the accountless session identity.
   const below = document.createElement("div");
   below.className = "avatar__below";
+
+  const plateRow = document.createElement("div");
+  plateRow.className = "avatar__plate-row";
 
   const plate = document.createElement("button");
   plate.className = "avatar__plate";
   plate.type = "button";
   plate.setAttribute("aria-label", "Say something");
-  plate.innerHTML = `
-    <span class="avatar__plate-dot"></span>
-    <span class="avatar__plate-name">you</span>
-    <span class="avatar__plate-hint">· say something</span>
-  `;
+
+  const dot = document.createElement("span");
+  dot.className = "avatar__plate-dot";
+
+  const nameEl = document.createElement("span");
+  nameEl.className = "avatar__plate-name";
+
+  const hint = document.createElement("span");
+  hint.className = "avatar__plate-hint";
+  hint.textContent = "· say something";
+  plate.append(dot, nameEl, hint);
+
+  const profileButton = document.createElement("button");
+  profileButton.className = "avatar__profile-button";
+  profileButton.type = "button";
+  profileButton.innerHTML = PENCIL_ICON;
+  profileButton.setAttribute("aria-label", "Edit character");
+  profileButton.setAttribute("aria-expanded", "false");
+  profileButton.title = "Edit character";
+
+  plateRow.append(plate, profileButton);
+
+  const profileForm = document.createElement("form");
+  profileForm.className = "avatar__profile";
+  profileForm.hidden = true;
+
+  const profileInput = document.createElement("input");
+  profileInput.className = "avatar__profile-input";
+  profileInput.type = "text";
+  profileInput.maxLength = 18;
+  profileInput.placeholder = "Display name";
+  profileInput.autocomplete = "off";
+  profileInput.setAttribute("aria-label", "Display name");
+
+  const swatches = document.createElement("div");
+  swatches.className = "avatar__swatches";
+
+  /** @type {Array<HTMLButtonElement>} */
+  const colorSwatches = colors.map((swatchColor) => {
+    const swatch = document.createElement("button");
+    swatch.className = "avatar__swatch";
+    swatch.type = "button";
+    swatch.style.setProperty("--swatch", swatchColor);
+    swatch.dataset.color = swatchColor;
+    swatch.setAttribute("aria-label", `Use color ${swatchColor}`);
+    swatches.appendChild(swatch);
+    return swatch;
+  });
+
+  const profileDone = document.createElement("button");
+  profileDone.className = "avatar__profile-done";
+  profileDone.type = "submit";
+  profileDone.innerHTML = ENTER_ICON;
+  profileDone.setAttribute("aria-label", "Save character");
+
+  profileForm.append(profileInput, swatches, profileDone);
 
   const composer = document.createElement("form");
   composer.className = "avatar__composer";
@@ -262,18 +349,94 @@ export function createAvatar({ isSelf, onSubmitChat, composerHost }) {
   composer.append(input, send);
   if (composerHost) {
     composer.classList.add("avatar__composer--docked");
-    below.append(plate);
+    below.append(plateRow, profileForm);
     composerHost.appendChild(composer);
   } else {
-    below.append(plate, composer);
+    below.append(plateRow, profileForm, composer);
   }
   el.appendChild(below);
 
   /** @type {AvatarView} */
-  const selfAvatar = { ...avatar, below, plate, composer, input, send };
+  const selfAvatar = {
+    ...avatar,
+    below,
+    nameEl,
+    dot,
+    plate,
+    profileButton,
+    profileForm,
+    profileInput,
+    colorSwatches,
+    composer,
+    input,
+    send,
+  };
+
+  const closeProfile = () => {
+    profileForm.hidden = true;
+    profileButton.setAttribute("aria-expanded", "false");
+  };
+
+  const submitProfile = (nextColor = el.dataset.color || color) => {
+    const nextProfile = {
+      displayName: profileInput.value,
+      color: nextColor,
+    };
+    setAvatarProfile(selfAvatar, nextProfile);
+    onProfileChange?.({
+      displayName: nameEl.dataset.value || "",
+      color: el.dataset.color || nextColor,
+    });
+  };
+
+  const openProfile = () => {
+    if (!composer.hidden) closeComposer();
+    profileForm.hidden = false;
+    profileButton.setAttribute("aria-expanded", "true");
+    profileInput.value = nameEl.dataset.value || "";
+    profileInput.focus();
+  };
+
+  const toggleProfile = () => {
+    if (profileForm.hidden) {
+      openProfile();
+      return;
+    }
+    submitProfile();
+    closeProfile();
+  };
+
+  profileButton.addEventListener("click", toggleProfile);
+
+  profileInput.addEventListener("input", () => {
+    submitProfile();
+  });
+
+  profileInput.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeProfile();
+    }
+  });
+
+  for (const swatch of colorSwatches) {
+    swatch.addEventListener("click", () => {
+      submitProfile(swatch.dataset.color || color);
+    });
+  }
+
+  profileForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+    submitProfile();
+    closeProfile();
+  });
+
+  setAvatarProfile(selfAvatar, profile);
 
   const openComposer = () => {
+    closeProfile();
     plate.hidden = true;
+    profileButton.hidden = true;
     composer.hidden = false;
     input.value = "";
     setSendReady(selfAvatar, false);
@@ -289,6 +452,7 @@ export function createAvatar({ isSelf, onSubmitChat, composerHost }) {
   const closeComposer = () => {
     composer.hidden = true;
     plate.hidden = false;
+    profileButton.hidden = false;
     input.value = "";
     setSendReady(selfAvatar, false);
   };
@@ -326,6 +490,30 @@ export function createAvatar({ isSelf, onSubmitChat, composerHost }) {
   });
 
   return selfAvatar;
+}
+
+/**
+ * @param {AvatarView} avatar
+ * @param {{ displayName?: string, color?: string }} profile
+ */
+export function setAvatarProfile(avatar, profile = {}) {
+  const displayName = typeof profile.displayName === "string"
+    ? profile.displayName.trim().replace(/\s+/g, " ").slice(0, 18)
+    : "";
+  const color = typeof profile.color === "string" ? profile.color : "";
+  avatar.el.dataset.color = color;
+  avatar.el.style.color = color || "";
+  if (avatar.dot) {
+    avatar.dot.style.background = color || "";
+  }
+  if (avatar.nameEl) {
+    avatar.nameEl.textContent = displayName || "you";
+    avatar.nameEl.dataset.value = displayName;
+    avatar.nameEl.parentElement?.toggleAttribute("hidden", !displayName && avatar.el.classList.contains("avatar--peer"));
+  }
+  for (const swatch of avatar.colorSwatches || []) {
+    swatch.setAttribute("aria-pressed", String(swatch.dataset.color === color));
+  }
 }
 
 /**

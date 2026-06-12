@@ -2,7 +2,12 @@
  * Pure browser helpers used during widget mount and connection setup.
  */
 
-import { BROWSER_ID_KEY } from "./constants.mjs";
+import {
+  BROWSER_ID_KEY,
+  CHARACTER_COLORS,
+  DISPLAY_NAME_MAX,
+  PROFILE_STORAGE_KEY,
+} from "./constants.mjs";
 
 /**
  * Stable per-browser identity used to dedupe visitors across tabs.
@@ -25,6 +30,56 @@ export function getBrowserId() {
   } catch {
     return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
   }
+}
+
+/**
+ * @param {string} value
+ * @returns {string}
+ */
+export function normalizeCharacterColor(value) {
+  return CHARACTER_COLORS.includes(value) ? value : CHARACTER_COLORS[0];
+}
+
+/**
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function normalizeDisplayName(value) {
+  if (typeof value !== "string") return "";
+  return value.trim().replace(/\s+/g, " ").slice(0, DISPLAY_NAME_MAX);
+}
+
+/**
+ * @returns {{ displayName: string, color: string }}
+ */
+export function getStoredProfile() {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem(PROFILE_STORAGE_KEY) || "{}");
+    const data = parsed && typeof parsed === "object" ? parsed : {};
+    return {
+      displayName: normalizeDisplayName(data.displayName),
+      color: normalizeCharacterColor(data.color),
+    };
+  } catch {
+    return { displayName: "", color: CHARACTER_COLORS[0] };
+  }
+}
+
+/**
+ * @param {{ displayName: string, color: string }} profile
+ * @returns {{ displayName: string, color: string }}
+ */
+export function saveStoredProfile(profile) {
+  const normalized = {
+    displayName: normalizeDisplayName(profile.displayName),
+    color: normalizeCharacterColor(profile.color),
+  };
+  try {
+    sessionStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalized));
+  } catch {
+    // The server still keeps the in-memory profile for the connected session.
+  }
+  return normalized;
 }
 
 /**

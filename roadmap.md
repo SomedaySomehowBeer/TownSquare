@@ -48,7 +48,8 @@ Still thin: scene feels like a demo strip; anonymous visitors; deployment docs l
 
 ### Visitors
 
-- [ ] **Optional display name**: short ephemeral name on own character; no accounts
+- [x] **Optional display name**: short ephemeral name on own character; no accounts
+- [x] **Character color**: visitor picks a color for their figure; choice is visible to others and persists for the session (same browser); small curated palette, not a full color picker
 - [ ] **Currently reading tag**: short label of the page each visitor is on (e.g. article or page title); visible to others; updates on navigation; readable in the scene without crowding
 - [ ] **Click/tap props**: intentional interaction where proximity isn't enough
 - [ ] **Arrival clarity**: live place, who's here, can move and chat: obvious in seconds

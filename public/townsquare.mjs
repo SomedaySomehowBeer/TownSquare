@@ -7,7 +7,7 @@
  */
 
 import { submitChat } from "./widget/chat.mjs";
-import { randomSpawnX } from "./widget/constants.mjs";
+import { CHARACTER_COLORS, randomSpawnX } from "./widget/constants.mjs";
 import {
   createAvatar,
   renderAvatar,
@@ -27,7 +27,7 @@ import {
 } from "./widget/movement.mjs";
 import { updateStatus } from "./widget/presence.mjs";
 import { wireSocket } from "./widget/protocol.mjs";
-import { buildSocketUrl, getBrowserId, normalizeOrigin } from "./widget/utils.mjs";
+import { buildSocketUrl, getBrowserId, getStoredProfile, normalizeOrigin, saveStoredProfile } from "./widget/utils.mjs";
 
 /**
  * @typedef {Object} MountOptions
@@ -64,6 +64,7 @@ export function mountTownSquare(root, options = {}) {
   const siteKey = options.siteKey || root.dataset.townsquareSiteKey || "";
   const socketUrl = buildSocketUrl(serverOrigin, options.socketPath || "/live", siteKey);
   const browserId = getBrowserId();
+  const profile = getStoredProfile();
   const spawnX = randomSpawnX();
   const peers = new Map();
   const coarsePointer = typeof window.matchMedia === "function"
@@ -108,11 +109,23 @@ export function mountTownSquare(root, options = {}) {
       lastSendAt: 0,
       pose: null,
       propId: null,
+      displayName: profile.displayName,
+      color: profile.color,
       propZoneEnteredAt: 0,
       settlePropId: null,
       settleRequested: false,
       avatar: createAvatar({
         isSelf: true,
+        profile,
+        colors: CHARACTER_COLORS,
+        onProfileChange: (nextProfile) => {
+          const saved = saveStoredProfile(nextProfile);
+          ctx.self.displayName = saved.displayName;
+          ctx.self.color = saved.color;
+          if (ctx.socket.readyState === WebSocket.OPEN && ctx.self.id) {
+            ctx.socket.send(JSON.stringify({ type: "profile", ...saved }));
+          }
+        },
         onSubmitChat: () => submitChat(ctx),
         composerHost: coarsePointer ? app : undefined,
       }),

@@ -16,13 +16,13 @@ function siteSocketUrl(siteKey) {
   return url.toString();
 }
 
-function connect({ x, browserId, siteKey = "", origin = "" }) {
+function connect({ x, browserId, siteKey = "", origin = "", displayName = "", color = "" }) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(siteSocketUrl(siteKey), origin ? { headers: { Origin: origin } } : undefined);
     const seen = [];
 
     ws.on("open", () => {
-      ws.send(JSON.stringify({ type: "init", x, browserId }));
+      ws.send(JSON.stringify({ type: "init", x, browserId, displayName, color }));
     });
 
     ws.on("message", (buffer) => {
@@ -201,12 +201,21 @@ function findLast(messages, predicate) {
 async function main() {
   await assertEmbeddableAssetsAreCrossOriginLoadable();
 
-  const first = await connect({ x: 0.25, browserId: "browser-a" });
+  const first = await connect({
+    x: 0.25,
+    browserId: "browser-a",
+    displayName: "  Ada    Lovelace  ",
+    color: "#3f7f63",
+  });
   const secondSameBrowser = await connect({ x: 0.75, browserId: "browser-a" });
 
   await delay(100);
 
   assert(first.id === secondSameBrowser.id, "same-browser tabs did not reuse one shared identity");
+  assert(first.hello.displayName === "Ada Lovelace", "display name was not normalized on init");
+  assert(first.hello.color === "#3f7f63", "character color was not accepted on init");
+  assert(secondSameBrowser.hello.displayName === "Ada Lovelace", "same-browser tab did not inherit display name");
+  assert(secondSameBrowser.hello.color === "#3f7f63", "same-browser tab did not inherit character color");
   assert(secondSameBrowser.hello.peers.length === 0, "same-browser tab should not see itself as a peer");
   assert(!first.seen.some((message) => message.type === "join"), "same-browser tab incorrectly triggered a join event");
 
@@ -215,7 +224,31 @@ async function main() {
   await delay(100);
 
   assert(third.hello.peers.length === 1, "third client should see one existing visitor, not one per tab");
+  assert(third.hello.peers[0].displayName === "Ada Lovelace", "peer snapshot did not include display name");
+  assert(third.hello.peers[0].color === "#3f7f63", "peer snapshot did not include character color");
   assert(first.seen.some((message) => message.type === "join" && message.peer.id === third.id), "first client did not observe different-browser join");
+
+  secondSameBrowser.ws.send(JSON.stringify({ type: "profile", displayName: "Ada", color: "#3f6fb5" }));
+  await delay(100);
+
+  assert(
+    first.seen.some((message) => (
+      message.type === "profile"
+      && message.id === first.id
+      && message.displayName === "Ada"
+      && message.color === "#3f6fb5"
+    )),
+    "profile update did not propagate to same-browser sibling",
+  );
+  assert(
+    third.seen.some((message) => (
+      message.type === "profile"
+      && message.id === first.id
+      && message.displayName === "Ada"
+      && message.color === "#3f6fb5"
+    )),
+    "profile update did not propagate to other visitors",
+  );
 
   secondSameBrowser.ws.send(JSON.stringify({ type: "move", x: 0.58 }));
   await delay(100);
