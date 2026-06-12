@@ -162,6 +162,7 @@ The admin page can:
 Registered sites are stored in `.data/sites.json` by default.
 Set `DATA_DIR` if the registry should live somewhere else.
 Set `PUBLIC_ORIGIN` in production so generated snippets use the public HTTPS origin.
+Set `AUTH_FAILURES_PER_HOUR` to tune per-IP failed admin sign-in throttling; `0` disables it.
 Set `SERVICE_ADMIN_PASSWORD` to enable `/service-admin`, where the service operator can list registered sites, reset site admin tokens, disable sites or chat, and delete site records.
 For local runs, `server.js` also reads `.env` if it exists; real environment variables win over `.env` values.
 

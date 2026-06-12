@@ -7,6 +7,7 @@ const HTTP_ORIGIN = process.env.TOWNSQUARE_HTTP_ORIGIN || "http://127.0.0.1:8787
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "..", ".data");
 const SITES_FILE = path.join(DATA_DIR, "sites.json");
 const SERVICE_ADMIN_PASSWORD = process.env.SERVICE_ADMIN_PASSWORD || "";
+const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
 
 function siteSocketUrl(siteKey) {
   if (!siteKey) return SERVER_URL;
@@ -73,15 +74,51 @@ async function loginShouldFailWithAdminToken(adminToken) {
   assert(response.status === 403, "old admin token still worked after reset");
 }
 
-async function serviceAdminApi(pathname, payload = {}) {
+async function postJson(pathname, payload = {}) {
   const response = await fetch(`${HTTP_ORIGIN}${pathname}`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ password: SERVICE_ADMIN_PASSWORD, ...payload }),
+    body: JSON.stringify(payload),
   });
-  const body = await response.json();
+  return { response, body: await response.json() };
+}
+
+async function serviceAdminApi(pathname, payload = {}) {
+  const { response, body } = await postJson(pathname, { password: SERVICE_ADMIN_PASSWORD, ...payload });
   assert(response.ok, body.error || "service admin request failed");
   return body;
+}
+
+async function assertAuthFailuresAreThrottled(hostedSite) {
+  if (AUTH_FAILURES_PER_HOUR <= 0) return;
+
+  for (let attempt = 0; attempt < AUTH_FAILURES_PER_HOUR; attempt += 1) {
+    const { response } = await postJson("/api/admin/login", { adminToken: `bad-token-${attempt}` });
+    assert(response.status === 403, "admin auth failure throttled too early");
+  }
+
+  const blockedAdmin = await postJson("/api/admin/login", { adminToken: "bad-token-blocked" });
+  assert(blockedAdmin.response.status === 429, "admin auth failures did not throttle by IP");
+
+  const blockedValidAdmin = await postJson("/api/admin/login", { adminToken: hostedSite.adminToken });
+  assert(blockedValidAdmin.response.status === 429, "admin auth throttle did not block the IP");
+}
+
+async function assertServiceAdminFailuresAreThrottled() {
+  if (!SERVICE_ADMIN_PASSWORD || AUTH_FAILURES_PER_HOUR <= 0) return;
+
+  for (let attempt = 0; attempt < AUTH_FAILURES_PER_HOUR; attempt += 1) {
+    const { response } = await postJson("/api/service-admin/sites", { password: SERVICE_ADMIN_PASSWORD });
+    assert(response.ok, "valid service admin auth did not clear prior auth failures");
+  }
+
+  for (let attempt = 0; attempt < AUTH_FAILURES_PER_HOUR; attempt += 1) {
+    const { response } = await postJson("/api/service-admin/sites", { password: `bad-password-${attempt}` });
+    assert(response.status === 403, "service admin auth failure throttled too early");
+  }
+
+  const blockedServiceAdmin = await postJson("/api/service-admin/sites", { password: "bad-password-blocked" });
+  assert(blockedServiceAdmin.response.status === 429, "service admin auth failures did not throttle by IP");
 }
 
 function assertAdminTokenStoredAsHash(siteKey, adminToken) {
@@ -263,6 +300,8 @@ async function main() {
   siteAVisitor.ws.close();
   siteBVisitor.ws.close();
   await assertServiceAdminCanManageSites(hostedA, hostedB);
+  await assertAuthFailuresAreThrottled(hostedA);
+  await assertServiceAdminFailuresAreThrottled();
 
   console.log("Smoke test passed.");
   first.ws.close();

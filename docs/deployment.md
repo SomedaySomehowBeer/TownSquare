@@ -23,6 +23,7 @@ Configure with environment variables:
 - `DATA_DIR` for hosted site registry storage
 - `PUBLIC_ORIGIN` for generated hosted snippets/admin links
 - `REGISTRATIONS_PER_HOUR` per-IP registration rate limit (default 20, `0` disables)
+- `AUTH_FAILURES_PER_HOUR` per-IP failed admin sign-in throttle (default 30, `0` disables)
 - `SERVICE_ADMIN_PASSWORD` to enable the service admin page
 
 For local runs, `server.js` also reads `.env` if it exists.

@@ -46,6 +46,7 @@ const MAX_RECENT_MESSAGES = 5;
 const MAX_SITE_NAME_LEN = 80;
 const MAX_ORIGIN_LEN = 240;
 const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
+const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
 const LAST_SEEN_SAVE_INTERVAL_MS = 60000;
 const MOVE_THROTTLE_MS = 40;
 const CHAT_THROTTLE_MS = 1500;
@@ -362,31 +363,62 @@ function buildAdminUrl(req, adminToken) {
 }
 
 const registrationsByIp = new Map();
+const adminAuthFailuresByIp = new Map();
+const serviceAdminAuthFailuresByIp = new Map();
 
-function isRegistrationAllowed(ip) {
-  if (REGISTRATIONS_PER_HOUR <= 0) return true;
+function getRequestIp(req) {
+  return req.socket.remoteAddress || "unknown";
+}
+
+function recentBucket(map, key, limit) {
+  if (limit <= 0) return [];
 
   const now = Date.now();
   const cutoff = now - 60 * 60 * 1000;
 
-  if (registrationsByIp.size > 1000) {
-    for (const [key, timestamps] of registrationsByIp) {
-      if (timestamps.every((at) => at <= cutoff)) registrationsByIp.delete(key);
+  if (map.size > 1000) {
+    for (const [bucketKey, timestamps] of map) {
+      if (timestamps.every((at) => at <= cutoff)) map.delete(bucketKey);
     }
   }
 
-  const recent = (registrationsByIp.get(ip) || []).filter((at) => at > cutoff);
-  registrationsByIp.set(ip, recent);
+  const recent = (map.get(key) || []).filter((at) => at > cutoff);
+  map.set(key, recent);
+  return recent;
+}
+
+function isRegistrationAllowed(ip) {
+  if (REGISTRATIONS_PER_HOUR <= 0) return true;
+
+  const recent = recentBucket(registrationsByIp, ip, REGISTRATIONS_PER_HOUR);
 
   if (recent.length >= REGISTRATIONS_PER_HOUR) return false;
 
-  recent.push(now);
+  recent.push(Date.now());
   return true;
+}
+
+function isAuthAttemptAllowed(map, ip) {
+  if (AUTH_FAILURES_PER_HOUR <= 0) return true;
+  return recentBucket(map, ip, AUTH_FAILURES_PER_HOUR).length < AUTH_FAILURES_PER_HOUR;
+}
+
+function recordAuthFailure(map, ip) {
+  if (AUTH_FAILURES_PER_HOUR <= 0) return;
+  recentBucket(map, ip, AUTH_FAILURES_PER_HOUR).push(Date.now());
+}
+
+function clearAuthFailures(map, ip) {
+  map.delete(ip);
+}
+
+function sendAuthThrottled(res) {
+  sendJson(res, 429, { error: "Too many failed sign-in attempts. Try again later." });
 }
 
 function handleRegisterSite(req, res) {
   readJsonBody(req, res, (body) => {
-    if (!isRegistrationAllowed(req.socket.remoteAddress || "unknown")) {
+    if (!isRegistrationAllowed(getRequestIp(req))) {
       sendJson(res, 429, { error: "Too many registrations from this address. Try again later." });
       return;
     }
@@ -426,21 +458,40 @@ function sendAdminSite(req, res, site, adminToken) {
 
 function handlePostAdminSite(req, res) {
   readJsonBody(req, res, (body) => {
+    const ip = getRequestIp(req);
+    if (!isAuthAttemptAllowed(adminAuthFailuresByIp, ip)) {
+      sendAuthThrottled(res);
+      return;
+    }
+
     const adminToken = String(body.adminToken || "").trim();
     const site = getAdminSiteByCredentials(String(body.siteKey || ""), adminToken);
+    if (!site) {
+      recordAuthFailure(adminAuthFailuresByIp, ip);
+    } else {
+      clearAuthFailures(adminAuthFailuresByIp, ip);
+    }
     sendAdminSite(req, res, site, adminToken);
   });
 }
 
 function handleAdminLogin(req, res) {
   readJsonBody(req, res, (body) => {
+    const ip = getRequestIp(req);
+    if (!isAuthAttemptAllowed(adminAuthFailuresByIp, ip)) {
+      sendAuthThrottled(res);
+      return;
+    }
+
     const adminToken = String(body.adminToken || "").trim();
     const site = findSiteByAdminToken(adminToken);
     if (!site) {
+      recordAuthFailure(adminAuthFailuresByIp, ip);
       sendJson(res, 403, { error: "Invalid admin token." });
       return;
     }
 
+    clearAuthFailures(adminAuthFailuresByIp, ip);
     sendJson(res, 200, {
       site: publicSite(site),
       adminUrl: buildAdminUrl(req, adminToken),
@@ -450,12 +501,20 @@ function handleAdminLogin(req, res) {
 
 function handleAdminAction(req, res) {
   readJsonBody(req, res, (body) => {
+    const ip = getRequestIp(req);
+    if (!isAuthAttemptAllowed(adminAuthFailuresByIp, ip)) {
+      sendAuthThrottled(res);
+      return;
+    }
+
     const site = getAdminSiteByCredentials(String(body.siteKey || ""), String(body.adminToken || ""));
     if (!site) {
+      recordAuthFailure(adminAuthFailuresByIp, ip);
       sendJson(res, 403, { error: "Invalid site key or admin token." });
       return;
     }
 
+    clearAuthFailures(adminAuthFailuresByIp, ip);
     const action = String(body.action || "");
     const scene = getScene(site.siteKey);
 
@@ -526,17 +585,25 @@ function serviceAdminPasswordMatches(password) {
   return tokensMatch(expected, provided);
 }
 
-function isServiceAdminAuthorized(body, res) {
+function isServiceAdminAuthorized(req, body, res) {
   if (!SERVICE_ADMIN_PASSWORD.trim()) {
     sendJson(res, 403, { error: "Service admin is not configured." });
     return false;
   }
 
+  const ip = getRequestIp(req);
+  if (!isAuthAttemptAllowed(serviceAdminAuthFailuresByIp, ip)) {
+    sendAuthThrottled(res);
+    return false;
+  }
+
   if (!serviceAdminPasswordMatches(body.password)) {
+    recordAuthFailure(serviceAdminAuthFailuresByIp, ip);
     sendJson(res, 403, { error: "Invalid service admin password." });
     return false;
   }
 
+  clearAuthFailures(serviceAdminAuthFailuresByIp, ip);
   return true;
 }
 
@@ -569,14 +636,14 @@ function closeSiteScene(siteKey, code, reason) {
 
 function handleServiceAdminSites(req, res) {
   readJsonBody(req, res, (body) => {
-    if (!isServiceAdminAuthorized(body, res)) return;
+    if (!isServiceAdminAuthorized(req, body, res)) return;
     sendServiceAdminSites(res);
   });
 }
 
 function handleServiceAdminAction(req, res) {
   readJsonBody(req, res, (body) => {
-    if (!isServiceAdminAuthorized(body, res)) return;
+    if (!isServiceAdminAuthorized(req, body, res)) return;
 
     const siteKey = String(body.siteKey || "");
     const site = sitesByKey.get(siteKey);
