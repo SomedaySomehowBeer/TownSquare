@@ -15,6 +15,11 @@ export const SEND_INTERVAL_MS = 45;
 export const MIN_X = 0.02;
 export const MAX_X = 0.98;
 
+/** @returns {number} */
+export function randomSpawnX() {
+  return MIN_X + Math.random() * (MAX_X - MIN_X);
+}
+
 /**
  * @typedef {Object} SceneProp
  * @property {string} id

@@ -48,6 +48,8 @@ const MAX_ORIGIN_LEN = 240;
 const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
 const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
 const LAST_SEEN_SAVE_INTERVAL_MS = 60000;
+const MIN_X = 0.02;
+const MAX_X = 0.98;
 const MOVE_THROTTLE_MS = 40;
 const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
@@ -196,6 +198,10 @@ function createIdentity(id, browserId, x) {
     leaveTimer: null,
     messages: [],
   };
+}
+
+function randomSpawnX() {
+  return MIN_X + Math.random() * (MAX_X - MIN_X);
 }
 
 function clampPosition(x) {
@@ -1020,7 +1026,7 @@ function handleInit(client, message) {
   if (client.joined) return;
 
   const nextX = clampPosition(message.x);
-  const fallbackX = nextX ?? 0.5;
+  const fallbackX = nextX ?? randomSpawnX();
   const { scene, site } = client;
 
   if (site && site.blockedBrowserIds.includes(sanitizeBrowserId(message.browserId))) {

@@ -7,6 +7,7 @@
  */
 
 import { submitChat } from "./widget/chat.mjs";
+import { randomSpawnX } from "./widget/constants.mjs";
 import {
   createAvatar,
   renderAvatar,
@@ -55,6 +56,7 @@ export function mountTownSquare(root, options = {}) {
   const siteKey = options.siteKey || root.dataset.townsquareSiteKey || "";
   const socketUrl = buildSocketUrl(serverOrigin, options.socketPath || "/live", siteKey);
   const browserId = getBrowserId();
+  const spawnX = randomSpawnX();
   const peers = new Map();
 
   root.replaceChildren();
@@ -88,10 +90,10 @@ export function mountTownSquare(root, options = {}) {
     expandButton,
     self: {
       id: null,
-      x: 0.5,
+      x: spawnX,
       movingLeft: false,
       movingRight: false,
-      lastSentX: 0.5,
+      lastSentX: spawnX,
       lastSendAt: 0,
       pose: null,
       propId: null,
