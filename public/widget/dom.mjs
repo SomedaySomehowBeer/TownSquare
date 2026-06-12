@@ -106,7 +106,8 @@ export function renderShell(container) {
   helpTitle.textContent = "TownSquare";
 
   const description = document.createElement("p");
-  description.textContent = "A tiny shared place for people visiting this site.";
+  description.textContent =
+    "A tiny shared place for people visiting this site. Not yet optimized for mobile — desktop works best. Working on it.";
 
   const instructions = document.createElement("p");
   instructions.textContent = "Move with the left and right arrow keys. Click your nameplate to chat.";
