@@ -37,11 +37,11 @@
 /** @type {LayoutConfig} */
 export const DEFAULT_LAYOUT_CONFIG = {
   columnGap: 10,
-  edgeMargin: 8,
-  nearX: 0.08,
-  farX: 0.4,
-  fadeFloor: 0.3,
-  scaleFloor: 0.75,
+  edgeMargin: 10,
+  nearX: 0.2,
+  farX: 0.29,
+  fadeFloor: 0.2,
+  scaleFloor: 0.55,
 };
 
 /** The tail's base stays clear of the live bubble's rounded corners by this much. */
