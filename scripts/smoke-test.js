@@ -69,6 +69,12 @@ async function loginWithAdminToken(adminToken) {
   return body;
 }
 
+async function adminSiteApi(siteKey, adminToken) {
+  const { response, body } = await postJson("/api/admin/site", { siteKey, adminToken });
+  assert(response.ok, body.error || "site admin request failed");
+  return body;
+}
+
 async function loginShouldFailWithAdminToken(adminToken) {
   const response = await fetch(`${HTTP_ORIGIN}/api/admin/login`, {
     method: "POST",
@@ -172,6 +178,23 @@ async function assertServiceAdminCanManageSites(hostedA, hostedB) {
     !afterDelete.sites.some((site) => site.siteKey === hostedB.site.siteKey),
     "service admin did not delete hosted site B",
   );
+}
+
+async function assertServiceAdminShowsActiveVisitors(hostedA, hostedB) {
+  if (!SERVICE_ADMIN_PASSWORD) return;
+
+  const siteAdminA = await adminSiteApi(hostedA.site.siteKey, hostedA.adminToken);
+  assert(siteAdminA.scene.activeVisitors === 1, "site admin did not show hosted site A's active visitor");
+  assert(
+    siteAdminA.scene.visitors[0]?.displayName === "Named Visitor",
+    "site admin active visitor did not include display name",
+  );
+
+  const listed = await serviceAdminApi("/api/service-admin/sites");
+  const listedA = listed.sites.find((site) => site.siteKey === hostedA.site.siteKey);
+  const listedB = listed.sites.find((site) => site.siteKey === hostedB.site.siteKey);
+  assert(listedA?.activeVisitors === 1, "service admin did not show hosted site A's active visitor");
+  assert(listedB?.activeVisitors === 1, "service admin did not show hosted site B's active visitor");
 }
 
 async function assertEmbeddableAssetsAreCrossOriginLoadable() {
@@ -427,6 +450,7 @@ async function main() {
     browserId: "hosted-a",
     siteKey: hostedA.site.siteKey,
     origin: HTTP_ORIGIN,
+    displayName: "Named Visitor",
   });
   const siteBVisitor = await connect({
     x: 0.7,
@@ -439,6 +463,7 @@ async function main() {
 
   assert(siteAVisitor.hello.peers.length === 0, "hosted site A saw visitors from another site");
   assert(siteBVisitor.hello.peers.length === 0, "hosted site B saw visitors from another site");
+  await assertServiceAdminShowsActiveVisitors(hostedA, hostedB);
 
   siteAVisitor.ws.close();
   siteBVisitor.ws.close();

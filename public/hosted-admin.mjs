@@ -158,10 +158,13 @@ function render(data) {
   for (const visitor of scene.visitors) {
     const row = document.createElement("article");
     row.className = "visitor-row";
+    const visitorName = String(visitor.displayName || "").trim();
+    const visitorLabel = visitorName || `Visitor ${visitor.id}`;
+    const visitorMeta = visitorName ? `Visitor ${visitor.id} · ` : "";
     row.innerHTML = `
       <div>
-        <strong>Visitor ${visitor.id}</strong>
-        <span>${visitor.clientCount} tab${visitor.clientCount === 1 ? "" : "s"} connected</span>
+        <strong>${escapeHtml(visitorLabel)}</strong>
+        <span>${escapeHtml(visitorMeta)}${visitor.clientCount} tab${visitor.clientCount === 1 ? "" : "s"} connected</span>
       </div>
     `;
 

@@ -13,8 +13,10 @@ const newAdminLink = document.getElementById("new-admin-link");
 const copyTokenButton = document.getElementById("copy-token");
 
 const STORAGE_KEY = "townsquare-service-admin-password";
+const REFRESH_INTERVAL_MS = 5000;
 
 let password = sessionStorage.getItem(STORAGE_KEY) || "";
+let refreshTimer = null;
 
 function setLoginStatus(message, isError = false) {
   loginStatusEl.textContent = message;
@@ -28,6 +30,7 @@ function setStatus(message, isError = false) {
 }
 
 function showLogin(message = "", isError = false) {
+  stopAutoRefresh();
   adminView.hidden = true;
   loginView.hidden = false;
   setLoginStatus(message, isError);
@@ -37,6 +40,22 @@ function showLogin(message = "", isError = false) {
 function showAdmin() {
   loginView.hidden = true;
   adminView.hidden = false;
+  startAutoRefresh();
+}
+
+function startAutoRefresh() {
+  if (refreshTimer) return;
+  refreshTimer = setInterval(() => {
+    if (!document.hidden) {
+      loadSites({ silent: true });
+    }
+  }, REFRESH_INTERVAL_MS);
+}
+
+function stopAutoRefresh() {
+  if (!refreshTimer) return;
+  clearInterval(refreshTimer);
+  refreshTimer = null;
 }
 
 async function api(path, payload = {}) {
@@ -126,13 +145,15 @@ function renderSites(sites) {
   }
 }
 
-async function loadSites() {
+async function loadSites({ silent = false } = {}) {
   if (!password) {
     showLogin();
     return;
   }
 
-  setStatus("Loading websites...");
+  if (!silent) {
+    setStatus("Loading websites...");
+  }
   const result = await api("/api/service-admin/sites");
   if (!result.ok) {
     if (result.status === 403) {
@@ -147,9 +168,13 @@ async function loadSites() {
 
   sessionStorage.setItem(STORAGE_KEY, password);
   showAdmin();
-  tokenResult.hidden = true;
+  if (!silent) {
+    tokenResult.hidden = true;
+  }
   renderSites(result.body.sites);
-  setStatus(`${result.body.sites.length} registered website${result.body.sites.length === 1 ? "" : "s"}.`);
+  if (!silent) {
+    setStatus(`${result.body.sites.length} registered website${result.body.sites.length === 1 ? "" : "s"}.`);
+  }
 }
 
 async function action(name, siteKey, data = {}) {
