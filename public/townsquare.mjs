@@ -7,6 +7,7 @@
  */
 
 import { submitChat } from "./widget/chat.mjs";
+import { initBirds, destroyBirds } from "./widget/birds.mjs";
 import { CHARACTER_COLORS, randomSpawnX } from "./widget/constants.mjs";
 import {
   createAvatar,
@@ -227,6 +228,7 @@ export function mountTownSquare(root, options = {}) {
     viewport.addEventListener("scroll", onViewportChange);
   }
 
+  initBirds(ctx);
   stage.appendChild(ctx.self.avatar.el);
   renderAvatar(ctx.self.avatar, ctx.self.x);
   updatePose(ctx.self.avatar, ctx.self.pose);
@@ -241,6 +243,7 @@ export function mountTownSquare(root, options = {}) {
     destroy() {
       ctx.disposed = true;
       stopGameLoop(ctx);
+      destroyBirds(ctx);
       unwireKeyboard(ctx);
       unwireStagePointer(ctx);
       unwireHelpPanel();

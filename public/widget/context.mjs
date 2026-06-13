@@ -73,6 +73,8 @@
  * @property {(event: KeyboardEvent) => void} onKeyDown
  * @property {(event: KeyboardEvent) => void} onKeyUp
  * @property {(event: MouseEvent) => void} onStageClick
+ * @property {Map<number, import("./birds.mjs").BirdView>} [birds]
+ * @property {HTMLElement} [birdLayer]
  */
 
 export {};
