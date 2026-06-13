@@ -26,8 +26,10 @@ Configure with environment variables:
 - `AUTH_FAILURES_PER_HOUR` per-IP failed admin sign-in throttle (default 30, `0` disables)
 - `SERVICE_ADMIN_PASSWORD` to enable the service admin page
 - `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to send Telegram notifications for chat messages
+- `INACTIVE_DISCONNECT_MS` to disconnect visitors who stay away or inactive (default 30 minutes, `0` disables)
+- `INACTIVE_CHECK_INTERVAL_MS` for how often the server scans for inactive visitors (default 60 seconds)
 
-For local runs, `server.js` also reads `.env` if it exists.
+For local runs, copy `.env.example` to `.env` (or create `.env` directly); `server.js` loads it on startup.
 Real environment variables take precedence over `.env` values.
 
 ## Local run

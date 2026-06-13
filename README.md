@@ -168,7 +168,8 @@ Set `PUBLIC_ORIGIN` in production so generated snippets use the public HTTPS ori
 Set `AUTH_FAILURES_PER_HOUR` to tune per-IP failed admin sign-in throttling; `0` disables it.
 Set `SERVICE_ADMIN_PASSWORD` to enable `/service-admin`, where the service operator can list registered sites, reset site admin tokens, disable sites or chat, and delete site records.
 Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to send a Telegram notification whenever a chat message is sent.
-For local runs, `server.js` also reads `.env` if it exists; real environment variables win over `.env` values.
+Set `INACTIVE_DISCONNECT_MS` and `INACTIVE_CHECK_INTERVAL_MS` to control away/inactive disconnects (see `.env.example`).
+For local runs, copy `.env.example` to `.env` (or create `.env` directly); `server.js` loads it on startup. Real environment variables win over `.env` values.
 
 ## Deploy updates to the shared Hetzner host
 
@@ -251,6 +252,13 @@ The smoke test verifies:
 - say
 - leave
 - hosted site isolation and admin token hashing
+
+To also verify inactive disconnect, restart the server with a short timeout and rerun smoke:
+
+```bash
+INACTIVE_DISCONNECT_MS=800 INACTIVE_CHECK_INTERVAL_MS=200 npm start
+INACTIVE_DISCONNECT_MS=800 npm run smoke
+```
 
 ## Current scope
 

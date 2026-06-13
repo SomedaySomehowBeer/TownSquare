@@ -225,7 +225,62 @@ function findLast(messages, predicate) {
   return null;
 }
 
+async function assertInactiveDisconnect() {
+  const inactiveMs = Number(process.env.INACTIVE_DISCONNECT_MS || 0);
+  if (inactiveMs <= 0 || inactiveMs > 5000) return;
+
+  const observer = await connect({ x: 0.15, browserId: "inactive-observer" });
+  const keepalive = setInterval(() => {
+    if (observer.ws.readyState === observer.ws.OPEN) {
+      observer.ws.send(JSON.stringify({ type: "move", x: 0.15 }));
+    }
+  }, Math.max(100, Math.floor(inactiveMs / 3)));
+
+  try {
+    const idle = await connect({
+      x: 0.25,
+      browserId: "inactive-idle",
+      readingActive: false,
+      readingLabel: "Away page",
+    });
+    await delay(100);
+
+    const idleId = idle.id;
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error("inactive visitor was not disconnected")),
+        inactiveMs + 3000,
+      );
+      idle.ws.on("close", (code, reason) => {
+        clearTimeout(timeout);
+        assert(String(reason) === "inactive", `expected inactive close reason, got ${reason}`);
+        resolve();
+      });
+    });
+
+    await delay(200);
+    assert(
+      observer.seen.some((message) => message.type === "leave" && message.id === idleId),
+      "observer did not see inactive leave",
+    );
+
+    const rejoined = await connect({ x: 0.25, browserId: "inactive-idle" });
+    assert(rejoined.hello.id !== idleId, "expected a fresh visitor id after refresh-style reconnect");
+    rejoined.ws.close();
+  } finally {
+    clearInterval(keepalive);
+    observer.ws.close();
+  }
+}
+
 async function main() {
+  const inactiveMs = Number(process.env.INACTIVE_DISCONNECT_MS || 0);
+  if (inactiveMs > 0 && inactiveMs <= 5000) {
+    await assertInactiveDisconnect();
+    console.log("Inactive disconnect smoke test passed.");
+    return;
+  }
+
   await assertEmbeddableAssetsAreCrossOriginLoadable();
 
   const first = await connect({

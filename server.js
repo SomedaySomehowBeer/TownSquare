@@ -53,6 +53,8 @@ const MOVE_THROTTLE_MS = 40;
 const ACTION_THROTTLE_MS = 560;
 const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
+const INACTIVE_DISCONNECT_MS = Number(process.env.INACTIVE_DISCONNECT_MS || 30 * 60 * 1000);
+const INACTIVE_CHECK_INTERVAL_MS = Number(process.env.INACTIVE_CHECK_INTERVAL_MS || 60000);
 const HEARTBEAT_INTERVAL_MS = 30000;
 const BIRD_TICK_INTERVAL_MS = 1000;
 const TELEGRAM_API_TIMEOUT_MS = 5000;
@@ -197,7 +199,7 @@ function createClient(connectionId, ws, scene, site) {
   };
 }
 
-/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
@@ -213,6 +215,9 @@ function createIdentity(id, browserId, x) {
     clients: new Set(),
     joined: false,
     leaveTimer: null,
+    inactiveKick: false,
+    lastActivityAt: 0,
+    awaySince: null,
     messages: [],
   };
 }
@@ -816,6 +821,53 @@ function refreshIdentityReadingActive(identity) {
   return identity.readingActive !== previous;
 }
 
+function touchIdentityActivity(identity, now = Date.now()) {
+  identity.lastActivityAt = now;
+}
+
+function syncIdentityAwayState(identity, now = Date.now()) {
+  if (!identity.joined) return;
+
+  if (identity.readingActive) {
+    identity.awaySince = null;
+    return;
+  }
+
+  if (identity.awaySince === null) {
+    identity.awaySince = now;
+  }
+}
+
+function isIdentityInactive(identity, now = Date.now()) {
+  if (!identity.joined || identity.clients.size === 0) return false;
+  if (INACTIVE_DISCONNECT_MS <= 0) return false;
+
+  if (identity.awaySince !== null && now - identity.awaySince >= INACTIVE_DISCONNECT_MS) {
+    return true;
+  }
+
+  return identity.lastActivityAt > 0 && now - identity.lastActivityAt >= INACTIVE_DISCONNECT_MS;
+}
+
+function disconnectInactiveIdentity(identity) {
+  if (!identity.joined) return;
+  clearLeaveTimer(identity);
+  identity.inactiveKick = true;
+  closeIdentityClients(identity, 4001, "inactive");
+}
+
+function sweepInactiveIdentities(now = Date.now()) {
+  if (INACTIVE_DISCONNECT_MS <= 0) return;
+
+  for (const scene of scenes.values()) {
+    for (const identity of scene.identities.values()) {
+      if (isIdentityInactive(identity, now)) {
+        disconnectInactiveIdentity(identity);
+      }
+    }
+  }
+}
+
 function clearLeaveTimer(identity) {
   if (!identity.leaveTimer) return;
   clearTimeout(identity.leaveTimer);
@@ -1288,10 +1340,13 @@ function handleInit(client, message) {
         readingActive: identity.readingActive,
       }, { exceptConnectionId: client.connectionId });
     }
+    syncIdentityAwayState(identity);
     return;
   }
 
   identity.joined = true;
+  const joinedAt = Date.now();
+  identity.lastActivityAt = joinedAt;
 
   if (site) {
     const now = Date.now();
@@ -1306,6 +1361,7 @@ function handleInit(client, message) {
   }
 
   broadcast(scene, { type: "join", peer: snapshotIdentity(identity) }, { exceptConnectionId: client.connectionId });
+  syncIdentityAwayState(identity, joinedAt);
 }
 
 function handleMove(client, message) {
@@ -1320,6 +1376,7 @@ function handleMove(client, message) {
   client.lastMoveAt = now;
   client.identity.x = nextX;
   clearPose(client.identity);
+  touchIdentityActivity(client.identity, now);
 
   emitIdentityState(client.identity, { exceptConnectionId: client.connectionId });
   maybeFleeBirds(client.scene, nextX);
@@ -1334,6 +1391,7 @@ function handleAction(client, message) {
 
   client.lastActionAt = now;
   clearPose(client.identity);
+  touchIdentityActivity(client.identity, now);
   broadcast(client.scene, {
     type: "action",
     id: client.identity.id,
@@ -1346,6 +1404,7 @@ function handleProfile(client, message) {
 
   client.identity.displayName = sanitizeDisplayName(message.displayName);
   client.identity.color = sanitizeCharacterColor(message.color);
+  touchIdentityActivity(client.identity);
 
   broadcast(client.scene, {
     type: "profile",
@@ -1374,6 +1433,11 @@ function handleReading(client, message) {
   client.identity.readingLabel = readingLabel;
   client.identity.readingUrl = readingUrl;
   refreshIdentityReadingActive(client.identity);
+  const now = Date.now();
+  if (client.identity.readingActive && !previousReadingActive) {
+    touchIdentityActivity(client.identity, now);
+  }
+  syncIdentityAwayState(client.identity, now);
   if (
     readingLabel === previousReadingLabel
     && readingUrl === previousReadingUrl
@@ -1403,6 +1467,7 @@ function handleSettle(client, message) {
   identity.x = seatX;
   identity.pose = prop.pose;
   identity.propId = prop.id;
+  touchIdentityActivity(identity);
 
   emitIdentityState(identity);
 }
@@ -1420,6 +1485,7 @@ function handleSay(client, message) {
   client.lastChatAt = now;
   client.identity.messages.push({ text, at: now });
   client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
+  touchIdentityActivity(client.identity, now);
 
   void sendTelegramChatNotification(client.site, client.identity, text, now);
 
@@ -1471,6 +1537,13 @@ function handleClientClose(client) {
         readingActive: identity.readingActive,
       });
     }
+    syncIdentityAwayState(identity);
+    return;
+  }
+
+  if (identity.inactiveKick) {
+    identity.inactiveKick = false;
+    finalizeDisconnect(identity);
     return;
   }
 
@@ -1506,6 +1579,12 @@ const birdTimer = setInterval(() => {
 }, BIRD_TICK_INTERVAL_MS);
 
 birdTimer.unref?.();
+
+const inactiveTimer = setInterval(() => {
+  sweepInactiveIdentities(Date.now());
+}, INACTIVE_CHECK_INTERVAL_MS);
+
+inactiveTimer.unref?.();
 
 wss.on("connection", (ws, req) => {
   const access = validateSiteAccess(req.url || "/live");
@@ -1548,6 +1627,7 @@ wss.on("connection", (ws, req) => {
 wss.on("close", () => {
   clearInterval(heartbeatTimer);
   clearInterval(birdTimer);
+  clearInterval(inactiveTimer);
 });
 
 async function startServer() {

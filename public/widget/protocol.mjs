@@ -26,6 +26,7 @@ const MAX_RECONNECT_DELAY_MS = 8000;
 const PERMANENT_CLOSE_MESSAGES = new Map([
   ["kicked", "You were removed from the square."],
   ["blocked", "You can't join this square right now."],
+  ["inactive", "You were away for a while and left the square. Refresh the page to rejoin."],
   ["site disabled", "This TownSquare isn't available right now."],
   ["site disabled or unknown", "This TownSquare isn't available right now."],
   ["origin not allowed", "This page isn't registered to TownSquare yet."],
