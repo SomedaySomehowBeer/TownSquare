@@ -76,6 +76,7 @@ export function mountTownSquare(root, options = {}) {
   const browserId = getBrowserId();
   const profile = getStoredProfile();
   const { readingLabel, readingUrl } = readCurrentPage(root, options);
+  const readingActive = document.visibilityState === "visible" && document.hasFocus();
   const spawnX = randomSpawnX();
   const peers = new Map();
   const coarsePointer = typeof window.matchMedia === "function"
@@ -124,12 +125,13 @@ export function mountTownSquare(root, options = {}) {
       color: profile.color,
       readingLabel,
       readingUrl,
+      readingActive,
       propZoneEnteredAt: 0,
       settlePropId: null,
       settleRequested: false,
       avatar: createAvatar({
         isSelf: true,
-        profile: { ...profile, readingLabel, readingUrl },
+        profile: { ...profile, readingLabel, readingUrl, readingActive },
         colors: CHARACTER_COLORS,
         onProfileChange: (nextProfile) => {
           const saved = saveStoredProfile(nextProfile);

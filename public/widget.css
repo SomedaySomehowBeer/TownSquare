@@ -330,6 +330,28 @@
   filter: var(--avatar-shade-filter) var(--avatar-walk-filter) var(--avatar-light-filter);
 }
 .avatar.walking { --avatar-walk-filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
+.avatar--reading-away > svg,
+.avatar--reading-away .avatar__below {
+  opacity: 0.52;
+}
+
+.avatar--reading-away::after {
+  content: "Zz";
+  position: absolute;
+  left: 50%;
+  top: -12px;
+  transform: translateX(-50%) rotate(-8deg);
+  padding: 1px 4px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface) 70%, transparent);
+  color: color-mix(in oklab, currentColor 58%, transparent);
+  font-size: 10px;
+  font-weight: 720;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
 .avatar--sitting { bottom: 44px; }
 .avatar--resting { bottom: 42px; }
 .avatar--shaded { --avatar-shade-filter: brightness(0.88); }

@@ -171,7 +171,7 @@ const MESSAGE_HANDLERS = {
   say: handleSay,
 };
 
-/** @returns {{connectionId:number,ws:any,identity:any,joined:boolean,lastMoveAt:number,lastChatAt:number}} */
+/** @returns {{connectionId:number,ws:any,identity:any,joined:boolean,readingActive:boolean,lastMoveAt:number,lastChatAt:number}} */
 function createClient(connectionId, ws, scene, site) {
   return {
     connectionId,
@@ -180,12 +180,13 @@ function createClient(connectionId, ws, scene, site) {
     site,
     identity: null,
     joined: false,
+    readingActive: false,
     lastMoveAt: 0,
     lastChatAt: 0,
   };
 }
 
-/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,clients:Set<any>,joined:boolean,leaveTimer:any,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
@@ -197,6 +198,7 @@ function createIdentity(id, browserId, x) {
     color: DEFAULT_CHARACTER_COLOR,
     readingLabel: "",
     readingUrl: "",
+    readingActive: false,
     clients: new Set(),
     joined: false,
     leaveTimer: null,
@@ -788,8 +790,19 @@ function snapshotIdentity(identity) {
     color: identity.color,
     readingLabel: identity.readingLabel,
     readingUrl: identity.readingUrl,
+    readingActive: identity.readingActive,
     messages: identity.messages,
   };
+}
+
+function getIdentityReadingActive(identity) {
+  return Array.from(identity.clients).some((client) => client.joined && client.readingActive);
+}
+
+function refreshIdentityReadingActive(identity) {
+  const previous = identity.readingActive;
+  identity.readingActive = getIdentityReadingActive(identity);
+  return identity.readingActive !== previous;
 }
 
 function clearLeaveTimer(identity) {
@@ -828,6 +841,7 @@ function emitIdentityState(identity, options = {}) {
     color: identity.color,
     readingLabel: identity.readingLabel,
     readingUrl: identity.readingUrl,
+    readingActive: identity.readingActive,
   };
 
   broadcast(scene, message, { exceptConnectionId });
@@ -1114,12 +1128,14 @@ function handleInit(client, message) {
   clearLeaveTimer(identity);
   const previousReadingLabel = identity.readingLabel;
   const previousReadingUrl = identity.readingUrl;
+  const previousReadingActive = identity.readingActive;
   if (Object.hasOwn(message, "readingLabel")) {
     identity.readingLabel = sanitizeReadingLabel(message.readingLabel);
   }
   if (Object.hasOwn(message, "readingUrl")) {
     identity.readingUrl = sanitizeReadingUrl(message.readingUrl);
   }
+  client.readingActive = message.readingActive !== false;
 
   if (!identity.joined) {
     identity.displayName = sanitizeDisplayName(message.displayName);
@@ -1129,6 +1145,7 @@ function handleInit(client, message) {
   client.identity = identity;
   client.joined = true;
   identity.clients.add(client);
+  refreshIdentityReadingActive(identity);
 
   const peers = Array.from(scene.identities.values())
     .filter((peer) => peer.joined && peer.id !== identity.id)
@@ -1144,17 +1161,23 @@ function handleInit(client, message) {
     color: identity.color,
     readingLabel: identity.readingLabel,
     readingUrl: identity.readingUrl,
+    readingActive: identity.readingActive,
     messages: identity.messages,
     peers,
   });
 
   if (identity.joined) {
-    if (identity.readingLabel !== previousReadingLabel || identity.readingUrl !== previousReadingUrl) {
+    if (
+      identity.readingLabel !== previousReadingLabel
+      || identity.readingUrl !== previousReadingUrl
+      || identity.readingActive !== previousReadingActive
+    ) {
       broadcast(scene, {
         type: "reading",
         id: identity.id,
         readingLabel: identity.readingLabel,
         readingUrl: identity.readingUrl,
+        readingActive: identity.readingActive,
       }, { exceptConnectionId: client.connectionId });
     }
     return;
@@ -1212,15 +1235,32 @@ function handleReading(client, message) {
 
   const readingLabel = sanitizeReadingLabel(message.readingLabel);
   const readingUrl = sanitizeReadingUrl(message.readingUrl);
-  if (readingLabel === client.identity.readingLabel && readingUrl === client.identity.readingUrl) return;
+  const readingActive = message.readingActive !== false;
+  const previousReadingLabel = client.identity.readingLabel;
+  const previousReadingUrl = client.identity.readingUrl;
+  const previousReadingActive = client.identity.readingActive;
+  if (
+    readingLabel === previousReadingLabel
+    && readingUrl === previousReadingUrl
+    && readingActive === client.readingActive
+  ) return;
 
+  client.readingActive = readingActive;
   client.identity.readingLabel = readingLabel;
   client.identity.readingUrl = readingUrl;
+  refreshIdentityReadingActive(client.identity);
+  if (
+    readingLabel === previousReadingLabel
+    && readingUrl === previousReadingUrl
+    && client.identity.readingActive === previousReadingActive
+  ) return;
+
   broadcast(client.scene, {
     type: "reading",
     id: client.identity.id,
     readingLabel,
     readingUrl,
+    readingActive: client.identity.readingActive,
   });
 }
 
@@ -1294,8 +1334,18 @@ function handleClientClose(client) {
   identity.clients.delete(client);
   client.joined = false;
   client.identity = null;
+  client.readingActive = false;
 
   if (identity.clients.size > 0) {
+    if (refreshIdentityReadingActive(identity)) {
+      broadcast(identity.scene, {
+        type: "reading",
+        id: identity.id,
+        readingLabel: identity.readingLabel,
+        readingUrl: identity.readingUrl,
+        readingActive: identity.readingActive,
+      });
+    }
     return;
   }
 

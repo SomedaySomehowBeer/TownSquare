@@ -207,7 +207,7 @@ export function wireHelpPanel(helpButton, helpPanel) {
  *
  * @param {{
  *   isSelf: boolean,
- *   profile?: { displayName?: string, color?: string, readingLabel?: string, readingUrl?: string },
+ *   profile?: { displayName?: string, color?: string, readingLabel?: string, readingUrl?: string, readingActive?: boolean },
  *   colors?: Array<string>,
  *   onProfileChange?: (profile: { displayName: string, color: string }) => void,
  *   onSubmitChat?: () => void,
@@ -515,7 +515,7 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
 
 /**
  * @param {AvatarView} avatar
- * @param {{ displayName?: string, color?: string, readingLabel?: string, readingUrl?: string }} profile
+ * @param {{ displayName?: string, color?: string, readingLabel?: string, readingUrl?: string, readingActive?: boolean }} profile
  */
 export function setAvatarProfile(avatar, profile = {}) {
   const displayName = typeof profile.displayName === "string"
@@ -526,10 +526,12 @@ export function setAvatarProfile(avatar, profile = {}) {
     ? profile.readingLabel.trim().replace(/\s+/g, " ").slice(0, READING_LABEL_MAX)
     : "";
   const readingUrl = typeof profile.readingUrl === "string" ? profile.readingUrl : "";
+  const readingActive = profile.readingActive !== false;
   avatar.el.dataset.color = color;
   avatar.el.style.color = color || "";
   avatar.el.classList.toggle("avatar--has-display-name", Boolean(displayName));
   avatar.el.classList.toggle("avatar--has-reading", Boolean(readingLabel));
+  avatar.el.classList.toggle("avatar--reading-away", Boolean(readingLabel) && !readingActive);
   if (avatar.dot) {
     avatar.dot.style.background = color || "";
   }

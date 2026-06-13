@@ -64,6 +64,7 @@ export function wireSocket(ctx) {
         color: self.color,
         readingLabel: self.readingLabel,
         readingUrl: self.readingUrl,
+        readingActive: self.readingActive,
       }));
     });
 

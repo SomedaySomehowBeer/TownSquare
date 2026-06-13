@@ -15,6 +15,10 @@ import { readCurrentPage } from "./utils.mjs";
 const READING_DEBOUNCE_MS = 80;
 const READING_RECHECK_MS = 400;
 
+function isReadingActive() {
+  return document.visibilityState === "visible" && document.hasFocus();
+}
+
 /**
  * Start watching the host page; returns a dispose function that removes the
  * listeners and restores the patched history methods.
@@ -29,13 +33,19 @@ export function watchCurrentPage(ctx) {
   const sendReadingUpdate = () => {
     updateTimer = null;
     const nextPage = readCurrentPage(ctx.root, ctx.options);
-    if (nextPage.readingLabel === ctx.self.readingLabel && nextPage.readingUrl === ctx.self.readingUrl) return;
+    const readingActive = isReadingActive();
+    if (
+      nextPage.readingLabel === ctx.self.readingLabel
+      && nextPage.readingUrl === ctx.self.readingUrl
+      && readingActive === ctx.self.readingActive
+    ) return;
 
     ctx.self.readingLabel = nextPage.readingLabel;
     ctx.self.readingUrl = nextPage.readingUrl;
+    ctx.self.readingActive = readingActive;
     setAvatarProfile(ctx.self.avatar, ctx.self);
     if (ctx.socket.readyState === WebSocket.OPEN && ctx.self.id) {
-      ctx.socket.send(JSON.stringify({ type: "reading", ...nextPage }));
+      ctx.socket.send(JSON.stringify({ type: "reading", ...nextPage, readingActive }));
     }
   };
 
@@ -70,6 +80,8 @@ export function watchCurrentPage(ctx) {
   window.addEventListener("hashchange", scheduleReadingUpdate);
   window.addEventListener("pageshow", scheduleReadingUpdate);
   document.addEventListener("visibilitychange", scheduleReadingUpdate);
+  window.addEventListener("focus", scheduleReadingUpdate);
+  window.addEventListener("blur", scheduleReadingUpdate);
   window.addEventListener("townsquare:navigation", scheduleReadingUpdate);
 
   return () => {
@@ -77,6 +89,8 @@ export function watchCurrentPage(ctx) {
     window.removeEventListener("hashchange", scheduleReadingUpdate);
     window.removeEventListener("pageshow", scheduleReadingUpdate);
     document.removeEventListener("visibilitychange", scheduleReadingUpdate);
+    window.removeEventListener("focus", scheduleReadingUpdate);
+    window.removeEventListener("blur", scheduleReadingUpdate);
     window.removeEventListener("townsquare:navigation", scheduleReadingUpdate);
     clearTimeout(updateTimer);
     clearTimeout(recheckTimer);

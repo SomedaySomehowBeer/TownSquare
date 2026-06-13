@@ -24,6 +24,7 @@
  * @property {string} color
  * @property {string} readingLabel
  * @property {string} readingUrl
+ * @property {boolean} readingActive
  * @property {number} propZoneEnteredAt
  * @property {string | null} settlePropId
  * @property {boolean} settleRequested
@@ -41,6 +42,7 @@
  * @property {string} color
  * @property {string} readingLabel
  * @property {string} readingUrl
+ * @property {boolean} readingActive
  * @property {AvatarView} avatar
  * @property {ReturnType<typeof setTimeout> | null} walkTimer
  */

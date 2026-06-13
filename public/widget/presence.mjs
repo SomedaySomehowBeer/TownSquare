@@ -39,7 +39,7 @@ export function updateStatus(ctx) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string, messages?: Array<{ text: string, at?: number }> }} peer
+ * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string, readingActive?: boolean, messages?: Array<{ text: string, at?: number }> }} peer
  * @returns {PeerState}
  */
 export function getOrCreatePeer(ctx, peer) {
@@ -58,6 +58,7 @@ export function getOrCreatePeer(ctx, peer) {
     color: peer.color || "",
     readingLabel: peer.readingLabel || "",
     readingUrl: peer.readingUrl || "",
+    readingActive: peer.readingActive !== false,
     avatar,
     walkTimer: null,
   };
@@ -86,7 +87,7 @@ export function removePeer(ctx, id) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string }} state
+ * @param {{ x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string, readingActive?: boolean }} state
  */
 export function applySelfState(ctx, state) {
   const previousX = ctx.self.x;
@@ -97,6 +98,7 @@ export function applySelfState(ctx, state) {
   if (typeof state.color === "string") ctx.self.color = state.color;
   if (typeof state.readingLabel === "string") ctx.self.readingLabel = state.readingLabel;
   if (typeof state.readingUrl === "string") ctx.self.readingUrl = state.readingUrl;
+  if (typeof state.readingActive === "boolean") ctx.self.readingActive = state.readingActive;
   if (ctx.self.pose) {
     // The server snapped us onto a seat; abandon any pending tap destination.
     ctx.self.targetX = null;
@@ -115,7 +117,7 @@ export function applySelfState(ctx, state) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string }} peerState
+ * @param {{ id: string, x: number, pose?: string | null, propId?: string | null, displayName?: string, color?: string, readingLabel?: string, readingUrl?: string, readingActive?: boolean }} peerState
  * @returns {PeerState}
  */
 export function applyPeerState(ctx, peerState) {
@@ -129,6 +131,7 @@ export function applyPeerState(ctx, peerState) {
   if (typeof peerState.color === "string") peer.color = peerState.color;
   if (typeof peerState.readingLabel === "string") peer.readingLabel = peerState.readingLabel;
   if (typeof peerState.readingUrl === "string") peer.readingUrl = peerState.readingUrl;
+  if (typeof peerState.readingActive === "boolean") peer.readingActive = peerState.readingActive;
   renderAvatar(peer.avatar, peer.x);
   setAvatarProfile(peer.avatar, peer);
   if (hadPeer && peer.x !== previousX) {
@@ -140,7 +143,7 @@ export function applyPeerState(ctx, peerState) {
 }
 
 /**
- * Copy the given string fields from a server message onto the matching
+ * Copy the given scalar fields from a server message onto the matching
  * presence (self or peer) and re-render that figure's profile.
  *
  * @param {WidgetContext} ctx
@@ -151,7 +154,8 @@ function applyPresenceFields(ctx, state, fields) {
   const presence = state.id === ctx.self.id ? ctx.self : ctx.peers.get(state.id);
   if (!presence) return;
   for (const field of fields) {
-    if (typeof state[field] === "string") presence[field] = state[field];
+    const value = state[field];
+    if (typeof value === "string" || typeof value === "boolean") presence[field] = value;
   }
   setAvatarProfile(presence.avatar, presence);
 }
@@ -166,8 +170,8 @@ export function applyProfileState(ctx, profile) {
 
 /**
  * @param {WidgetContext} ctx
- * @param {{ id: string, readingLabel?: string, readingUrl?: string }} state
+ * @param {{ id: string, readingLabel?: string, readingUrl?: string, readingActive?: boolean }} state
  */
 export function applyReadingState(ctx, state) {
-  applyPresenceFields(ctx, state, ["readingLabel", "readingUrl"]);
+  applyPresenceFields(ctx, state, ["readingLabel", "readingUrl", "readingActive"]);
 }

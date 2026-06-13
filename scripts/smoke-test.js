@@ -16,7 +16,7 @@ function siteSocketUrl(siteKey) {
   return url.toString();
 }
 
-function connect({ x, browserId, siteKey = "", origin = "", displayName = "", color = "", readingLabel, readingUrl }) {
+function connect({ x, browserId, siteKey = "", origin = "", displayName = "", color = "", readingLabel, readingUrl, readingActive }) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(siteSocketUrl(siteKey), origin ? { headers: { Origin: origin } } : undefined);
     const seen = [];
@@ -25,6 +25,7 @@ function connect({ x, browserId, siteKey = "", origin = "", displayName = "", co
       const init = { type: "init", x, browserId, displayName, color };
       if (typeof readingLabel === "string") init.readingLabel = readingLabel;
       if (typeof readingUrl === "string") init.readingUrl = readingUrl;
+      if (typeof readingActive === "boolean") init.readingActive = readingActive;
       ws.send(JSON.stringify(init));
     });
 
@@ -221,10 +222,12 @@ async function main() {
   assert(first.hello.color === "#3f7f63", "character color was not accepted on init");
   assert(first.hello.readingLabel === "Launch notes", "reading label was not normalized on init");
   assert(first.hello.readingUrl === `${HTTP_ORIGIN}/notes/launch`, "reading URL was not accepted on init");
+  assert(first.hello.readingActive === true, "reading should default to active on init");
   assert(secondSameBrowser.hello.displayName === "Ada Lovelace", "same-browser tab did not inherit display name");
   assert(secondSameBrowser.hello.color === "#3f7f63", "same-browser tab did not inherit character color");
   assert(secondSameBrowser.hello.readingLabel === "Launch notes", "same-browser tab did not inherit reading label");
   assert(secondSameBrowser.hello.readingUrl === `${HTTP_ORIGIN}/notes/launch`, "same-browser tab did not inherit reading URL");
+  assert(secondSameBrowser.hello.readingActive === true, "same-browser tab did not inherit active reading state");
   assert(secondSameBrowser.hello.peers.length === 0, "same-browser tab should not see itself as a peer");
   assert(!first.seen.some((message) => message.type === "join"), "same-browser tab incorrectly triggered a join event");
 
@@ -237,6 +240,7 @@ async function main() {
   assert(third.hello.peers[0].color === "#3f7f63", "peer snapshot did not include character color");
   assert(third.hello.peers[0].readingLabel === "Launch notes", "peer snapshot did not include reading label");
   assert(third.hello.peers[0].readingUrl === `${HTTP_ORIGIN}/notes/launch`, "peer snapshot did not include reading URL");
+  assert(third.hello.peers[0].readingActive === true, "peer snapshot did not include active reading state");
   assert(first.seen.some((message) => message.type === "join" && message.peer.id === third.id), "first client did not observe different-browser join");
 
   secondSameBrowser.ws.send(JSON.stringify({
@@ -263,6 +267,40 @@ async function main() {
       && message.readingUrl === `${HTTP_ORIGIN}/docs/api`
     )),
     "reading update did not propagate to other visitors",
+  );
+
+  secondSameBrowser.ws.send(JSON.stringify({
+    type: "reading",
+    readingLabel: "API reference",
+    readingUrl: `${HTTP_ORIGIN}/docs/api`,
+    readingActive: false,
+  }));
+  await delay(100);
+
+  assert(
+    !third.seen.some((message) => (
+      message.type === "reading"
+      && message.id === first.id
+      && message.readingActive === false
+    )),
+    "one inactive same-browser tab should not mark the shared visitor away",
+  );
+
+  first.ws.send(JSON.stringify({
+    type: "reading",
+    readingLabel: "API reference",
+    readingUrl: `${HTTP_ORIGIN}/docs/api`,
+    readingActive: false,
+  }));
+  await delay(100);
+
+  assert(
+    third.seen.some((message) => (
+      message.type === "reading"
+      && message.id === first.id
+      && message.readingActive === false
+    )),
+    "reading inactive state did not propagate when every same-browser tab was inactive",
   );
 
   secondSameBrowser.ws.send(JSON.stringify({ type: "profile", displayName: "Ada", color: "#3f6fb5" }));
