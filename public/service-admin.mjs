@@ -173,7 +173,11 @@ async function loadSites({ silent = false } = {}) {
   }
   renderSites(result.body.sites);
   if (!silent) {
-    setStatus(`${result.body.sites.length} registered website${result.body.sites.length === 1 ? "" : "s"}.`);
+    const sites = result.body.sites;
+    const verifiedCount = sites.filter((site) => site.verifiedAt).length;
+    setStatus(
+      `${sites.length} registered website${sites.length === 1 ? "" : "s"}, ${verifiedCount} verified.`,
+    );
   }
 }
 
