@@ -269,6 +269,162 @@
   opacity: 0.34;
 }
 
+.townsquare__birds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bird {
+  position: absolute;
+  left: calc(var(--bird-x) * 100%);
+  bottom: calc(53px + var(--bird-lift, 0px));
+  width: 12px;
+  height: 8px;
+  transform: translateX(-50%);
+  color: color-mix(in oklab, var(--text) 58%, var(--muted) 42%);
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.bird svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+  overflow: visible;
+}
+
+.bird svg * {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.bird--arriving svg,
+.bird--fleeing svg {
+  transform: scaleX(var(--bird-facing, 1));
+  transform-origin: 50% 50%;
+}
+
+.bird--arriving .bird-wing,
+.bird--fleeing .bird-wing {
+  transform-box: fill-box;
+  animation-duration: 0.16s;
+  animation-timing-function: ease-in-out;
+  animation-iteration-count: infinite;
+  animation-direction: alternate;
+}
+
+.bird--arriving .bird-wing--left,
+.bird--fleeing .bird-wing--left {
+  transform-origin: 100% 0%;
+  animation-name: bird-wing-left;
+}
+
+.bird--arriving .bird-wing--right,
+.bird--fleeing .bird-wing--right {
+  transform-origin: 0% 0%;
+  animation-name: bird-wing-right;
+}
+
+.bird--arriving {
+  animation: bird-arrive 1.2s ease-out forwards;
+}
+
+.bird--perched {
+  width: 16px;
+  height: 11px;
+  animation: bird-bob 3s ease-in-out infinite;
+}
+
+.bird--perched svg {
+  transform: scaleX(var(--bird-facing, 1));
+  transform-origin: 50% 100%;
+}
+
+.bird--fleeing {
+  animation: bird-flee 0.7s ease-in forwards;
+}
+
+@keyframes bird-wing-left {
+  from {
+    transform: rotate(16deg);
+  }
+
+  to {
+    transform: rotate(-22deg);
+  }
+}
+
+@keyframes bird-wing-right {
+  from {
+    transform: rotate(-16deg);
+  }
+
+  to {
+    transform: rotate(22deg);
+  }
+}
+
+@keyframes bird-arrive {
+  from {
+    left: calc(var(--bird-from) * 100%);
+    bottom: calc(53px + var(--bird-lift, 0px) + 24px);
+    opacity: 0;
+  }
+
+  25% {
+    bottom: calc(53px + var(--bird-lift, 0px) + 20px);
+  }
+
+  50% {
+    bottom: calc(53px + var(--bird-lift, 0px) + 26px);
+  }
+
+  75% {
+    bottom: calc(53px + var(--bird-lift, 0px) + 18px);
+  }
+
+  to {
+    left: calc(var(--bird-to) * 100%);
+    bottom: calc(53px + var(--bird-lift, 0px));
+    opacity: 0.45;
+  }
+}
+
+@keyframes bird-bob {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+
+  50% {
+    transform: translateX(-50%) translateY(-2px);
+  }
+}
+
+@keyframes bird-flee {
+  from {
+    left: calc(var(--bird-x) * 100%);
+    bottom: calc(53px + var(--bird-lift, 0px));
+    opacity: 0.45;
+  }
+
+  35% {
+    bottom: calc(53px + var(--bird-lift, 0px) + 28px);
+  }
+
+  to {
+    left: calc((var(--bird-x) + var(--bird-dir, 1) * 0.18) * 100%);
+    bottom: calc(53px + var(--bird-lift, 0px) + 42px);
+    opacity: 0;
+  }
+}
+
 .townsquare-avatar {
   --walk-cycle: 0.8s;
   --townsquare-avatar-walk-filter: ;

@@ -266,6 +266,40 @@ async function main() {
   assert(third.hello.peers[0].readingActive === true, "peer snapshot did not include active reading state");
   assert(first.seen.some((message) => message.type === "join" && message.peer.id === third.id), "first client did not observe different-browser join");
 
+  await delay(800);
+
+  const birdSpawn = findLast(first.seen, (message) => message.type === "bird" && message.action === "spawn");
+  assert(birdSpawn, "ambient bird did not spawn after visitors joined");
+  assert(typeof birdSpawn.x === "number", "bird spawn did not include x");
+
+  const birdJoiner = await connect({ x: 0.4, browserId: "browser-bird-sync" });
+  await delay(100);
+
+  assert(Array.isArray(birdJoiner.hello.birds), "hello did not include birds snapshot");
+  assert(
+    birdJoiner.hello.birds.some((bird) => bird.id === birdSpawn.id && bird.perchId === birdSpawn.perchId),
+    "hello birds snapshot did not match spawned bird",
+  );
+
+  third.ws.send(JSON.stringify({ type: "move", x: birdSpawn.x }));
+  await delay(100);
+
+  assert(
+    first.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
+    "first client did not receive bird flee broadcast",
+  );
+  assert(
+    third.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
+    "approaching visitor did not receive bird flee event",
+  );
+  assert(
+    birdJoiner.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
+    "other visitor did not receive bird flee broadcast",
+  );
+
+  birdJoiner.ws.close();
+  await delay(100);
+
   secondSameBrowser.ws.send(JSON.stringify({
     type: "reading",
     readingLabel: "API reference",

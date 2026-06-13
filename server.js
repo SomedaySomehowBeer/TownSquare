@@ -54,7 +54,13 @@ const ACTION_THROTTLE_MS = 560;
 const CHAT_THROTTLE_MS = 1500;
 const RECONNECT_GRACE_MS = 1500;
 const HEARTBEAT_INTERVAL_MS = 30000;
+const BIRD_TICK_INTERVAL_MS = 1000;
 const TELEGRAM_API_TIMEOUT_MS = 5000;
+const MAX_BIRDS = 3;
+const BIRD_FLEE_RADIUS = 0.07;
+const BIRD_SPAWN_MIN_MS = Number(process.env.BIRD_SPAWN_MIN_MS || 12000);
+const BIRD_SPAWN_MAX_MS = Number(process.env.BIRD_SPAWN_MAX_MS || 22000);
+const BIRD_FIRST_SPAWN_MS = Number(process.env.BIRD_FIRST_SPAWN_MS || 500);
 
 // Wire-protocol limits and the character palette, shared with the widget.
 // Populated from public/shared-constants.mjs in startServer (the server is
@@ -100,6 +106,8 @@ function loadEnvFile(filePath = path.join(__dirname, ".env")) {
 
 /** @type {Map<string, import("./public/scene-props.mjs").SceneProp>} */
 let PROPS_BY_ID = new Map();
+/** @type {Array<import("./public/bird-perches.mjs").BirdPerch>} */
+let BIRD_PERCHES = [];
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -896,13 +904,109 @@ function findAvailableSeatX(scene, prop, requestedX, excludeIdentityId = null) {
   )).x;
 }
 
+function randomBirdSpawnDelay() {
+  return BIRD_SPAWN_MIN_MS + Math.floor(Math.random() * (BIRD_SPAWN_MAX_MS - BIRD_SPAWN_MIN_MS + 1));
+}
+
+function snapshotBirds(scene) {
+  return Array.from(scene.birds.values()).map(({ id, perchId, x, state }) => ({
+    id,
+    perchId,
+    x,
+    state,
+  }));
+}
+
+function sceneHasJoinedClients(scene) {
+  for (const client of scene.clients.values()) {
+    if (client.joined) return true;
+  }
+  return false;
+}
+
+function occupiedBirdPerchIds(scene) {
+  return new Set(Array.from(scene.birds.values(), (bird) => bird.perchId));
+}
+
+function pickFreeBirdPerch(scene) {
+  const occupied = occupiedBirdPerchIds(scene);
+  const free = BIRD_PERCHES.filter((perch) => !occupied.has(perch.id));
+  if (free.length === 0) return null;
+  return free[Math.floor(Math.random() * free.length)];
+}
+
+function broadcastBird(scene, message, options = {}) {
+  broadcast(scene, { type: "bird", ...message }, options);
+}
+
+function fleeBird(scene, bird, playerX) {
+  if (!scene.birds.delete(bird.id)) return;
+
+  const dir = playerX < bird.x ? 1 : -1;
+  broadcastBird(scene, {
+    action: "flee",
+    id: bird.id,
+    x: bird.x,
+    dir,
+    at: Date.now(),
+  });
+  scene.nextSpawnAt = Date.now() + randomBirdSpawnDelay();
+}
+
+function maybeFleeBirds(scene, playerX) {
+  for (const bird of scene.birds.values()) {
+    if (bird.state !== "perched") continue;
+    if (Math.abs(playerX - bird.x) >= BIRD_FLEE_RADIUS) continue;
+    fleeBird(scene, bird, playerX);
+    return;
+  }
+}
+
+function spawnBird(scene) {
+  if (scene.birds.size >= MAX_BIRDS) return false;
+
+  const perch = pickFreeBirdPerch(scene);
+  if (!perch) return false;
+
+  const bird = {
+    id: scene.nextBirdId++,
+    perchId: perch.id,
+    x: perch.x,
+    state: "perched",
+  };
+  scene.birds.set(bird.id, bird);
+
+  const from = perch.x < 0.5 ? "left" : "right";
+  broadcastBird(scene, {
+    action: "spawn",
+    id: bird.id,
+    perchId: bird.perchId,
+    x: bird.x,
+    from,
+    at: Date.now(),
+  });
+  scene.nextSpawnAt = Date.now() + randomBirdSpawnDelay();
+  return true;
+}
+
+function tickSceneBirds(scene, now) {
+  if (!sceneHasJoinedClients(scene)) return;
+  if (scene.birds.size >= MAX_BIRDS) return;
+  if (now < scene.nextSpawnAt) return;
+  spawnBird(scene);
+}
+
 function createScene(key) {
+  const now = Date.now();
   return {
     key,
     clients: new Map(),
     identities: new Map(),
     identityByBrowser: new Map(),
     nextIdentityId: 1,
+    birds: new Map(),
+    nextBirdId: 1,
+    nextSpawnAt: now + BIRD_FIRST_SPAWN_MS,
   };
 }
 
@@ -1167,6 +1271,7 @@ function handleInit(client, message) {
     readingActive: identity.readingActive,
     messages: identity.messages,
     peers,
+    birds: snapshotBirds(scene),
   });
 
   if (identity.joined) {
@@ -1217,6 +1322,7 @@ function handleMove(client, message) {
   clearPose(client.identity);
 
   emitIdentityState(client.identity, { exceptConnectionId: client.connectionId });
+  maybeFleeBirds(client.scene, nextX);
 }
 
 function handleAction(client, message) {
@@ -1392,6 +1498,15 @@ const heartbeatTimer = setInterval(() => {
 
 heartbeatTimer.unref?.();
 
+const birdTimer = setInterval(() => {
+  const now = Date.now();
+  for (const scene of scenes.values()) {
+    tickSceneBirds(scene, now);
+  }
+}, BIRD_TICK_INTERVAL_MS);
+
+birdTimer.unref?.();
+
 wss.on("connection", (ws, req) => {
   const access = validateSiteAccess(req.url || "/live");
   if (!access.ok) {
@@ -1432,11 +1547,15 @@ wss.on("connection", (ws, req) => {
 
 wss.on("close", () => {
   clearInterval(heartbeatTimer);
+  clearInterval(birdTimer);
 });
 
 async function startServer() {
   const { PROPS } = await import("./public/scene-props.mjs");
   PROPS_BY_ID = new Map(PROPS.map((prop) => [prop.id, prop]));
+
+  const birdPerches = await import("./public/bird-perches.mjs");
+  BIRD_PERCHES = birdPerches.BIRD_PERCHES;
 
   const shared = await import("./public/shared-constants.mjs");
   MIN_X = shared.MIN_X;

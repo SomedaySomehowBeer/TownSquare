@@ -3,6 +3,7 @@
  */
 
 import { recordMessage, sayMessage } from "./chat.mjs";
+import { applyBirdFlee, applyBirdSpawn, syncBirdsFromHello } from "./birds.mjs";
 import { playJump, setWalking, updatePose, updatePropEffects } from "./dom.mjs";
 import {
   applyPeerState,
@@ -107,7 +108,17 @@ export function wireSocket(ctx) {
         for (const peer of message.peers) {
           applyPeerState(ctx, peer);
         }
+        syncBirdsFromHello(ctx, message.birds);
         updateStatus(ctx);
+        return;
+      }
+
+      if (message.type === "bird") {
+        if (message.action === "spawn") {
+          applyBirdSpawn(ctx, message);
+        } else if (message.action === "flee") {
+          applyBirdFlee(ctx, message);
+        }
         return;
       }
 
