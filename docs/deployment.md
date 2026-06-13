@@ -73,6 +73,23 @@ This is the core self-hosting contract:
 - TownSquare owns what happens inside the widget
 - the widget connects back to the TownSquare server origin you provide
 
+### Theme
+
+By default the widget follows the OS/browser `prefers-color-scheme` setting.
+If your site uses a manual dark-mode toggle, pass an explicit theme so labels
+and plates do not keep the light palette on a dark page:
+
+```js
+mountTownSquare(document.getElementById("townsquare-root"), {
+  serverOrigin: "https://your-townsquare-host",
+  theme: "dark"
+});
+```
+
+You can also set `data-townsquare-theme="dark"` (or `"light"`) on the mount
+root before calling `mountTownSquare`. Valid values: `auto`, `light`, `dark`.
+Token definitions live in `public/tokens.css`.
+
 Self-hosting does not have to mean permanent isolation.
 A future self-hosted TownSquare may also choose to communicate with other TownSquares and join the wider network while still remaining independently operated.
 

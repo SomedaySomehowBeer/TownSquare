@@ -103,6 +103,41 @@ function labelFromPath() {
   }
 }
 
+/** @typedef {"auto" | "light" | "dark"} WidgetTheme */
+
+/**
+ * Resolve the widget color theme from mount options or a pre-set root attribute.
+ *
+ * `auto` (default) follows `prefers-color-scheme`. Host pages with a manual
+ * dark toggle should pass `theme: "dark"` or set `data-townsquare-theme="dark"`
+ * on the mount root before calling `mountTownSquare`.
+ *
+ * @param {HTMLElement} root
+ * @param {{ theme?: string }} [options]
+ * @returns {WidgetTheme}
+ */
+export function resolveWidgetTheme(root, options = {}) {
+  const raw = options.theme || root.dataset.townsquareTheme || "auto";
+  if (typeof raw !== "string") return "auto";
+  const theme = raw.trim().toLowerCase();
+  if (theme === "light" || theme === "dark") return theme;
+  return "auto";
+}
+
+/**
+ * Apply the resolved theme to the mount root for token.css selectors.
+ *
+ * @param {HTMLElement} root
+ * @param {WidgetTheme} theme
+ */
+export function applyWidgetTheme(root, theme) {
+  if (theme === "auto") {
+    root.removeAttribute("data-townsquare-theme");
+    return;
+  }
+  root.dataset.townsquareTheme = theme;
+}
+
 /**
  * @param {HTMLElement} root
  * @param {{ readingLabel?: string, readingUrl?: string }} options

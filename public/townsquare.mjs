@@ -29,11 +29,13 @@ import {
 import { updateStatus } from "./widget/presence.mjs";
 import { wireSocket } from "./widget/protocol.mjs";
 import {
+  applyWidgetTheme,
   buildSocketUrl,
   getBrowserId,
   getStoredProfile,
   normalizeOrigin,
   readCurrentPage,
+  resolveWidgetTheme,
   saveStoredProfile,
 } from "./widget/utils.mjs";
 
@@ -44,6 +46,7 @@ import {
  * @property {string} [siteKey] Hosted TownSquare site key. Self-hosted embeds can omit it.
  * @property {string} [readingLabel] Explicit page label. Defaults to the page heading, then document title.
  * @property {string} [readingUrl] Explicit page URL. Defaults to the current browser URL.
+ * @property {"auto" | "light" | "dark"} [theme="auto"] Widget palette. `auto` follows `prefers-color-scheme`; use `dark` when the host page has a manual dark toggle.
  */
 
 /**
@@ -82,6 +85,7 @@ export function mountTownSquare(root, options = {}) {
   const coarsePointer = typeof window.matchMedia === "function"
     && window.matchMedia("(pointer: coarse)").matches;
 
+  applyWidgetTheme(root, resolveWidgetTheme(root, options));
   root.replaceChildren();
 
   const {

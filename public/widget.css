@@ -13,6 +13,14 @@
   -webkit-font-smoothing: antialiased;
 }
 
+#townsquare-root[data-townsquare-theme="light"] {
+  color-scheme: light;
+}
+
+#townsquare-root[data-townsquare-theme="dark"] {
+  color-scheme: dark;
+}
+
 #townsquare-root,
 #townsquare-root * {
   box-sizing: border-box;
