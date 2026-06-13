@@ -218,22 +218,22 @@ export function wireHelpPanel(helpButton, helpPanel) {
  */
 export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChange, onSubmitChat, composerHost }) {
   const el = document.createElement("div");
-  el.className = `avatar ${isSelf ? "avatar--self" : "avatar--peer"}`;
+  el.className = `townsquare-avatar ${isSelf ? "townsquare-avatar--self" : "townsquare-avatar--peer"}`;
   el.innerHTML = figureMarkup('aria-hidden="true"');
 
   // The ghost stack: recent lines linger as fading bubbles above the live one.
   const above = document.createElement("div");
-  above.className = "avatar__above";
+  above.className = "townsquare-avatar__above";
   above.setAttribute("aria-hidden", "true");
   el.appendChild(above);
 
   // History tray: revealed on hover so past lines can be recovered after they fade.
   const tray = document.createElement("section");
-  tray.className = "avatar__tray";
+  tray.className = "townsquare-avatar__tray";
   tray.setAttribute("aria-label", "Recent messages");
 
   const trayList = document.createElement("div");
-  trayList.className = "avatar__tray-list";
+  trayList.className = "townsquare-avatar__tray-list";
   tray.appendChild(trayList);
   el.appendChild(tray);
 
@@ -249,26 +249,26 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
 
   if (!isSelf) {
     const below = document.createElement("div");
-    below.className = "avatar__below avatar__below--peer";
+    below.className = "townsquare-avatar__below townsquare-avatar__below--peer";
 
     const label = document.createElement("div");
-    label.className = "avatar__peer-label";
+    label.className = "townsquare-avatar__peer-label";
 
     const nameEl = document.createElement("span");
-    nameEl.className = "avatar__peer-name";
+    nameEl.className = "townsquare-avatar__peer-name";
 
     const readingEl = document.createElement("a");
-    readingEl.className = "avatar__reading avatar__reading--peer";
+    readingEl.className = "townsquare-avatar__reading townsquare-avatar__reading--peer";
     readingEl.target = "_blank";
     readingEl.rel = "noopener noreferrer";
     readingEl.addEventListener("click", (event) => event.stopPropagation());
 
     const readingPrefix = document.createElement("span");
-    readingPrefix.className = "avatar__reading-prefix";
+    readingPrefix.className = "townsquare-avatar__reading-prefix";
     readingPrefix.textContent = "visiting";
 
     const readingLabelEl = document.createElement("span");
-    readingLabelEl.className = "avatar__reading-label";
+    readingLabelEl.className = "townsquare-avatar__reading-label";
 
     readingEl.append(readingPrefix, readingLabelEl);
     label.append(nameEl, readingEl);
@@ -285,29 +285,29 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
   // Self carries a persistent nameplate at its base: identity, the chat way in,
   // and a compact profile editor for the accountless session identity.
   const below = document.createElement("div");
-  below.className = "avatar__below";
+  below.className = "townsquare-avatar__below";
 
   const plateRow = document.createElement("div");
-  plateRow.className = "avatar__plate-row";
+  plateRow.className = "townsquare-avatar__plate-row";
 
   const plate = document.createElement("button");
-  plate.className = "avatar__plate";
+  plate.className = "townsquare-avatar__plate";
   plate.type = "button";
   plate.setAttribute("aria-label", "Say something");
 
   const dot = document.createElement("span");
-  dot.className = "avatar__plate-dot";
+  dot.className = "townsquare-avatar__plate-dot";
 
   const nameEl = document.createElement("span");
-  nameEl.className = "avatar__plate-name";
+  nameEl.className = "townsquare-avatar__plate-name";
 
   const hint = document.createElement("span");
-  hint.className = "avatar__plate-hint";
+  hint.className = "townsquare-avatar__plate-hint";
   hint.textContent = "· say something";
   plate.append(dot, nameEl, hint);
 
   const profileButton = document.createElement("button");
-  profileButton.className = "avatar__profile-button";
+  profileButton.className = "townsquare-avatar__profile-button";
   profileButton.type = "button";
   profileButton.innerHTML = PENCIL_ICON;
   profileButton.setAttribute("aria-label", "Edit character");
@@ -317,11 +317,11 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
   plateRow.append(plate, profileButton);
 
   const profileForm = document.createElement("form");
-  profileForm.className = "avatar__profile";
+  profileForm.className = "townsquare-avatar__profile";
   profileForm.hidden = true;
 
   const profileInput = document.createElement("input");
-  profileInput.className = "avatar__profile-input";
+  profileInput.className = "townsquare-avatar__profile-input";
   profileInput.type = "text";
   profileInput.maxLength = DISPLAY_NAME_MAX;
   profileInput.placeholder = "Display name";
@@ -329,12 +329,12 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
   profileInput.setAttribute("aria-label", "Display name");
 
   const swatches = document.createElement("div");
-  swatches.className = "avatar__swatches";
+  swatches.className = "townsquare-avatar__swatches";
 
   /** @type {Array<HTMLButtonElement>} */
   const colorSwatches = colors.map((swatchColor) => {
     const swatch = document.createElement("button");
-    swatch.className = "avatar__swatch";
+    swatch.className = "townsquare-avatar__swatch";
     swatch.type = "button";
     swatch.style.setProperty("--swatch", swatchColor);
     swatch.dataset.color = swatchColor;
@@ -344,7 +344,7 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
   });
 
   const profileDone = document.createElement("button");
-  profileDone.className = "avatar__profile-done";
+  profileDone.className = "townsquare-avatar__profile-done";
   profileDone.type = "submit";
   profileDone.innerHTML = ENTER_ICON;
   profileDone.setAttribute("aria-label", "Save character");
@@ -352,25 +352,25 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
   profileForm.append(profileInput, swatches, profileDone);
 
   const composer = document.createElement("form");
-  composer.className = "avatar__composer";
+  composer.className = "townsquare-avatar__composer";
   composer.hidden = true;
 
   const input = document.createElement("input");
-  input.className = "avatar__input";
+  input.className = "townsquare-avatar__input";
   input.type = "text";
   input.maxLength = MESSAGE_MAX;
   input.placeholder = "Say something…";
   input.setAttribute("aria-label", "Say something");
 
   const send = document.createElement("button");
-  send.className = "avatar__send";
+  send.className = "townsquare-avatar__send";
   send.type = "submit";
   send.innerHTML = ENTER_ICON;
   send.setAttribute("aria-label", "Send message");
 
   composer.append(input, send);
   if (composerHost) {
-    composer.classList.add("avatar__composer--docked");
+    composer.classList.add("townsquare-avatar__composer--docked");
     below.append(plateRow, profileForm);
     composerHost.appendChild(composer);
   } else {
@@ -530,16 +530,16 @@ export function setAvatarProfile(avatar, profile = {}) {
   const readingActive = profile.readingActive !== false;
   avatar.el.dataset.color = color;
   avatar.el.style.color = color || "";
-  avatar.el.classList.toggle("avatar--has-display-name", Boolean(displayName));
-  avatar.el.classList.toggle("avatar--has-reading", Boolean(readingLabel));
-  avatar.el.classList.toggle("avatar--reading-away", Boolean(readingLabel) && !readingActive);
+  avatar.el.classList.toggle("townsquare-avatar--has-display-name", Boolean(displayName));
+  avatar.el.classList.toggle("townsquare-avatar--has-reading", Boolean(readingLabel));
+  avatar.el.classList.toggle("townsquare-avatar--reading-away", Boolean(readingLabel) && !readingActive);
   if (avatar.dot) {
     avatar.dot.style.background = color || "";
   }
   if (avatar.nameEl) {
     avatar.nameEl.textContent = displayName || "you";
     avatar.nameEl.dataset.value = displayName;
-    avatar.nameEl.toggleAttribute("hidden", !displayName && avatar.el.classList.contains("avatar--peer"));
+    avatar.nameEl.toggleAttribute("hidden", !displayName && avatar.el.classList.contains("townsquare-avatar--peer"));
   }
   if (avatar.readingEl && avatar.readingLabelEl) {
     avatar.readingLabelEl.textContent = readingLabel;
@@ -549,10 +549,10 @@ export function setAvatarProfile(avatar, profile = {}) {
     } else {
       avatar.readingEl.removeAttribute("href");
     }
-    avatar.readingEl.classList.toggle("avatar__reading--available", Boolean(readingLabel));
+    avatar.readingEl.classList.toggle("townsquare-avatar__reading--available", Boolean(readingLabel));
     avatar.readingEl.toggleAttribute("hidden", !readingLabel);
   }
-  if (avatar.below && avatar.el.classList.contains("avatar--peer")) {
+  if (avatar.below && avatar.el.classList.contains("townsquare-avatar--peer")) {
     avatar.below.toggleAttribute("hidden", !displayName && !readingLabel);
   }
   for (const swatch of avatar.colorSwatches || []) {
@@ -567,7 +567,7 @@ export function setAvatarProfile(avatar, profile = {}) {
  * @param {boolean} ready
  */
 function setSendReady(avatar, ready) {
-  avatar.send?.classList.toggle("avatar__send--ready", ready);
+  avatar.send?.classList.toggle("townsquare-avatar__send--ready", ready);
 }
 
 /**
@@ -604,7 +604,7 @@ export function renderAvatar(avatar, x) {
  * @param {boolean} movingLeft
  */
 export function setFacing(avatar, movingLeft) {
-  avatar.el.classList.toggle("flip", movingLeft);
+  avatar.el.classList.toggle("townsquare-avatar--flipped", movingLeft);
 }
 
 /**
@@ -612,19 +612,19 @@ export function setFacing(avatar, movingLeft) {
  * @param {boolean} walking
  */
 export function setWalking(avatar, walking) {
-  avatar.el.classList.toggle("walking", walking);
+  avatar.el.classList.toggle("townsquare-avatar--walking", walking);
 }
 
 /**
  * @param {AvatarView} avatar
  */
 export function playJump(avatar) {
-  avatar.el.classList.remove("avatar--jumping");
+  avatar.el.classList.remove("townsquare-avatar--jumping");
   clearTimeout(avatar.jumpTimer);
   void avatar.el.offsetWidth;
-  avatar.el.classList.add("avatar--jumping");
+  avatar.el.classList.add("townsquare-avatar--jumping");
   avatar.jumpTimer = setTimeout(() => {
-    avatar.el.classList.remove("avatar--jumping");
+    avatar.el.classList.remove("townsquare-avatar--jumping");
     avatar.jumpTimer = null;
   }, 560);
 }
@@ -634,8 +634,8 @@ export function playJump(avatar) {
  * @param {string | null} pose
  */
 export function updatePose(avatar, pose) {
-  avatar.el.classList.toggle("avatar--sitting", pose === "sitting");
-  avatar.el.classList.toggle("avatar--resting", pose === "resting");
+  avatar.el.classList.toggle("townsquare-avatar--sitting", pose === "sitting");
+  avatar.el.classList.toggle("townsquare-avatar--resting", pose === "resting");
   if (pose) {
     setWalking(avatar, false);
   }
@@ -653,11 +653,11 @@ export function updatePropEffects(avatar, x, propId) {
   }
 
   avatar.el.classList.toggle(
-    "avatar--shaded",
+    "townsquare-avatar--shaded",
     PROPS.some((prop) => prop.shadeRadius && Math.abs(x - prop.x) < prop.shadeRadius),
   );
   avatar.el.classList.toggle(
-    "avatar--lit",
+    "townsquare-avatar--lit",
     PROPS.some((prop) => prop.lightRadius && Math.abs(x - prop.x) < prop.lightRadius),
   );
 }
@@ -670,14 +670,14 @@ export function updatePropEffects(avatar, x, propId) {
  */
 export function createBubble(text) {
   const bubble = document.createElement("div");
-  bubble.className = "avatar__bubble";
+  bubble.className = "townsquare-avatar__bubble";
 
   const body = document.createElement("span");
-  body.className = "avatar__bubble-text";
+  body.className = "townsquare-avatar__bubble-text";
   body.textContent = text;
 
   const tail = document.createElement("span");
-  tail.className = "avatar__tail";
+  tail.className = "townsquare-avatar__tail";
 
   bubble.append(body, tail);
   return bubble;
@@ -691,14 +691,14 @@ export function createBubble(text) {
  */
 export function createTrayRow(message) {
   const row = document.createElement("div");
-  row.className = "avatar__tray-row";
+  row.className = "townsquare-avatar__tray-row";
 
   const text = document.createElement("span");
-  text.className = "avatar__tray-msg";
+  text.className = "townsquare-avatar__tray-msg";
   text.textContent = message.text;
 
   const time = document.createElement("time");
-  time.className = "avatar__tray-time";
+  time.className = "townsquare-avatar__tray-time";
   const date = new Date(message.at);
   time.dateTime = date.toISOString();
   time.textContent = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });

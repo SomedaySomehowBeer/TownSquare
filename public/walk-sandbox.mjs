@@ -32,7 +32,7 @@ if (
 }
 
 const avatar = document.createElement("div");
-avatar.className = "avatar avatar--preview walking";
+avatar.className = "townsquare-avatar townsquare-avatar--preview townsquare-avatar--walking";
 avatar.innerHTML = figureMarkup('aria-label="Walking figure"');
 preview.appendChild(avatar);
 
@@ -114,7 +114,7 @@ nextFrame.addEventListener("click", () => {
 // The scaleX(-1) flip alone handles facing left; the gait itself is
 // direction-independent.
 directionLeft.addEventListener("change", () => {
-  avatar.classList.toggle("flip", directionLeft.checked);
+  avatar.classList.toggle("townsquare-avatar--flipped", directionLeft.checked);
 });
 
 renderReadout();

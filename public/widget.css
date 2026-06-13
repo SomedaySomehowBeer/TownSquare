@@ -161,7 +161,7 @@
   height: 180px;
   border-radius: var(--r) var(--r) 0 0;
   background: transparent;
-  /* taps move the avatar; keep page panning, drop double-tap zoom */
+  /* taps move the character; keep page panning, drop double-tap zoom */
   touch-action: manipulation;
 }
 
@@ -269,11 +269,11 @@
   opacity: 0.34;
 }
 
-.avatar {
+.townsquare-avatar {
   --walk-cycle: 0.8s;
-  --avatar-walk-filter: ;
-  --avatar-shade-filter: ;
-  --avatar-light-filter: ;
+  --townsquare-avatar-walk-filter: ;
+  --townsquare-avatar-shade-filter: ;
+  --townsquare-avatar-light-filter: ;
   position: absolute;
   bottom: 53px;
   width: 18px;
@@ -284,19 +284,19 @@
   z-index: var(--speak-order, 0);
 }
 
-.avatar.flip svg {
+.townsquare-avatar.townsquare-avatar--flipped svg {
   transform: scaleX(-1);
   transform-origin: 50% 50%;
 }
 
-.avatar svg {
+.townsquare-avatar svg {
   width: 100%;
   height: 100%;
   display: block;
   overflow: visible;
 }
 
-.avatar svg * {
+.townsquare-avatar svg * {
   fill: none;
   stroke: currentColor;
   stroke-width: 1.8;
@@ -304,23 +304,23 @@
   vector-effect: non-scaling-stroke;
 }
 
-.avatar svg circle.head {
+.townsquare-avatar svg circle.head {
   fill: currentColor;
 }
 
-.avatar--self {
+.townsquare-avatar--self {
   color: var(--you);
   z-index: 2147483001;
 }
-.avatar--peer { color: var(--other); }
+.townsquare-avatar--peer { color: var(--other); }
 
 /* peers are clickable (recent-message tray); the cursor also marks the slim
    figure as interactive, and on iOS Safari makes taps produce click events */
-.avatar--peer { cursor: pointer; }
+.townsquare-avatar--peer { cursor: pointer; }
 
 /* widen the 18px figure's click/tap zone so "click a person" doesn't need
    precision — clicks here open their tray instead of walking */
-.avatar--peer::before {
+.townsquare-avatar--peer::before {
   content: "";
   position: absolute;
   inset: -8px -14px;
@@ -328,33 +328,33 @@
 
 /* a character's lingering bubbles are part of "them": clicking one opens
    their tray (the container keeps pointer-events: none for walk taps) */
-.avatar--peer .avatar__bubble {
+.townsquare-avatar--peer .townsquare-avatar__bubble {
   pointer-events: auto;
   cursor: pointer;
 }
 
 /* while the tray is open the faded-out bubbles must not block clicks on it */
-.avatar--tray-open .avatar__bubble {
+.townsquare-avatar--tray-open .townsquare-avatar__bubble {
   pointer-events: none;
 }
 
 /* reading a character's tray outranks any neighbour's speak-order stacking */
-.avatar--has-history:hover,
-.avatar--has-history:focus-within,
-.avatar--tray-open { z-index: 2147483000; }
-.avatar:is(.walking, .avatar--shaded, .avatar--lit) {
-  filter: var(--avatar-shade-filter) var(--avatar-walk-filter) var(--avatar-light-filter);
+.townsquare-avatar--has-history:hover,
+.townsquare-avatar--has-history:focus-within,
+.townsquare-avatar--tray-open { z-index: 2147483000; }
+.townsquare-avatar:is(.townsquare-avatar--walking, .townsquare-avatar--shaded, .townsquare-avatar--lit) {
+  filter: var(--townsquare-avatar-shade-filter) var(--townsquare-avatar-walk-filter) var(--townsquare-avatar-light-filter);
 }
-.avatar.walking { --avatar-walk-filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
-.avatar--jumping {
+.townsquare-avatar.townsquare-avatar--walking { --townsquare-avatar-walk-filter: drop-shadow(0 2px 5px rgba(0,0,0,0.12)); }
+.townsquare-avatar--jumping {
   animation: presence-jump 560ms cubic-bezier(0.2, 0.8, 0.2, 1);
 }
-.avatar--reading-away > svg,
-.avatar--reading-away .avatar__below {
+.townsquare-avatar--reading-away > svg,
+.townsquare-avatar--reading-away .townsquare-avatar__below {
   opacity: 0.52;
 }
 
-.avatar--reading-away::after {
+.townsquare-avatar--reading-away::after {
   content: "Zz";
   position: absolute;
   left: 50%;
@@ -371,15 +371,15 @@
   pointer-events: none;
 }
 
-.avatar--sitting { bottom: 44px; }
-.avatar--resting { bottom: 42px; }
-.avatar--shaded { --avatar-shade-filter: brightness(0.88); }
-.avatar--lit {
-  --avatar-light-filter: drop-shadow(0 0 3px rgba(253, 230, 160, 0.7)) drop-shadow(0 0 6px rgba(253, 230, 160, 0.25));
+.townsquare-avatar--sitting { bottom: 44px; }
+.townsquare-avatar--resting { bottom: 42px; }
+.townsquare-avatar--shaded { --townsquare-avatar-shade-filter: brightness(0.88); }
+.townsquare-avatar--lit {
+  --townsquare-avatar-light-filter: drop-shadow(0 0 3px rgba(253, 230, 160, 0.7)) drop-shadow(0 0 6px rgba(253, 230, 160, 0.25));
 }
 
 /* Walk-sandbox preview: fills the preview box instead of standing on a stage. */
-.avatar--preview {
+.townsquare-avatar--preview {
   position: static;
   width: 100%;
   height: 100%;
@@ -387,24 +387,24 @@
   transition: none;
 }
 
-.avatar--preview.walking { filter: none; }
-.avatar--preview svg * { stroke-width: 1.4; }
+.townsquare-avatar--preview.townsquare-avatar--walking { filter: none; }
+.townsquare-avatar--preview svg * { stroke-width: 1.4; }
 
-.avatar svg :is(g.figure-core, g.joint) {
+.townsquare-avatar svg :is(g.figure-core, g.joint) {
   transform-box: view-box;
 }
 
-.avatar svg g.figure-core { transform-origin: 10px 24px; }
-.avatar svg g.arm-l { transform-origin: 9.4px 14px; }
-.avatar svg g.arm-r { transform-origin: 10.6px 14px; }
-.avatar svg g.elbow-l { transform-origin: 6.1px 20px; }
-.avatar svg g.elbow-r { transform-origin: 13.9px 20px; }
-.avatar svg g.leg-l { transform-origin: 9.2px 26px; }
-.avatar svg g.leg-r { transform-origin: 10.8px 26px; }
-.avatar svg g.knee-l { transform-origin: 7.1px 34px; }
-.avatar svg g.knee-r { transform-origin: 12.9px 34px; }
+.townsquare-avatar svg g.figure-core { transform-origin: 10px 24px; }
+.townsquare-avatar svg g.arm-l { transform-origin: 9.4px 14px; }
+.townsquare-avatar svg g.arm-r { transform-origin: 10.6px 14px; }
+.townsquare-avatar svg g.elbow-l { transform-origin: 6.1px 20px; }
+.townsquare-avatar svg g.elbow-r { transform-origin: 13.9px 20px; }
+.townsquare-avatar svg g.leg-l { transform-origin: 9.2px 26px; }
+.townsquare-avatar svg g.leg-r { transform-origin: 10.8px 26px; }
+.townsquare-avatar svg g.knee-l { transform-origin: 7.1px 34px; }
+.townsquare-avatar svg g.knee-r { transform-origin: 12.9px 34px; }
 
-.avatar.walking svg :is(g.figure-core, g.joint) {
+.townsquare-avatar.townsquare-avatar--walking svg :is(g.figure-core, g.joint) {
   animation-duration: var(--walk-cycle);
   /* linear between frames: the easing lives in the keyframe spacing itself,
      so motion doesn't decelerate/re-accelerate at every keyframe. */
@@ -412,34 +412,34 @@
   animation-iteration-count: infinite;
 }
 
-.avatar.walking svg g.figure-core { animation-name: presence-body-bob; }
-.avatar.walking svg g.leg-l { animation-name: presence-leg-a; }
-.avatar.walking svg g.leg-r { animation-name: presence-leg-b; }
-.avatar.walking svg g.knee-l { animation-name: presence-knee-a; }
-.avatar.walking svg g.knee-r { animation-name: presence-knee-b; }
-.avatar.walking svg g.arm-l { animation-name: presence-arm-a; }
-.avatar.walking svg g.arm-r { animation-name: presence-arm-b; }
-.avatar.walking svg g.elbow-l { animation-name: presence-forearm-a; }
-.avatar.walking svg g.elbow-r { animation-name: presence-forearm-b; }
+.townsquare-avatar.townsquare-avatar--walking svg g.figure-core { animation-name: presence-body-bob; }
+.townsquare-avatar.townsquare-avatar--walking svg g.leg-l { animation-name: presence-leg-a; }
+.townsquare-avatar.townsquare-avatar--walking svg g.leg-r { animation-name: presence-leg-b; }
+.townsquare-avatar.townsquare-avatar--walking svg g.knee-l { animation-name: presence-knee-a; }
+.townsquare-avatar.townsquare-avatar--walking svg g.knee-r { animation-name: presence-knee-b; }
+.townsquare-avatar.townsquare-avatar--walking svg g.arm-l { animation-name: presence-arm-a; }
+.townsquare-avatar.townsquare-avatar--walking svg g.arm-r { animation-name: presence-arm-b; }
+.townsquare-avatar.townsquare-avatar--walking svg g.elbow-l { animation-name: presence-forearm-a; }
+.townsquare-avatar.townsquare-avatar--walking svg g.elbow-r { animation-name: presence-forearm-b; }
 
-.avatar--jumping svg :is(g.figure-core, g.joint) {
+.townsquare-avatar--jumping svg :is(g.figure-core, g.joint) {
   animation-duration: 560ms;
   animation-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
   animation-iteration-count: 1;
 }
 
-.avatar--jumping svg g.figure-core { animation-name: presence-jump-body; }
-.avatar--jumping svg g.leg-l { animation-name: presence-jump-leg-a; }
-.avatar--jumping svg g.leg-r { animation-name: presence-jump-leg-b; }
-.avatar--jumping svg g.knee-l { animation-name: presence-jump-knee-a; }
-.avatar--jumping svg g.knee-r { animation-name: presence-jump-knee-b; }
-.avatar--jumping svg g.arm-l { animation-name: presence-jump-arm-a; }
-.avatar--jumping svg g.arm-r { animation-name: presence-jump-arm-b; }
-.avatar--jumping svg g.elbow-l { animation-name: presence-jump-forearm-a; }
-.avatar--jumping svg g.elbow-r { animation-name: presence-jump-forearm-b; }
+.townsquare-avatar--jumping svg g.figure-core { animation-name: presence-jump-body; }
+.townsquare-avatar--jumping svg g.leg-l { animation-name: presence-jump-leg-a; }
+.townsquare-avatar--jumping svg g.leg-r { animation-name: presence-jump-leg-b; }
+.townsquare-avatar--jumping svg g.knee-l { animation-name: presence-jump-knee-a; }
+.townsquare-avatar--jumping svg g.knee-r { animation-name: presence-jump-knee-b; }
+.townsquare-avatar--jumping svg g.arm-l { animation-name: presence-jump-arm-a; }
+.townsquare-avatar--jumping svg g.arm-r { animation-name: presence-jump-arm-b; }
+.townsquare-avatar--jumping svg g.elbow-l { animation-name: presence-jump-forearm-a; }
+.townsquare-avatar--jumping svg g.elbow-r { animation-name: presence-jump-forearm-b; }
 
 /*
-  Walk cycle, figure facing right (the .flip scaleX(-1) mirrors it for left —
+  Walk cycle, figure facing right (the flipped state mirrors it for left —
   the pose data itself never changes with direction).
 
   Sign conventions in the un-mirrored pose:
@@ -618,34 +618,34 @@
   82% { transform: rotate(-14deg); }
 }
 
-.avatar--sitting svg :is(g.figure-core, g.joint),
-.avatar--resting svg :is(g.figure-core, g.joint) {
+.townsquare-avatar--sitting svg :is(g.figure-core, g.joint),
+.townsquare-avatar--resting svg :is(g.figure-core, g.joint) {
   animation: none !important;
   transition: transform 220ms ease;
 }
 
-.avatar--sitting svg g.figure-core { transform: translateY(0) rotate(0); }
-.avatar--sitting svg g.leg-l { transform: rotate(74deg); }
-.avatar--sitting svg g.leg-r { transform: rotate(70deg); }
-.avatar--sitting svg g.knee-l { transform: rotate(-84deg); }
-.avatar--sitting svg g.knee-r { transform: rotate(-80deg); }
-.avatar--sitting svg g.arm-l,
-.avatar--sitting svg g.arm-r { transform: rotate(16deg); }
-.avatar--sitting svg g.elbow-l { transform: rotate(24deg); }
-.avatar--sitting svg g.elbow-r { transform: rotate(-24deg); }
+.townsquare-avatar--sitting svg g.figure-core { transform: translateY(0) rotate(0); }
+.townsquare-avatar--sitting svg g.leg-l { transform: rotate(74deg); }
+.townsquare-avatar--sitting svg g.leg-r { transform: rotate(70deg); }
+.townsquare-avatar--sitting svg g.knee-l { transform: rotate(-84deg); }
+.townsquare-avatar--sitting svg g.knee-r { transform: rotate(-80deg); }
+.townsquare-avatar--sitting svg g.arm-l,
+.townsquare-avatar--sitting svg g.arm-r { transform: rotate(16deg); }
+.townsquare-avatar--sitting svg g.elbow-l { transform: rotate(24deg); }
+.townsquare-avatar--sitting svg g.elbow-r { transform: rotate(-24deg); }
 
-.avatar--resting svg g.figure-core { transform: translateY(0) rotate(-10deg); }
-.avatar--resting svg g.leg-l { transform: rotate(120deg); }
-.avatar--resting svg g.leg-r { transform: rotate(118deg); }
-.avatar--resting svg g.knee-l { transform: rotate(-88deg); }
-.avatar--resting svg g.knee-r { transform: rotate(-85deg); }
-.avatar--resting svg g.arm-l,
-.avatar--resting svg g.arm-r { transform: rotate(45deg); }
-.avatar--resting svg g.elbow-l { transform: rotate(10deg); }
-.avatar--resting svg g.elbow-r { transform: rotate(-30deg); }
+.townsquare-avatar--resting svg g.figure-core { transform: translateY(0) rotate(-10deg); }
+.townsquare-avatar--resting svg g.leg-l { transform: rotate(120deg); }
+.townsquare-avatar--resting svg g.leg-r { transform: rotate(118deg); }
+.townsquare-avatar--resting svg g.knee-l { transform: rotate(-88deg); }
+.townsquare-avatar--resting svg g.knee-r { transform: rotate(-85deg); }
+.townsquare-avatar--resting svg g.arm-l,
+.townsquare-avatar--resting svg g.arm-r { transform: rotate(45deg); }
+.townsquare-avatar--resting svg g.elbow-l { transform: rotate(10deg); }
+.townsquare-avatar--resting svg g.elbow-r { transform: rotate(-30deg); }
 
 /* ── Ghost stack: history lives in the scene as fading bubbles above the figure ── */
-.avatar__above {
+.townsquare-avatar__above {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 12px);
@@ -664,14 +664,14 @@
   transition: opacity 140ms ease, transform 160ms ease;
 }
 
-.avatar__above:empty { display: none; }
+.townsquare-avatar__above:empty { display: none; }
 
 /* hovering to read history yields the live stack to the tray */
-.avatar--has-history:hover .avatar__above,
-.avatar--has-history:focus-within .avatar__above,
-.avatar--tray-open .avatar__above { opacity: 0; }
+.townsquare-avatar--has-history:hover .townsquare-avatar__above,
+.townsquare-avatar--has-history:focus-within .townsquare-avatar__above,
+.townsquare-avatar--tray-open .townsquare-avatar__above { opacity: 0; }
 
-.avatar__bubble {
+.townsquare-avatar__bubble {
   position: relative;
   max-width: 100%;
   padding: 11px 16px 12px;
@@ -687,12 +687,12 @@
   transition: opacity 280ms ease, transform 280ms ease, box-shadow 280ms ease;
 }
 
-.avatar__bubble-text {
+.townsquare-avatar__bubble-text {
   display: block;
   overflow-wrap: anywhere;
 }
 
-.avatar__tail {
+.townsquare-avatar__tail {
   position: absolute;
   left: 50%;
   bottom: -11px;
@@ -714,27 +714,27 @@
 }
 
 /* only the live (bottom) bubble keeps its tail */
-.avatar__bubble--ghost .avatar__tail { display: none; }
+.townsquare-avatar__bubble--ghost .townsquare-avatar__tail { display: none; }
 
-.avatar__bubble--ghost {
+.townsquare-avatar__bubble--ghost {
   opacity: 0.5;
   transform: scale(0.9);
   box-shadow: none;
 }
 
-.avatar__bubble--ghost.avatar__bubble--far {
+.townsquare-avatar__bubble--ghost.townsquare-avatar__bubble--far {
   opacity: 0.26;
   transform: scale(0.84);
 }
 
 /* each line fades out on its own timer, oldest first */
-.avatar__bubble--expiring {
+.townsquare-avatar__bubble--expiring {
   opacity: 0;
   transform: scale(0.8);
 }
 
 /* ── History tray: hover a character to recover their recent lines ── */
-.avatar__tray {
+.townsquare-avatar__tray {
   position: absolute;
   left: 50%;
   bottom: calc(100% + 12px);
@@ -756,16 +756,16 @@
   transition: opacity 140ms ease, transform 140ms ease;
 }
 
-.avatar--has-history:hover .avatar__tray,
-.avatar--has-history:focus-within .avatar__tray,
-.avatar--tray-open .avatar__tray {
+.townsquare-avatar--has-history:hover .townsquare-avatar__tray,
+.townsquare-avatar--has-history:focus-within .townsquare-avatar__tray,
+.townsquare-avatar--tray-open .townsquare-avatar__tray {
   opacity: 1;
   pointer-events: auto;
   transform: translate(-50%, 0);
 }
 
 /* transparent bridge across the gap so hover survives figure → tray travel */
-.avatar__tray::after {
+.townsquare-avatar__tray::after {
   content: "";
   position: absolute;
   left: 0;
@@ -774,7 +774,7 @@
   height: 16px;
 }
 
-.avatar__tray-row {
+.townsquare-avatar__tray-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: start;
@@ -783,11 +783,11 @@
   padding: 8px 13px;
 }
 
-.avatar__tray-row + .avatar__tray-row {
+.townsquare-avatar__tray-row + .townsquare-avatar__tray-row {
   box-shadow: 0 -1px 0 var(--hair);
 }
 
-.avatar__tray-msg {
+.townsquare-avatar__tray-msg {
   min-width: 0;
   white-space: normal;
   overflow-wrap: anywhere;
@@ -797,7 +797,7 @@
   color: var(--ink);
 }
 
-.avatar__tray-time {
+.townsquare-avatar__tray-time {
   font-size: var(--fs-time);
   font-weight: var(--fw-time);
   line-height: 1.28;
@@ -807,17 +807,17 @@
 }
 
 @media (max-width: 420px) {
-  .avatar__tray-row {
+  .townsquare-avatar__tray-row {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .avatar__tray-time {
+  .townsquare-avatar__tray-time {
     justify-self: start;
   }
 }
 
 /* ── Nameplate / composer: the persistent way in, below your figure ── */
-.avatar__below {
+.townsquare-avatar__below {
   position: absolute;
   left: 50%;
   top: calc(100% + 9px);
@@ -829,24 +829,24 @@
   white-space: nowrap;
 }
 
-.avatar__below[hidden] { display: none; }
+.townsquare-avatar__below[hidden] { display: none; }
 
-.avatar__below--peer {
+.townsquare-avatar__below--peer {
   top: calc(100% + 7px);
   pointer-events: auto;
 }
 
-.avatar--peer.avatar--has-reading:not(.avatar--has-display-name):not(:hover):not(:focus-within):not(.avatar--label-open) .avatar__below {
+.townsquare-avatar--peer.townsquare-avatar--has-reading:not(.townsquare-avatar--has-display-name):not(:hover):not(:focus-within):not(.townsquare-avatar--label-open) .townsquare-avatar__below {
   display: none;
 }
 
-.avatar__plate-row {
+.townsquare-avatar__plate-row {
   display: inline-flex;
   align-items: center;
   gap: 6px;
 }
 
-.avatar__plate {
+.townsquare-avatar__plate {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -860,26 +860,26 @@
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 
-.avatar__plate:hover { transform: translateY(-1px); }
-.avatar__plate:focus-visible,
-.avatar__profile-button:focus-visible,
-.avatar__swatch:focus-visible,
-.avatar__profile-done:focus-visible {
+.townsquare-avatar__plate:hover { transform: translateY(-1px); }
+.townsquare-avatar__plate:focus-visible,
+.townsquare-avatar__profile-button:focus-visible,
+.townsquare-avatar__swatch:focus-visible,
+.townsquare-avatar__profile-done:focus-visible {
   outline: 2px solid var(--you);
   outline-offset: 2px;
 }
 
-.avatar__plate[hidden],
-.avatar__profile-button[hidden] { display: none; }
+.townsquare-avatar__plate[hidden],
+.townsquare-avatar__profile-button[hidden] { display: none; }
 
-.avatar__plate-dot {
+.townsquare-avatar__plate-dot {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--you);
 }
 
-.avatar__plate-name {
+.townsquare-avatar__plate-name {
   font-size: var(--fs-name);
   font-weight: var(--fw-name);
   letter-spacing: 0.01em;
@@ -887,7 +887,7 @@
   text-transform: lowercase;
 }
 
-.avatar__peer-label {
+.townsquare-avatar__peer-label {
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -900,7 +900,7 @@
   box-shadow: 0 6px 12px -10px rgba(60, 40, 20, 0.34);
 }
 
-.avatar__peer-name {
+.townsquare-avatar__peer-name {
   display: inline-block;
   max-width: 100%;
   overflow: hidden;
@@ -910,9 +910,9 @@
   text-transform: lowercase;
 }
 
-.avatar__peer-name[hidden] { display: none; }
+.townsquare-avatar__peer-name[hidden] { display: none; }
 
-.avatar__reading {
+.townsquare-avatar__reading {
   display: none;
   align-items: baseline;
   gap: 3px;
@@ -926,40 +926,40 @@
   text-decoration: none;
 }
 
-.avatar--peer:hover .avatar__reading--available,
-.avatar--peer:focus-within .avatar__reading--available,
-.avatar--label-open .avatar__reading--available {
+.townsquare-avatar--peer:hover .townsquare-avatar__reading--available,
+.townsquare-avatar--peer:focus-within .townsquare-avatar__reading--available,
+.townsquare-avatar--label-open .townsquare-avatar__reading--available {
   display: inline-flex;
 }
 
-.avatar__reading-prefix {
+.townsquare-avatar__reading-prefix {
   flex: 0 0 auto;
   font-weight: 520;
 }
 
-.avatar__reading-label {
+.townsquare-avatar__reading-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.avatar__reading:hover,
-.avatar__reading:focus-visible {
+.townsquare-avatar__reading:hover,
+.townsquare-avatar__reading:focus-visible {
   color: currentColor;
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
-.avatar__reading[hidden] { display: none; }
+.townsquare-avatar__reading[hidden] { display: none; }
 
-.avatar__plate-hint {
+.townsquare-avatar__plate-hint {
   font-size: 12.5px;
   font-weight: 500;
   color: var(--ink-faint);
 }
 
-.avatar__profile-button,
-.avatar__profile-done {
+.townsquare-avatar__profile-button,
+.townsquare-avatar__profile-done {
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
@@ -974,19 +974,19 @@
   cursor: pointer;
 }
 
-.avatar__profile-button:hover,
-.avatar__profile-button[aria-expanded="true"],
-.avatar__profile-done:hover {
+.townsquare-avatar__profile-button:hover,
+.townsquare-avatar__profile-button[aria-expanded="true"],
+.townsquare-avatar__profile-done:hover {
   color: var(--ink);
 }
 
-.avatar__profile-button svg,
-.avatar__profile-done svg {
+.townsquare-avatar__profile-button svg,
+.townsquare-avatar__profile-done svg {
   width: 15px;
   height: 15px;
 }
 
-.avatar__profile {
+.townsquare-avatar__profile {
   display: grid;
   grid-template-columns: minmax(86px, 120px) auto 30px;
   align-items: center;
@@ -997,9 +997,9 @@
   box-shadow: var(--tray-shadow);
 }
 
-.avatar__profile[hidden] { display: none; }
+.townsquare-avatar__profile[hidden] { display: none; }
 
-.avatar__profile-input {
+.townsquare-avatar__profile-input {
   min-width: 0;
   height: 30px;
   padding: 0 8px;
@@ -1013,15 +1013,15 @@
   font-weight: 520;
 }
 
-.avatar__profile-input::placeholder { color: var(--ink-faint); }
+.townsquare-avatar__profile-input::placeholder { color: var(--ink-faint); }
 
-.avatar__swatches {
+.townsquare-avatar__swatches {
   display: grid;
   grid-template-columns: repeat(3, 18px);
   gap: 5px;
 }
 
-.avatar__swatch {
+.townsquare-avatar__swatch {
   width: 18px;
   height: 18px;
   padding: 0;
@@ -1032,12 +1032,12 @@
   cursor: pointer;
 }
 
-.avatar__swatch[aria-pressed="true"] {
+.townsquare-avatar__swatch[aria-pressed="true"] {
   border-color: var(--surface);
   box-shadow: 0 0 0 2px var(--ink), inset 0 0 0 1px rgba(42, 41, 38, 0.18);
 }
 
-.avatar__composer {
+.townsquare-avatar__composer {
   display: flex;
   align-items: center;
   gap: 9px;
@@ -1049,9 +1049,9 @@
   box-shadow: var(--tray-shadow);
 }
 
-.avatar__composer[hidden] { display: none; }
+.townsquare-avatar__composer[hidden] { display: none; }
 
-.avatar__input {
+.townsquare-avatar__input {
   flex: 1;
   min-width: 0;
   min-height: 30px;
@@ -1064,9 +1064,9 @@
   font-weight: 460;
 }
 
-.avatar__input::placeholder { color: var(--ink-faint); }
+.townsquare-avatar__input::placeholder { color: var(--ink-faint); }
 
-.avatar__send {
+.townsquare-avatar__send {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -1083,9 +1083,9 @@
   transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
-.avatar__send svg { width: 17px; height: 17px; display: block; }
+.townsquare-avatar__send svg { width: 17px; height: 17px; display: block; }
 
-.avatar__send--ready {
+.townsquare-avatar__send--ready {
   background: var(--you);
   color: #fff;
   box-shadow: none;
@@ -1093,13 +1093,13 @@
 
 @media (max-width: 640px) {
   .townsquare__status { flex-direction: column; gap: 4px; }
-  .avatar__composer { min-width: min(260px, 80vw); }
+  .townsquare-avatar__composer { min-width: min(260px, 80vw); }
 }
 
 /* ── Touch: docked composer ──
    On coarse pointers the composer detaches from the figure and docks as a bar
    at the bottom of the widget, where the virtual keyboard can't clip it. */
-.avatar__composer.avatar__composer--docked {
+.townsquare-avatar__composer.townsquare-avatar__composer--docked {
   position: absolute;
   left: 10px;
   right: 10px;
@@ -1110,7 +1110,7 @@
 }
 
 /* in expanded (fixed) mode the page can't scroll, so ride above the keyboard */
-.townsquare--expanded .avatar__composer.avatar__composer--docked {
+.townsquare--expanded .townsquare-avatar__composer.townsquare-avatar__composer--docked {
   bottom: calc(10px + var(--ts-keyboard, 0px));
 }
 
@@ -1129,12 +1129,12 @@
     right: 152px;
   }
 
-  .avatar__plate {
+  .townsquare-avatar__plate {
     padding: 9px 15px 9px 13px;
   }
 
   /* fingers need an even wider tap zone than mouse pointers */
-  .avatar--peer::before {
+  .townsquare-avatar--peer::before {
     inset: -10px -20px;
   }
 }

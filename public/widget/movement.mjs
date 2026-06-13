@@ -223,8 +223,8 @@ export function unwireKeyboard(ctx) {
  */
 export function closeTrays(ctx) {
   for (const peer of ctx.peers.values()) {
-    peer.avatar.el.classList.remove("avatar--tray-open");
-    peer.avatar.el.classList.remove("avatar--label-open");
+    peer.avatar.el.classList.remove("townsquare-avatar--tray-open");
+    peer.avatar.el.classList.remove("townsquare-avatar--label-open");
   }
 }
 
@@ -241,18 +241,18 @@ export function wireStagePointer(ctx) {
     if (ctx.quiet) return;
 
     const target = event.target instanceof Element ? event.target : null;
-    const avatarEl = target?.closest(".avatar");
+    const avatarEl = target?.closest(".townsquare-avatar");
     if (avatarEl) {
       // Self taps are handled by the nameplate/composer; peers toggle the tray.
-      if (avatarEl.classList.contains("avatar--self")) return;
-      const open = !avatarEl.classList.contains("avatar--tray-open")
-        && !avatarEl.classList.contains("avatar--label-open");
+      if (avatarEl.classList.contains("townsquare-avatar--self")) return;
+      const open = !avatarEl.classList.contains("townsquare-avatar--tray-open")
+        && !avatarEl.classList.contains("townsquare-avatar--label-open");
       closeTrays(ctx);
       if (open) {
-        avatarEl.classList.add("avatar--label-open");
+        avatarEl.classList.add("townsquare-avatar--label-open");
       }
-      if (open && avatarEl.classList.contains("avatar--has-history")) {
-        avatarEl.classList.add("avatar--tray-open");
+      if (open && avatarEl.classList.contains("townsquare-avatar--has-history")) {
+        avatarEl.classList.add("townsquare-avatar--tray-open");
       }
       return;
     }

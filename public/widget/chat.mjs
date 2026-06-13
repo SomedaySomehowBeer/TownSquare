@@ -32,10 +32,10 @@ function renderGhostStack(avatar) {
   for (let i = 0; i < messages.length; i += 1) {
     const message = messages[i];
     const distance = messages.length - 1 - i;
-    let className = "avatar__bubble";
+    let className = "townsquare-avatar__bubble";
     if (!(distance === 0 && message.solid)) {
-      className += " avatar__bubble--ghost";
-      if (distance >= 2) className += " avatar__bubble--far";
+      className += " townsquare-avatar__bubble--ghost";
+      if (distance >= 2) className += " townsquare-avatar__bubble--far";
     }
     message.el.className = className;
   }
@@ -50,7 +50,7 @@ function renderGhostStack(avatar) {
 function expire(avatar, message) {
   const index = avatar.messages.indexOf(message);
   if (index !== -1) avatar.messages.splice(index, 1);
-  message.el.classList.add("avatar__bubble--expiring");
+  message.el.classList.add("townsquare-avatar__bubble--expiring");
   setTimeout(() => message.el.remove(), FADE_MS);
   renderGhostStack(avatar);
 }
@@ -71,7 +71,7 @@ export function recordMessage(avatar, message) {
   avatar.history = avatar.history.slice(-MAX_RECENT_MESSAGES);
 
   avatar.trayList.replaceChildren(...avatar.history.map(createTrayRow));
-  avatar.el.classList.toggle("avatar--has-history", avatar.history.length > 0);
+  avatar.el.classList.toggle("townsquare-avatar--has-history", avatar.history.length > 0);
 }
 
 /**
