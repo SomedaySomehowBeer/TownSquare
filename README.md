@@ -157,6 +157,9 @@ mountTownSquare(document.getElementById("townsquare-root"), {
 
 ## Hosted registration
 
+For a user-facing guide to all current configuration options, see [`docs/customization.md`](docs/customization.md).
+
+
 TownSquare can also run as a tiny hosted service.
 Open:
 
@@ -185,7 +188,8 @@ The admin page can:
 
 - show install/seen status
 - show active visitors
-- show the current generated CSS and scene config
+- edit scene/style customization with a live preview
+- regenerate the current embed snippet and CSS
 - kick or block active visitors
 - disable chat
 - disable the site

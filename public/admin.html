@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>TownSquare admin</title>
+    <link rel="stylesheet" href="/widget.css" />
     <link rel="stylesheet" href="/page.css" />
   </head>
   <body>
@@ -47,6 +48,84 @@
 
         <section class="hosted-meta" id="site-meta"></section>
 
+        <section class="hosted-section" id="customization-section">
+          <div class="hosted-section-head">
+            <h2>Editable customization</h2>
+          </div>
+          <p class="hosted-note">
+            Change the saved scene and style here, preview it, then copy the refreshed snippet and CSS below.
+          </p>
+
+          <form class="hosted-form" id="customization-form">
+            <section aria-labelledby="scene-config-title">
+              <div class="hosted-section-head">
+                <h2 id="scene-config-title">Scene props</h2>
+              </div>
+              <div class="hosted-grid hosted-grid--compact">
+                <label>
+                  <span>Benches</span>
+                  <input id="scene-benches" name="scene-benches" type="number" min="0" max="6" step="1" value="2" />
+                </label>
+                <label>
+                  <span>Trees</span>
+                  <input id="scene-trees" name="scene-trees" type="number" min="0" max="6" step="1" value="1" />
+                </label>
+                <label>
+                  <span>Lamps</span>
+                  <input id="scene-lamps" name="scene-lamps" type="number" min="0" max="4" step="1" value="1" />
+                </label>
+                <label>
+                  <span>Branches</span>
+                  <input id="scene-branches" name="scene-branches" type="number" min="0" max="8" step="1" value="0" />
+                </label>
+              </div>
+            </section>
+
+            <section aria-labelledby="style-config-title">
+              <div class="hosted-section-head">
+                <h2 id="style-config-title">Style overrides</h2>
+              </div>
+              <div class="hosted-grid hosted-grid--compact">
+                <label>
+                  <span>Scene</span>
+                  <input id="style-scene" name="style-scene" type="color" value="#e4e2dd" />
+                </label>
+                <label>
+                  <span>Page</span>
+                  <input id="style-page" name="style-page" type="color" value="#efede9" />
+                </label>
+                <label>
+                  <span>Surface</span>
+                  <input id="style-surface" name="style-surface" type="color" value="#fdf8f4" />
+                </label>
+                <label>
+                  <span>Ink</span>
+                  <input id="style-ink" name="style-ink" type="color" value="#2a2926" />
+                </label>
+                <label>
+                  <span>Accent</span>
+                  <input id="style-accent" name="style-accent" type="color" value="#c8641f" />
+                </label>
+              </div>
+            </section>
+
+            <div class="hosted-actions">
+              <button type="submit" id="save-customization">Save customization</button>
+              <button type="button" id="reset-customization">Reset form</button>
+            </div>
+            <p class="hosted-status" id="customization-status" role="status" hidden></p>
+          </form>
+
+          <section class="hosted-section" aria-labelledby="preview-title">
+            <div class="hosted-section-head">
+              <h2 id="preview-title">Preview</h2>
+            </div>
+            <div class="townsquare-host">
+              <div id="townsquare-root"></div>
+            </div>
+          </section>
+        </section>
+
         <section class="hosted-section" id="install-section">
           <h2>Embed snippet</h2>
           <p class="hosted-note">Paste this where you want the square to appear.</p>
@@ -67,7 +146,7 @@
 
         <section class="hosted-section" id="scene-section">
           <div class="hosted-section-head">
-            <h2>Current scene setup</h2>
+            <h2>Saved scene setup</h2>
           </div>
           <div class="hosted-kv" id="scene-summary"></div>
         </section>

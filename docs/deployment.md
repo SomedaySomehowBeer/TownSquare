@@ -77,6 +77,9 @@ This is the core self-hosting contract:
 
 ### Scene props and style overrides
 
+For a user-facing explanation of what each customization does and where it lives, see [`customization.md`](customization.md).
+
+
 The widget mount API also accepts site-level scene and style settings:
 
 ```js

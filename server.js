@@ -654,6 +654,15 @@ function handleAdminLogin(req, res) {
 }
 
 const ADMIN_ACTIONS = {
+  updateCustomization(site, scene, body) {
+    site.sceneConfig = sanitizeSceneConfig(body.sceneConfig);
+    site.styleConfig = sanitizeSiteStyle(body.styleConfig);
+    touchSite(site);
+
+    if (scene.clients.size === 0) {
+      scenes.delete(site.siteKey);
+    }
+  },
   setChatDisabled(site, scene, body) {
     site.chatDisabled = Boolean(body.disabled);
     touchSite(site);

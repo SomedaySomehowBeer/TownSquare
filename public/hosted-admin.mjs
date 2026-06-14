@@ -5,7 +5,15 @@ import {
   setStatus,
   setValueIfIdle,
 } from "./hosted-common.mjs";
-import { getSceneSummaryEntries } from "./site-config.mjs";
+import {
+  applyConfigToForm,
+  getSceneSummaryEntries,
+  readSceneConfigFromForm,
+  readStyleConfigFromForm,
+  sanitizeSceneConfig,
+  sanitizeSiteStyle,
+} from "./site-config.mjs";
+import { mountTownSquare } from "./townsquare.mjs";
 
 const loginView = document.getElementById("login-view");
 const adminView = document.getElementById("admin-view");
@@ -16,6 +24,11 @@ const loginStatusEl = document.getElementById("login-status");
 const signOutButton = document.getElementById("sign-out");
 const statusEl = document.getElementById("admin-status");
 const metaEl = document.getElementById("site-meta");
+const customizationForm = document.getElementById("customization-form");
+const customizationStatusEl = document.getElementById("customization-status");
+const saveCustomizationButton = document.getElementById("save-customization");
+const resetCustomizationButton = document.getElementById("reset-customization");
+const previewRoot = document.getElementById("townsquare-root");
 const snippetEl = document.getElementById("embed-snippet");
 const styleSnippetEl = document.getElementById("style-snippet");
 const sceneSummaryEl = document.getElementById("scene-summary");
@@ -33,6 +46,9 @@ let currentSite = null;
 let siteKey = "";
 let adminToken = "";
 let refreshTimer = null;
+let previewHandle = null;
+let customizationBusy = false;
+let customizationSavedMessage = "";
 
 function readStoredCredentials() {
   try {
@@ -64,15 +80,23 @@ function storeCredentials() {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ siteKey, adminToken }));
 }
 
+function destroyPreview() {
+  previewHandle?.destroy();
+  previewHandle = null;
+}
+
 function clearCredentials() {
   siteKey = "";
   adminToken = "";
   currentSite = null;
+  customizationSavedMessage = "";
+  destroyPreview();
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
 function showLogin(message = "", isError = false) {
   stopAutoRefresh();
+  destroyPreview();
   adminView.hidden = true;
   loginView.hidden = false;
   setStatus(loginStatusEl, message, isError, { hideWhenEmpty: true });
@@ -178,6 +202,86 @@ function renderVisitors(scene) {
   }
 }
 
+function getCurrentCustomization() {
+  return {
+    sceneConfig: sanitizeSceneConfig(currentSite?.sceneConfig || {}),
+    styleConfig: sanitizeSiteStyle(currentSite?.styleConfig || {}),
+  };
+}
+
+function readCustomizationFromForm() {
+  return {
+    sceneConfig: sanitizeSceneConfig(readSceneConfigFromForm(customizationForm)),
+    styleConfig: sanitizeSiteStyle(readStyleConfigFromForm(customizationForm)),
+  };
+}
+
+function serializeCustomization(customization) {
+  return JSON.stringify({
+    sceneConfig: sanitizeSceneConfig(customization?.sceneConfig || {}),
+    styleConfig: sanitizeSiteStyle(customization?.styleConfig || {}),
+  });
+}
+
+function customizationIsDirty() {
+  if (!currentSite) return false;
+  return serializeCustomization(readCustomizationFromForm()) !== serializeCustomization(getCurrentCustomization());
+}
+
+function updateCustomizationButtons() {
+  const dirty = customizationIsDirty();
+  saveCustomizationButton.disabled = customizationBusy || !dirty;
+  resetCustomizationButton.disabled = customizationBusy || !dirty;
+}
+
+function updateCustomizationStatus() {
+  if (customizationBusy) {
+    setStatus(customizationStatusEl, "Saving customization...", false, { hideWhenEmpty: true });
+    return;
+  }
+
+  if (customizationSavedMessage) {
+    setStatus(customizationStatusEl, customizationSavedMessage, false, { hideWhenEmpty: true });
+    return;
+  }
+
+  if (customizationIsDirty()) {
+    setStatus(
+      customizationStatusEl,
+      "Previewing unsaved changes. Save to regenerate the embed snippet and CSS.",
+      false,
+      { hideWhenEmpty: true },
+    );
+    return;
+  }
+
+  setStatus(customizationStatusEl, "", false, { hideWhenEmpty: true });
+}
+
+function mountPreview() {
+  if (!(previewRoot instanceof HTMLElement)) return;
+  const customization = currentSite ? readCustomizationFromForm() : getCurrentCustomization();
+  destroyPreview();
+  previewHandle = mountTownSquare(previewRoot, {
+    serverOrigin: window.location.origin,
+    scene: customization.sceneConfig,
+    style: customization.styleConfig,
+    readingLabel: currentSite ? `${currentSite.name} preview` : "Admin preview",
+    readingUrl: window.location.href,
+  });
+}
+
+function syncCustomizationForm({ force = false } = {}) {
+  if (!currentSite || !(customizationForm instanceof HTMLFormElement)) return;
+  if (force || !customizationIsDirty()) {
+    const customization = getCurrentCustomization();
+    applyConfigToForm(customizationForm, { ...customization.sceneConfig, ...customization.styleConfig });
+  }
+  updateCustomizationButtons();
+  updateCustomizationStatus();
+  mountPreview();
+}
+
 function render(data) {
   currentSite = data.site;
   const scene = data.scene;
@@ -190,6 +294,7 @@ function render(data) {
 
   chatDisabledInput.checked = currentSite.chatDisabled;
   disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
+  syncCustomizationForm();
 
   if (currentSite.disabled) {
     setStatus(statusEl, "Site is disabled. Visitors cannot connect.", true);
@@ -238,11 +343,41 @@ async function action(name, data = {}) {
   const result = await api("/api/admin/action", { siteKey, adminToken, action: name, ...data });
   if (!result.ok) {
     setStatus(statusEl, result.body.error || "Action failed.", true);
-    return;
+    return false;
   }
 
   await loadSite();
+  return true;
 }
+
+customizationForm.addEventListener("input", () => {
+  customizationSavedMessage = "";
+  updateCustomizationButtons();
+  updateCustomizationStatus();
+  mountPreview();
+});
+
+customizationForm.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  customizationBusy = true;
+  customizationSavedMessage = "";
+  updateCustomizationButtons();
+  updateCustomizationStatus();
+
+  const ok = await action("updateCustomization", readCustomizationFromForm());
+
+  customizationBusy = false;
+  if (ok) {
+    customizationSavedMessage = "Customization saved. Copy the refreshed snippet and CSS below.";
+  }
+  updateCustomizationButtons();
+  updateCustomizationStatus();
+});
+
+resetCustomizationButton.addEventListener("click", () => {
+  customizationSavedMessage = "";
+  syncCustomizationForm({ force: true });
+});
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();

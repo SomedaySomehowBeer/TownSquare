@@ -91,6 +91,39 @@ async function adminSiteApi(siteKey, adminToken) {
   return body;
 }
 
+async function adminActionApi(siteKey, adminToken, action, payload = {}) {
+  const { response, body } = await postJson("/api/admin/action", {
+    siteKey,
+    adminToken,
+    action,
+    ...payload,
+  });
+  assert(response.ok, body.error || `site admin action failed: ${action}`);
+  return body;
+}
+
+async function assertAdminCustomizationCanBeUpdated(hostedSite) {
+  const updated = await adminActionApi(hostedSite.site.siteKey, hostedSite.adminToken, "updateCustomization", {
+    sceneConfig: { benches: 4, trees: 1, lamps: 2, branches: 4 },
+    styleConfig: {
+      scene: "#d9d0c5",
+      page: "#f6efe7",
+      surface: "#fff8f1",
+      ink: "#2f2925",
+      accent: "#336699",
+    },
+  });
+
+  assert(updated.site.sceneConfig?.benches === 4, "admin customization did not update scene config");
+  assert(updated.site.sceneConfig?.branches === 4, "admin customization did not update branch count");
+  assert(updated.site.styleConfig?.accent === "#336699", "admin customization did not update accent color");
+
+  const refreshed = await adminSiteApi(hostedSite.site.siteKey, hostedSite.adminToken);
+  assert(refreshed.embedSnippet.includes('"benches":4'), "refreshed embed snippet did not include updated benches");
+  assert(refreshed.embedSnippet.includes('"branches":4'), "refreshed embed snippet did not include updated branches");
+  assert(refreshed.styleSnippet.includes("#336699"), "refreshed style snippet did not include updated accent color");
+}
+
 async function loginShouldFailWithAdminToken(adminToken) {
   const response = await fetch(`${HTTP_ORIGIN}/api/admin/login`, {
     method: "POST",
@@ -556,6 +589,7 @@ async function main() {
   const hostedB = await createSite("Smoke B");
   assertAdminTokenStoredAsHash(hostedA.site.siteKey, hostedA.adminToken);
   assertAdminTokenStoredAsHash(hostedB.site.siteKey, hostedB.adminToken);
+  await assertAdminCustomizationCanBeUpdated(hostedA);
   const hostedALogin = await loginWithAdminToken(hostedA.adminToken);
   assert(hostedALogin.site.siteKey === hostedA.site.siteKey, "admin token login returned the wrong site");
 
