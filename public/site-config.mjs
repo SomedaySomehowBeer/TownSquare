@@ -10,46 +10,33 @@
 
 const SAFE_COLOR_RE = /^[#(),.%\sA-Za-z0-9-]+$/;
 
-export const DEFAULT_SCENE_CONFIG = Object.freeze({
-  benches: 2,
-  trees: 1,
-  lamps: 1,
-  branches: 0,
-});
-
-export const DEFAULT_SITE_STYLE = Object.freeze({
-  scene: "#e4e2dd",
-  page: "#efede9",
-  surface: "#fdf8f4",
-  ink: "#2a2926",
-  accent: "#c8641f",
-  other: "#26241f",
-  ground: "rgba(42, 41, 38, 0.16)",
-});
-
-const STYLE_VAR_MAP = new Map([
-  ["scene", "--scene"],
-  ["page", "--page"],
-  ["surface", "--surface"],
-  ["ink", "--ink"],
-  ["accent", "--you"],
-  ["other", "--other"],
-  ["ground", "--ground"],
+export const SCENE_FIELDS = Object.freeze([
+  Object.freeze({ key: "benches", label: "Benches", inputName: "scene-benches", min: 0, max: 6, defaultValue: 2 }),
+  Object.freeze({ key: "trees", label: "Trees", inputName: "scene-trees", min: 0, max: 6, defaultValue: 1 }),
+  Object.freeze({ key: "lamps", label: "Lamps", inputName: "scene-lamps", min: 0, max: 4, defaultValue: 1 }),
+  Object.freeze({ key: "branches", label: "Branches", inputName: "scene-branches", min: 0, max: 8, defaultValue: 0 }),
 ]);
 
-const SCENE_LIMITS = Object.freeze({
-  benches: 0,
-  trees: 0,
-  lamps: 0,
-  branches: 0,
-});
+export const STYLE_FIELDS = Object.freeze([
+  Object.freeze({ key: "scene", label: "Scene", inputName: "style-scene", defaultValue: "#e4e2dd", cssVar: "--scene" }),
+  Object.freeze({ key: "page", label: "Page", inputName: "style-page", defaultValue: "#efede9", cssVar: "--page" }),
+  Object.freeze({ key: "surface", label: "Surface", inputName: "style-surface", defaultValue: "#fdf8f4", cssVar: "--surface" }),
+  Object.freeze({ key: "ink", label: "Ink", inputName: "style-ink", defaultValue: "#2a2926", cssVar: "--ink" }),
+  Object.freeze({ key: "accent", label: "Accent", inputName: "style-accent", defaultValue: "#c8641f", cssVar: "--you" }),
+  Object.freeze({ key: "other", label: "Other", inputName: "style-other", defaultValue: "#26241f", cssVar: "--other" }),
+  Object.freeze({ key: "ground", label: "Ground", inputName: "style-ground", defaultValue: "rgba(42, 41, 38, 0.16)", cssVar: "--ground" }),
+]);
 
-const SCENE_MAX = Object.freeze({
-  benches: 6,
-  trees: 6,
-  lamps: 4,
-  branches: 8,
-});
+export const DEFAULT_SCENE_CONFIG = Object.freeze(
+  Object.fromEntries(SCENE_FIELDS.map((field) => [field.key, field.defaultValue])),
+);
+
+export const DEFAULT_SITE_STYLE = Object.freeze(
+  Object.fromEntries(STYLE_FIELDS.map((field) => [field.key, field.defaultValue])),
+);
+
+const STYLE_VAR_MAP = new Map(STYLE_FIELDS.map((field) => [field.key, field.cssVar]));
+
 
 const POSITION_PRESETS = Object.freeze({
   benches: Object.freeze([0.2, 0.72, 0.46, 0.08, 0.58, 0.86]),
@@ -195,22 +182,57 @@ function createBranch(index, x) {
 
 export function sanitizeSceneConfig(input = {}) {
   const base = isPlainObject(input) ? input : {};
-  return {
-    benches: clampInt(base.benches, SCENE_LIMITS.benches, SCENE_MAX.benches, DEFAULT_SCENE_CONFIG.benches),
-    trees: clampInt(base.trees, SCENE_LIMITS.trees, SCENE_MAX.trees, DEFAULT_SCENE_CONFIG.trees),
-    lamps: clampInt(base.lamps, SCENE_LIMITS.lamps, SCENE_MAX.lamps, DEFAULT_SCENE_CONFIG.lamps),
-    branches: clampInt(base.branches, SCENE_LIMITS.branches, SCENE_MAX.branches, DEFAULT_SCENE_CONFIG.branches),
-  };
+  return Object.fromEntries(
+    SCENE_FIELDS.map((field) => [
+      field.key,
+      clampInt(base[field.key], field.min, field.max, field.defaultValue),
+    ]),
+  );
 }
 
 export function sanitizeSiteStyle(input = {}) {
   const base = isPlainObject(input) ? input : {};
   const next = {};
-  for (const [key, fallback] of Object.entries(DEFAULT_SITE_STYLE)) {
+  for (const { key, defaultValue } of STYLE_FIELDS) {
     const value = typeof base[key] === "string" ? base[key].trim() : "";
-    next[key] = value && value.length <= 64 && SAFE_COLOR_RE.test(value) ? value : fallback;
+    next[key] = value && value.length <= 64 && SAFE_COLOR_RE.test(value) ? value : defaultValue;
   }
   return next;
+}
+
+export function readSceneConfigFromForm(form) {
+  const formData = new FormData(form);
+  return Object.fromEntries(
+    SCENE_FIELDS.map((field) => [field.key, Number(formData.get(field.inputName) || 0)]),
+  );
+}
+
+export function readStyleConfigFromForm(form) {
+  const formData = new FormData(form);
+  return Object.fromEntries(
+    STYLE_FIELDS.map((field) => [field.key, String(formData.get(field.inputName) || "").trim()]),
+  );
+}
+
+export function applyConfigToForm(form, config = {}) {
+  for (const field of SCENE_FIELDS) {
+    const input = form.elements.namedItem(field.inputName);
+    if (input && "value" in input) {
+      input.value = String(config[field.key] ?? field.defaultValue);
+    }
+  }
+
+  for (const field of STYLE_FIELDS) {
+    const input = form.elements.namedItem(field.inputName);
+    if (input && "value" in input) {
+      input.value = String(config[field.key] ?? field.defaultValue);
+    }
+  }
+}
+
+export function getSceneSummaryEntries(sceneConfig = {}) {
+  const scene = sanitizeSceneConfig(sceneConfig);
+  return SCENE_FIELDS.map((field) => ({ label: field.label, value: scene[field.key] }));
 }
 
 export function buildSceneProps(config = DEFAULT_SCENE_CONFIG) {

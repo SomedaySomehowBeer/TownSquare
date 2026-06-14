@@ -1,3 +1,12 @@
+import {
+  bindCopy,
+  renderDefinitionList,
+  renderKeyValueList,
+  setStatus,
+  setValueIfIdle,
+} from "./hosted-common.mjs";
+import { getSceneSummaryEntries } from "./site-config.mjs";
+
 const loginView = document.getElementById("login-view");
 const adminView = document.getElementById("admin-view");
 const loginForm = document.getElementById("login-form");
@@ -24,17 +33,6 @@ let currentSite = null;
 let siteKey = "";
 let adminToken = "";
 let refreshTimer = null;
-
-function setLoginStatus(message, isError = false) {
-  loginStatusEl.textContent = message;
-  loginStatusEl.hidden = !message;
-  loginStatusEl.classList.toggle("hosted-status--error", isError);
-}
-
-function setStatus(message, isError = false) {
-  statusEl.textContent = message;
-  statusEl.classList.toggle("hosted-status--error", isError);
-}
 
 function readStoredCredentials() {
   try {
@@ -77,7 +75,7 @@ function showLogin(message = "", isError = false) {
   stopAutoRefresh();
   adminView.hidden = true;
   loginView.hidden = false;
-  setLoginStatus(message, isError);
+  setStatus(loginStatusEl, message, isError, { hideWhenEmpty: true });
   loginTokenEl.focus();
 }
 
@@ -121,94 +119,84 @@ function formatTime(value) {
   return new Date(value).toLocaleString();
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;");
-}
-
 function renderSceneSummary(sceneConfig = {}) {
-  sceneSummaryEl.innerHTML = [
-    ["Benches", sceneConfig.benches ?? 0],
-    ["Trees", sceneConfig.trees ?? 0],
-    ["Lamps", sceneConfig.lamps ?? 0],
-    ["Branches", sceneConfig.branches ?? 0],
-  ]
-    .map(
-      ([label, value]) =>
-        `<div><strong>${escapeHtml(label)}</strong><span>${escapeHtml(String(value))}</span></div>`,
-    )
-    .join("");
+  renderKeyValueList(sceneSummaryEl, getSceneSummaryEntries(sceneConfig));
 }
 
-function render(data) {
-  currentSite = data.site;
-  const scene = data.scene;
+function renderSiteMeta(site, scene) {
+  renderDefinitionList(metaEl, [
+    { label: "Site", value: site.name },
+    { label: "Origin", value: site.origin },
+    { label: "Status", value: site.disabled ? "Disabled" : "Enabled" },
+    { label: "Verified", value: formatTime(site.verifiedAt) },
+    { label: "Active visitors", value: scene.activeVisitors },
+    { label: "Blocked", value: site.blockedCount },
+  ]);
+}
 
-  metaEl.innerHTML = `
-    <dl>
-      <div><dt>Site</dt><dd>${escapeHtml(currentSite.name)}</dd></div>
-      <div><dt>Origin</dt><dd>${escapeHtml(currentSite.origin)}</dd></div>
-      <div><dt>Status</dt><dd>${currentSite.disabled ? "Disabled" : "Enabled"}</dd></div>
-      <div><dt>Verified</dt><dd>${formatTime(currentSite.verifiedAt)}</dd></div>
-      <div><dt>Active visitors</dt><dd>${scene.activeVisitors}</dd></div>
-      <div><dt>Blocked</dt><dd>${currentSite.blockedCount}</dd></div>
-    </dl>
-  `;
+function createVisitorRow(visitor) {
+  const row = document.createElement("article");
+  row.className = "visitor-row";
 
-  if (document.activeElement !== snippetEl) {
-    snippetEl.value = data.embedSnippet;
-  }
-  if (document.activeElement !== styleSnippetEl) {
-    styleSnippetEl.value = data.styleSnippet;
-  }
-  renderSceneSummary(currentSite.sceneConfig);
-  chatDisabledInput.checked = currentSite.chatDisabled;
-  disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
+  const info = document.createElement("div");
+  const title = document.createElement("strong");
+  const meta = document.createElement("span");
+  const visitorName = String(visitor.displayName || "").trim();
+  const visitorLabel = visitorName || `Visitor ${visitor.id}`;
+  const visitorMeta = visitorName ? `Visitor ${visitor.id} · ` : "";
 
+  title.textContent = visitorLabel;
+  meta.textContent = `${visitorMeta}${visitor.clientCount} tab${visitor.clientCount === 1 ? "" : "s"} connected`;
+  info.append(title, meta);
+
+  const kick = document.createElement("button");
+  kick.type = "button";
+  kick.textContent = "Kick";
+  kick.addEventListener("click", () => action("kickVisitor", { visitorId: visitor.id }));
+
+  const block = document.createElement("button");
+  block.type = "button";
+  block.textContent = "Block";
+  block.addEventListener("click", () => action("blockVisitor", { visitorId: visitor.id }));
+
+  row.append(info, kick, block);
+  return row;
+}
+
+function renderVisitors(scene) {
   visitorList.replaceChildren();
   if (scene.visitors.length === 0) {
     const empty = document.createElement("p");
     empty.className = "hosted-note";
     empty.textContent = "No active visitors right now.";
     visitorList.appendChild(empty);
+    return;
   }
 
   for (const visitor of scene.visitors) {
-    const row = document.createElement("article");
-    row.className = "visitor-row";
-    const visitorName = String(visitor.displayName || "").trim();
-    const visitorLabel = visitorName || `Visitor ${visitor.id}`;
-    const visitorMeta = visitorName ? `Visitor ${visitor.id} · ` : "";
-    row.innerHTML = `
-      <div>
-        <strong>${escapeHtml(visitorLabel)}</strong>
-        <span>${escapeHtml(visitorMeta)}${visitor.clientCount} tab${visitor.clientCount === 1 ? "" : "s"} connected</span>
-      </div>
-    `;
-
-    const kick = document.createElement("button");
-    kick.type = "button";
-    kick.textContent = "Kick";
-    kick.addEventListener("click", () => action("kickVisitor", { visitorId: visitor.id }));
-
-    const block = document.createElement("button");
-    block.type = "button";
-    block.textContent = "Block";
-    block.addEventListener("click", () => action("blockVisitor", { visitorId: visitor.id }));
-
-    row.append(kick, block);
-    visitorList.appendChild(row);
+    visitorList.appendChild(createVisitorRow(visitor));
   }
+}
+
+function render(data) {
+  currentSite = data.site;
+  const scene = data.scene;
+
+  renderSiteMeta(currentSite, scene);
+  setValueIfIdle(snippetEl, data.embedSnippet);
+  setValueIfIdle(styleSnippetEl, data.styleSnippet);
+  renderSceneSummary(currentSite.sceneConfig);
+  renderVisitors(scene);
+
+  chatDisabledInput.checked = currentSite.chatDisabled;
+  disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
 
   if (currentSite.disabled) {
-    setStatus("Site is disabled. Visitors cannot connect.", true);
+    setStatus(statusEl, "Site is disabled. Visitors cannot connect.", true);
   } else if (currentSite.verifiedAt) {
-    setStatus("Installed and active. Updates automatically.");
+    setStatus(statusEl, "Installed and active. Updates automatically.");
   } else {
-    setStatus("Waiting for the snippet to load from your site. Updates automatically.");
+    setStatus(statusEl, "Waiting for the snippet to load from your site. Updates automatically.");
   }
 }
 
@@ -236,7 +224,7 @@ async function loadSite({ silent = false } = {}) {
       return;
     }
     if (!silent) {
-      setStatus(result.body.error || "Could not load this site.", true);
+      setStatus(statusEl, result.body.error || "Could not load this site.", true);
     }
     return;
   }
@@ -249,34 +237,17 @@ async function loadSite({ silent = false } = {}) {
 async function action(name, data = {}) {
   const result = await api("/api/admin/action", { siteKey, adminToken, action: name, ...data });
   if (!result.ok) {
-    setStatus(result.body.error || "Action failed.", true);
+    setStatus(statusEl, result.body.error || "Action failed.", true);
     return;
   }
 
   await loadSite();
 }
 
-function bindCopy(button, source, doneLabel) {
-  const originalLabel = button.textContent;
-  button.addEventListener("click", async () => {
-    try {
-      await navigator.clipboard.writeText(source.value);
-    } catch {
-      source.focus();
-      source.select();
-      return;
-    }
-    button.textContent = doneLabel;
-    setTimeout(() => {
-      button.textContent = originalLabel;
-    }, 1200);
-  });
-}
-
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginSubmitButton.disabled = true;
-  setLoginStatus("Checking token...");
+  setStatus(loginStatusEl, "Checking token...", false, { hideWhenEmpty: true });
 
   adminToken = loginTokenEl.value.trim();
   siteKey = "";
@@ -285,7 +256,7 @@ loginForm.addEventListener("submit", async (event) => {
   loginSubmitButton.disabled = false;
   if (!adminView.hidden) {
     loginForm.reset();
-    setLoginStatus("");
+    setStatus(loginStatusEl, "", false, { hideWhenEmpty: true });
   }
 });
 
@@ -294,8 +265,8 @@ signOutButton.addEventListener("click", () => {
   showLogin("Signed out. Your token was forgotten on this device.");
 });
 
-bindCopy(copyButton, snippetEl, "Copied");
-bindCopy(copyStyleButton, styleSnippetEl, "Copied");
+bindCopy(copyButton, () => snippetEl.value, { fallbackTarget: snippetEl });
+bindCopy(copyStyleButton, () => styleSnippetEl.value, { fallbackTarget: styleSnippetEl });
 
 chatDisabledInput.addEventListener("change", () => action("setChatDisabled", { disabled: chatDisabledInput.checked }));
 clearMessagesButton.addEventListener("click", () => action("clearMessages"));

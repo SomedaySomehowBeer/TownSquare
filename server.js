@@ -1682,20 +1682,7 @@ wss.on("close", () => {
 });
 
 async function startServer() {
-  const siteConfig = await import("./public/site-config.mjs");
-  DEFAULT_SITE_SCENE_CONFIG = siteConfig.DEFAULT_SCENE_CONFIG;
-  DEFAULT_SITE_STYLE = siteConfig.DEFAULT_SITE_STYLE;
-  sanitizeSceneConfig = siteConfig.sanitizeSceneConfig;
-  sanitizeSiteStyle = siteConfig.sanitizeSiteStyle;
-  buildSceneProps = siteConfig.buildSceneProps;
-  buildBirdPerches = siteConfig.buildBirdPerches;
-  buildSiteCss = siteConfig.buildSiteCss;
-
-  const { PROPS } = await import("./public/scene-props.mjs");
-  PROPS_BY_ID = new Map(PROPS.map((prop) => [prop.id, prop]));
-
-  const birdPerches = await import("./public/bird-perches.mjs");
-  BIRD_PERCHES = birdPerches.BIRD_PERCHES;
+  await loadSharedModules();
 
   const shared = await import("./public/shared-constants.mjs");
   MIN_X = shared.MIN_X;
@@ -1710,6 +1697,25 @@ async function startServer() {
   server.listen(PORT, HOST, () => {
     console.log(`TownSquare server running at http://${HOST}:${PORT}`);
   });
+}
+
+async function loadSharedModules() {
+  const [siteConfig, scenePropsModule, birdPerchesModule] = await Promise.all([
+    import("./public/site-config.mjs"),
+    import("./public/scene-props.mjs"),
+    import("./public/bird-perches.mjs"),
+  ]);
+
+  DEFAULT_SITE_SCENE_CONFIG = siteConfig.DEFAULT_SCENE_CONFIG;
+  DEFAULT_SITE_STYLE = siteConfig.DEFAULT_SITE_STYLE;
+  sanitizeSceneConfig = siteConfig.sanitizeSceneConfig;
+  sanitizeSiteStyle = siteConfig.sanitizeSiteStyle;
+  buildSceneProps = siteConfig.buildSceneProps;
+  buildBirdPerches = siteConfig.buildBirdPerches;
+  buildSiteCss = siteConfig.buildSiteCss;
+
+  PROPS_BY_ID = new Map(scenePropsModule.PROPS.map((prop) => [prop.id, prop]));
+  BIRD_PERCHES = birdPerchesModule.BIRD_PERCHES;
 }
 
 startServer().catch((error) => {
