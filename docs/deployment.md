@@ -75,6 +75,36 @@ This is the core self-hosting contract:
 - TownSquare owns what happens inside the widget
 - the widget connects back to the TownSquare server origin you provide
 
+### Scene props and style overrides
+
+For a user-facing explanation of what each customization does and where it lives, see [`customization.md`](customization.md).
+
+
+The widget mount API also accepts site-level scene and style settings:
+
+```js
+mountTownSquare(document.getElementById("townsquare-root"), {
+  serverOrigin: "https://your-townsquare-host",
+  scene: {
+    benches: 2,
+    trees: 1,
+    lamps: 1,
+    branches: 4,
+  },
+  style: {
+    scene: "#e6dfd3",
+    page: "#f5efe7",
+    surface: "#fffaf6",
+    ink: "#2d2926",
+    accent: "#9d5c2f",
+  },
+});
+```
+
+Current scene keys: `benches`, `trees`, `lamps`, `branches`.
+Current style keys: `scene`, `page`, `surface`, `ink`, `accent`, plus `other` and `ground` for deeper overrides.
+The shared sanitizing/build logic lives in `public/site-config.mjs`, which is used by both the widget and the server so hosted sites stay deterministic.
+
 ### Theme
 
 By default the widget follows the OS/browser `prefers-color-scheme` setting.
@@ -105,7 +135,10 @@ https://your-townsquare-host/register
 
 The hosted flow does not require an owner account:
 - the site owner enters a website URL
+- the site owner chooses prop counts and color overrides
+- the registration page shows a live preview using the same widget runtime
 - TownSquare issues a public `siteKey` in the embed snippet
+- TownSquare issues a generated CSS snippet matching the chosen style
 - TownSquare issues a private admin token and admin link
 - the site is marked seen/verified when the snippet connects from the registered origin
 
@@ -117,6 +150,8 @@ Only an admin token hash is stored in the site registry.
 
 The admin page supports the first hosted operations:
 - view install status and active visitors
+- copy the current embed snippet and generated CSS
+- inspect the current scene prop counts
 - kick/block active visitors
 - disable chat
 - disable the site
