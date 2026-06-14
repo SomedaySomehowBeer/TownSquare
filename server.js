@@ -48,6 +48,7 @@ const TRUSTED_PROXY_IPS = new Set(
     .split(",").map((s) => s.trim()).filter(Boolean),
 );
 const MAX_BROWSER_ID_LEN = 80;
+const MAX_BROWSER_SECRET_LEN = 64;
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
 const MAX_READING_URL_LEN = 240;
 const MAX_USER_AGENT_LEN = 240;
@@ -238,11 +239,12 @@ function syncClientSceneProps(client, message) {
   client.propsById = new Map(props.map((prop) => [prop.id, prop]));
 }
 
-/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,lastIp:string,lastUserAgent:string,lastOrigin:string,suspiciousReasons:Array<string>,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,browserSecret:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,lastIp:string,lastUserAgent:string,lastOrigin:string,suspiciousReasons:Array<string>,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
     browserId,
+    browserSecret: crypto.randomBytes(32).toString("hex"),
     x,
     pose: null,
     propId: null,
@@ -278,6 +280,11 @@ function clampPosition(x) {
 function sanitizeBrowserId(browserId) {
   if (typeof browserId !== "string") return "";
   return browserId.slice(0, MAX_BROWSER_ID_LEN).replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
+function sanitizeBrowserSecret(browserSecret) {
+  if (typeof browserSecret !== "string") return "";
+  return browserSecret.slice(0, MAX_BROWSER_SECRET_LEN).replace(/[^a-f0-9]/gi, "");
 }
 
 function sanitizeMessage(text) {
@@ -1010,7 +1017,6 @@ function send(ws, message) {
 function snapshotIdentity(identity) {
   return {
     id: identity.id,
-    browserId: identity.browserId,
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
@@ -1134,11 +1140,29 @@ function emitIdentityState(identity, options = {}) {
   broadcast(scene, message, { exceptConnectionId });
 }
 
-function getOrCreateIdentity(scene, browserId, fallbackX, connectionId) {
-  const key = sanitizeBrowserId(browserId) || `connection-${connectionId}`;
+function createEphemeralIdentity(scene, fallbackX, connectionId) {
+  const key = `connection-${connectionId}`;
   const existing = scene.identityByBrowser.get(key);
   if (existing) {
     return existing;
+  }
+
+  const identity = createIdentity(scene.nextIdentityId++, key, fallbackX);
+  identity.scene = scene;
+  scene.identities.set(identity.id, identity);
+  scene.identityByBrowser.set(key, identity);
+  return identity;
+}
+
+function getOrCreateIdentity(scene, browserId, browserSecret, fallbackX, connectionId) {
+  const key = sanitizeBrowserId(browserId) || `connection-${connectionId}`;
+  const existing = scene.identityByBrowser.get(key);
+  if (existing) {
+    const cleanSecret = sanitizeBrowserSecret(browserSecret);
+    if (cleanSecret && cleanSecret === existing.browserSecret) {
+      return existing;
+    }
+    return createEphemeralIdentity(scene, fallbackX, connectionId);
   }
 
   const identity = createIdentity(scene.nextIdentityId++, key, fallbackX);
@@ -1529,7 +1553,7 @@ function handleInit(client, message) {
     return;
   }
 
-  const identity = getOrCreateIdentity(scene, message.browserId, fallbackX, client.connectionId);
+  const identity = getOrCreateIdentity(scene, message.browserId, message.browserSecret, fallbackX, client.connectionId);
   clearLeaveTimer(identity);
   const previousReadingLabel = identity.readingLabel;
   const previousReadingUrl = identity.readingUrl;
@@ -1560,6 +1584,7 @@ function handleInit(client, message) {
   send(client.ws, {
     type: "hello",
     id: identity.id,
+    browserSecret: identity.browserSecret,
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
