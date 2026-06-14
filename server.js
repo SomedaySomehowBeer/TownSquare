@@ -198,13 +198,14 @@ const MESSAGE_HANDLERS = {
   say: handleSay,
 };
 
-/** @returns {{connectionId:number,ws:any,identity:any,joined:boolean,readingActive:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
+/** @returns {{connectionId:number,ws:any,scene:any,site:any,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
 function createClient(connectionId, ws, scene, site) {
   return {
     connectionId,
     ws,
     scene,
     site,
+    propsById: scene.propsById,
     identity: null,
     joined: false,
     readingActive: false,
@@ -212,6 +213,17 @@ function createClient(connectionId, ws, scene, site) {
     lastActionAt: 0,
     lastChatAt: 0,
   };
+}
+
+function syncClientSceneProps(client, message) {
+  if (client.site) {
+    client.propsById = client.scene.propsById;
+    return;
+  }
+
+  const config = isPlainObject(message.sceneConfig) ? message.sceneConfig : DEFAULT_SITE_SCENE_CONFIG;
+  const props = buildSceneProps(sanitizeSceneConfig(config));
+  client.propsById = new Map(props.map((prop) => [prop.id, prop]));
 }
 
 /** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
@@ -1334,6 +1346,8 @@ const wss = new WebSocketServer({
 function handleInit(client, message) {
   if (client.joined) return;
 
+  syncClientSceneProps(client, message);
+
   const nextX = clampPosition(message.x);
   const fallbackX = nextX ?? randomSpawnX();
   const { scene, site } = client;
@@ -1515,7 +1529,7 @@ function handleReading(client, message) {
 
 function handleSettle(client, message) {
   if (!client.identity) return;
-  const prop = client.scene.propsById.get(message.propId);
+  const prop = client.propsById.get(message.propId);
   if (!prop?.pose) return;
 
   const identity = client.identity;

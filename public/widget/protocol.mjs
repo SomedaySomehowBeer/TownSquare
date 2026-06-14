@@ -68,7 +68,7 @@ export function wireSocket(ctx) {
 
     socket.addEventListener("open", () => {
       reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
-      socket.send(JSON.stringify({
+      const init = {
         type: "init",
         browserId,
         x: self.x,
@@ -77,7 +77,12 @@ export function wireSocket(ctx) {
         readingLabel: self.readingLabel,
         readingUrl: self.readingUrl,
         readingActive: self.readingActive,
-      }));
+      };
+      const siteKey = ctx.options.siteKey || ctx.root.dataset.townsquareSiteKey || "";
+      if (!siteKey && ctx.options.scene) {
+        init.sceneConfig = ctx.options.scene;
+      }
+      socket.send(JSON.stringify(init));
     });
 
     socket.addEventListener("error", () => {

@@ -16,7 +16,7 @@ function siteSocketUrl(siteKey) {
   return url.toString();
 }
 
-function connect({ x, browserId, siteKey = "", origin = "", displayName = "", color = "", readingLabel, readingUrl, readingActive }) {
+function connect({ x, browserId, siteKey = "", origin = "", displayName = "", color = "", readingLabel, readingUrl, readingActive, sceneConfig }) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(siteSocketUrl(siteKey), origin ? { headers: { Origin: origin } } : undefined);
     const seen = [];
@@ -26,6 +26,7 @@ function connect({ x, browserId, siteKey = "", origin = "", displayName = "", co
       if (typeof readingLabel === "string") init.readingLabel = readingLabel;
       if (typeof readingUrl === "string") init.readingUrl = readingUrl;
       if (typeof readingActive === "boolean") init.readingActive = readingActive;
+      if (sceneConfig) init.sceneConfig = sceneConfig;
       ws.send(JSON.stringify(init));
     });
 
@@ -607,6 +608,47 @@ async function main() {
     "first client did not observe different-browser leave",
     { timeout: 2500 },
   );
+
+  const previewBenchX = 0.31;
+  const preview = await connect({
+    x: previewBenchX,
+    browserId: "preview-custom-scene",
+    sceneConfig: {
+      benches: 1,
+      trees: 0,
+      lamps: 0,
+      branches: 0,
+      benchXs: [previewBenchX],
+    },
+  });
+  preview.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
+  const previewSeat = await waitFor(
+    () => findLast(preview.seen, (message) => (
+      message.type === "move"
+      && message.id === preview.id
+      && message.pose === "sitting"
+      && message.propId === "bench"
+    )),
+    "preview settle did not use the client scene config bench position",
+  );
+  assert(Math.abs(previewSeat.x - (previewBenchX - 0.01)) < 0.005, "preview bench seat was not snapped to the custom bench");
+
+  const defaultSceneWithoutConfig = await connect({
+    x: previewBenchX,
+    browserId: "preview-default-scene",
+  });
+  defaultSceneWithoutConfig.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
+  await delay(200);
+  assert(
+    !defaultSceneWithoutConfig.seen.some((message) => (
+      message.type === "move"
+      && message.id === defaultSceneWithoutConfig.id
+      && message.pose === "sitting"
+    )),
+    "default-scene preview should not settle onto a bench placed outside the shared default layout",
+  );
+  defaultSceneWithoutConfig.ws.close();
+  preview.ws.close();
 
   const hostedA = await createSite("Smoke A");
   const hostedB = await createSite("Smoke B");
