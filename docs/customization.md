@@ -52,9 +52,9 @@ In plain language: the snippet says *put my TownSquare here and load this square
 The generated CSS block is the style layer you paste into your stylesheet.
 
 It mainly controls:
-- scene color
-- page/background color
-- surface color
+- background color
+- ground color
+- buttons and tags color
 - text/ink color
 - accent color
 - a few deeper color tokens
@@ -119,18 +119,18 @@ The goal is just: *pick how many props you want, then place each one along the s
 ## 2) Style setup
 These settings change the color palette.
 
-### Scene
-The main scene color.
+### Background
+The main background color inside the square.
 
-This affects the core visual field inside the square.
+This affects the sky area above the ground line.
 
-### Page
-The page-level background color around the square.
+### Ground
+The ground strip along the bottom of the square.
 
-This helps TownSquare sit more naturally inside your site.
+This is the band where characters walk and props sit.
 
-### Surface
-The surface color used for panels, plates, and softer UI areas.
+### Buttons and Tags
+The color used for control buttons, nameplates, chat bubbles, and other tagged UI.
 
 ### Ink
 The main dark/text color.

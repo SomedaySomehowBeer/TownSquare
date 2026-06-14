@@ -87,11 +87,17 @@ function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(form)) {
 
 function mountPreview() {
   if (!(previewRoot instanceof HTMLElement)) return;
-  previewHandle?.destroy();
+  const scene = readSceneConfigFromForm(form);
+  const style = readStyleConfigFromForm(form);
+  if (previewHandle) {
+    previewHandle.updateConfig({ scene, style });
+    return;
+  }
   previewHandle = mountTownSquare(previewRoot, {
     serverOrigin: window.location.origin,
-    scene: readSceneConfigFromForm(form),
-    style: readStyleConfigFromForm(form),
+    scene,
+    style,
+    preview: true,
     readingLabel: "Registration preview",
     readingUrl: window.location.href,
   });

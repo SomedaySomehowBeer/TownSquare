@@ -69,13 +69,13 @@ export const SCENE_FIELDS = Object.freeze([
 ]);
 
 export const STYLE_FIELDS = Object.freeze([
-  Object.freeze({ key: "scene", label: "Scene", inputName: "style-scene", defaultValue: "#e4e2dd", cssVar: "--scene" }),
-  Object.freeze({ key: "page", label: "Page", inputName: "style-page", defaultValue: "#efede9", cssVar: "--page" }),
-  Object.freeze({ key: "surface", label: "Surface", inputName: "style-surface", defaultValue: "#fdf8f4", cssVar: "--surface" }),
+  Object.freeze({ key: "scene", label: "Background", inputName: "style-scene", defaultValue: "#e4e2dd", cssVar: "--scene" }),
+  Object.freeze({ key: "page", label: "Ground", inputName: "style-page", defaultValue: "#efede9", cssVar: "--page" }),
+  Object.freeze({ key: "surface", label: "Buttons and Tags", inputName: "style-surface", defaultValue: "#fdf8f4", cssVar: "--surface" }),
   Object.freeze({ key: "ink", label: "Ink", inputName: "style-ink", defaultValue: "#2a2926", cssVar: "--ink" }),
   Object.freeze({ key: "accent", label: "Accent", inputName: "style-accent", defaultValue: "#c8641f", cssVar: "--you" }),
   Object.freeze({ key: "other", label: "Other", inputName: "style-other", defaultValue: "#26241f", cssVar: "--other" }),
-  Object.freeze({ key: "ground", label: "Ground", inputName: "style-ground", defaultValue: "rgba(42, 41, 38, 0.16)", cssVar: "--ground" }),
+  Object.freeze({ key: "ground", label: "Ground line", inputName: "style-ground", defaultValue: "rgba(42, 41, 38, 0.16)", cssVar: "--ground" }),
 ]);
 
 const SCENE_FIELD_BY_KEY = new Map(SCENE_FIELDS.map((field) => [field.key, field]));
@@ -448,6 +448,7 @@ export function applySiteStyle(root, style = DEFAULT_SITE_STYLE) {
   for (const [key, cssVar] of STYLE_VAR_MAP) {
     root.style.setProperty(cssVar, next[key]);
   }
+  root.style.setProperty("--scene-edge", "color-mix(in oklab, var(--scene) 88%, var(--page) 12%)");
   root.style.setProperty("--you-deep", next.accent);
   root.style.setProperty("--text", next.ink);
   root.style.setProperty("--muted", next.ink);
@@ -459,6 +460,7 @@ export function buildSiteCss(style = DEFAULT_SITE_STYLE, selector = "#townsquare
   for (const [key, cssVar] of STYLE_VAR_MAP) {
     lines.push(`  ${cssVar}: ${next[key]};`);
   }
+  lines.push("  --scene-edge: color-mix(in oklab, var(--scene) 88%, var(--page) 12%);");
   lines.push("  --you-deep: var(--you);");
   lines.push("  --text: var(--ink);");
   lines.push("  --muted: var(--ink);");
