@@ -15,7 +15,7 @@ It covers:
 
 There are three parts to customization:
 
-1. **Scene setup** — how many benches, trees, lamps, and branches the square has.
+1. **Scene setup** — how many benches, trees, lamps, and branches the square has, and where each one sits on the X axis.
 2. **Style setup** — the main colors TownSquare uses.
 3. **Placement on your site** — where the TownSquare appears in your page layout.
 
@@ -64,7 +64,7 @@ In plain language: the CSS says *make the TownSquare look like this*.
 ## What you can change today
 
 ## 1) Scene setup
-These settings change what quiet props exist in the square.
+These settings change what quiet props exist in the square and where each one sits from left to right.
 
 ### Benches
 How many benches appear.
@@ -98,6 +98,23 @@ What this changes:
 ### Practical note on scene setup
 Scene setup changes the shape of the square, not just its styling.
 So it affects both the look and the way the scene reads.
+
+### Manual prop placement
+For each bench, tree, lamp, or branch, TownSquare also lets you set an **X position**.
+
+That X value is a simple left-to-right percentage:
+- `0` = far left
+- `50` = middle
+- `100` = far right
+
+So if you have 4 benches, you can set 4 separate bench X positions.
+
+This is intentionally simple:
+- no drag-and-drop editor yet
+- no free Y positioning yet
+- no rotation/orientation controls yet
+
+The goal is just: *pick how many props you want, then place each one along the square from left to right*.
 
 ## 2) Style setup
 These settings change the color palette.
@@ -160,6 +177,7 @@ It lets you:
 - enter your website URL
 - optionally set a site name
 - choose scene prop counts
+- choose an X position for each prop
 - choose the main style colors
 - preview the square before creating it
 - get your embed snippet
@@ -177,6 +195,7 @@ It lets you:
 - see whether your site has connected yet
 - see active visitors
 - edit scene setup
+- edit each prop's X position
 - edit style setup
 - preview changes before saving
 - save changes
@@ -193,6 +212,7 @@ In plain language: registration is for first setup, admin is for ongoing control
 
 You can safely:
 - change scene counts in admin
+- change prop X positions in admin
 - change colors in admin
 - copy the refreshed snippet again
 - copy the refreshed CSS again

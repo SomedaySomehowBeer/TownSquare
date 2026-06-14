@@ -48,7 +48,16 @@ async function createSite(name) {
     body: JSON.stringify({
       name,
       origin: HTTP_ORIGIN,
-      sceneConfig: { benches: 1, trees: 2, lamps: 1, branches: 3 },
+      sceneConfig: {
+        benches: 1,
+        benchXs: [0.14],
+        trees: 2,
+        treeXs: [0.33, 0.81],
+        lamps: 1,
+        lampXs: [0.62],
+        branches: 3,
+        branchXs: [0.24, 0.51, 0.77],
+      },
       styleConfig: {
         scene: "#e6dfd3",
         page: "#f5efe7",
@@ -64,6 +73,8 @@ async function createSite(name) {
   assert(body.adminToken, "registered site did not include an admin token");
   assert(body.styleSnippet.includes("#townsquare-root"), "registered site did not include a style snippet");
   assert(body.site.sceneConfig?.branches === 3, "registered site did not persist scene config");
+  assert(body.site.sceneConfig?.benchXs?.[0] === 0.14, "registered site did not persist bench placement");
+  assert(body.site.sceneConfig?.treeXs?.[1] === 0.81, "registered site did not persist tree placement");
   assert(body.site.styleConfig?.accent === "#9d5c2f", "registered site did not persist style config");
   return body;
 }
@@ -104,7 +115,16 @@ async function adminActionApi(siteKey, adminToken, action, payload = {}) {
 
 async function assertAdminCustomizationCanBeUpdated(hostedSite) {
   const updated = await adminActionApi(hostedSite.site.siteKey, hostedSite.adminToken, "updateCustomization", {
-    sceneConfig: { benches: 4, trees: 1, lamps: 2, branches: 4 },
+    sceneConfig: {
+      benches: 4,
+      benchXs: [0.12, 0.31, 0.68, 0.9],
+      trees: 1,
+      treeXs: [0.44],
+      lamps: 2,
+      lampXs: [0.2, 0.8],
+      branches: 4,
+      branchXs: [0.22, 0.4, 0.58, 0.76],
+    },
     styleConfig: {
       scene: "#d9d0c5",
       page: "#f6efe7",
@@ -116,10 +136,13 @@ async function assertAdminCustomizationCanBeUpdated(hostedSite) {
 
   assert(updated.site.sceneConfig?.benches === 4, "admin customization did not update scene config");
   assert(updated.site.sceneConfig?.branches === 4, "admin customization did not update branch count");
+  assert(updated.site.sceneConfig?.benchXs?.[2] === 0.68, "admin customization did not update bench placement");
+  assert(updated.site.sceneConfig?.lampXs?.[1] === 0.8, "admin customization did not update lamp placement");
   assert(updated.site.styleConfig?.accent === "#336699", "admin customization did not update accent color");
 
   const refreshed = await adminSiteApi(hostedSite.site.siteKey, hostedSite.adminToken);
   assert(refreshed.embedSnippet.includes('"benches":4'), "refreshed embed snippet did not include updated benches");
+  assert(refreshed.embedSnippet.includes('"benchXs":[0.12,0.31,0.68,0.9]'), "refreshed embed snippet did not include updated bench positions");
   assert(refreshed.embedSnippet.includes('"branches":4'), "refreshed embed snippet did not include updated branches");
   assert(refreshed.styleSnippet.includes("#336699"), "refreshed style snippet did not include updated accent color");
 }

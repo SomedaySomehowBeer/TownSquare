@@ -625,6 +625,34 @@ body {
   margin-top: 12px;
 }
 
+.hosted-position-groups {
+  display: grid;
+  gap: 12px;
+  margin-top: 14px;
+}
+
+.hosted-position-group {
+  padding: 12px;
+  border: 1px solid var(--hair-2);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+
+.hosted-position-group-head {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.hosted-position-group-head strong {
+  font-size: 0.88rem;
+}
+
+.hosted-position-group-head .hosted-note {
+  margin: 0;
+  font-size: 0.88rem;
+}
+
 .hosted-meta dl {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -9,12 +9,63 @@
  */
 
 const SAFE_COLOR_RE = /^[#(),.%\sA-Za-z0-9-]+$/;
+const POSITION_INPUT_MIN = 0;
+const POSITION_INPUT_MAX = 100;
+const POSITION_INPUT_STEP = 1;
 
 export const SCENE_FIELDS = Object.freeze([
-  Object.freeze({ key: "benches", label: "Benches", inputName: "scene-benches", min: 0, max: 6, defaultValue: 2 }),
-  Object.freeze({ key: "trees", label: "Trees", inputName: "scene-trees", min: 0, max: 6, defaultValue: 1 }),
-  Object.freeze({ key: "lamps", label: "Lamps", inputName: "scene-lamps", min: 0, max: 4, defaultValue: 1 }),
-  Object.freeze({ key: "branches", label: "Branches", inputName: "scene-branches", min: 0, max: 8, defaultValue: 0 }),
+  Object.freeze({
+    key: "benches",
+    kind: "bench",
+    itemLabel: "Bench",
+    label: "Benches",
+    inputName: "scene-benches",
+    positionsKey: "benchXs",
+    min: 0,
+    max: 6,
+    defaultValue: 2,
+    start: 0.08,
+    end: 0.86,
+  }),
+  Object.freeze({
+    key: "trees",
+    kind: "tree",
+    itemLabel: "Tree",
+    label: "Trees",
+    inputName: "scene-trees",
+    positionsKey: "treeXs",
+    min: 0,
+    max: 6,
+    defaultValue: 1,
+    start: 0.18,
+    end: 0.9,
+  }),
+  Object.freeze({
+    key: "lamps",
+    kind: "lamp",
+    itemLabel: "Lamp",
+    label: "Lamps",
+    inputName: "scene-lamps",
+    positionsKey: "lampXs",
+    min: 0,
+    max: 4,
+    defaultValue: 1,
+    start: 0.16,
+    end: 0.84,
+  }),
+  Object.freeze({
+    key: "branches",
+    kind: "branch",
+    itemLabel: "Branch",
+    label: "Branches",
+    inputName: "scene-branches",
+    positionsKey: "branchXs",
+    min: 0,
+    max: 8,
+    defaultValue: 0,
+    start: 0.2,
+    end: 0.8,
+  }),
 ]);
 
 export const STYLE_FIELDS = Object.freeze([
@@ -27,16 +78,8 @@ export const STYLE_FIELDS = Object.freeze([
   Object.freeze({ key: "ground", label: "Ground", inputName: "style-ground", defaultValue: "rgba(42, 41, 38, 0.16)", cssVar: "--ground" }),
 ]);
 
-export const DEFAULT_SCENE_CONFIG = Object.freeze(
-  Object.fromEntries(SCENE_FIELDS.map((field) => [field.key, field.defaultValue])),
-);
-
-export const DEFAULT_SITE_STYLE = Object.freeze(
-  Object.fromEntries(STYLE_FIELDS.map((field) => [field.key, field.defaultValue])),
-);
-
+const SCENE_FIELD_BY_KEY = new Map(SCENE_FIELDS.map((field) => [field.key, field]));
 const STYLE_VAR_MAP = new Map(STYLE_FIELDS.map((field) => [field.key, field.cssVar]));
-
 
 const POSITION_PRESETS = Object.freeze({
   benches: Object.freeze([0.2, 0.72, 0.46, 0.08, 0.58, 0.86]),
@@ -44,6 +87,12 @@ const POSITION_PRESETS = Object.freeze({
   lamps: Object.freeze([0.12, 0.88, 0.36, 0.64]),
   branches: Object.freeze([0.22, 0.3, 0.38, 0.46, 0.54, 0.62, 0.7, 0.78]),
 });
+
+export const DEFAULT_SCENE_CONFIG = Object.freeze(buildDefaultSceneConfig());
+
+export const DEFAULT_SITE_STYLE = Object.freeze(
+  Object.fromEntries(STYLE_FIELDS.map((field) => [field.key, field.defaultValue])),
+);
 
 const BENCH_SVG = `
   <svg viewBox="0 0 50 18" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
@@ -99,26 +148,63 @@ const BRANCH_SVG = `
  * @property {string} svg
  */
 
+function buildDefaultSceneConfig() {
+  const next = {};
+  for (const field of SCENE_FIELDS) {
+    next[field.key] = field.defaultValue;
+    next[field.positionsKey] = Object.freeze(selectDefaultPositions(field, field.defaultValue));
+  }
+  return next;
+}
+
 function clampInt(value, min, max, fallback) {
   const parsed = Number.parseInt(String(value ?? ""), 10);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.max(min, Math.min(max, parsed));
 }
 
-function evenPositions(count, start, end) {
-  if (count <= 0) return [];
-  if (count === 1) return [(start + end) / 2];
-  const step = (end - start) / (count - 1);
-  return Array.from({ length: count }, (_, index) => Number((start + step * index).toFixed(4)));
+function clampNumber(value, min, max, fallback) {
+  const parsed = Number.parseFloat(String(value ?? ""));
+  if (!Number.isFinite(parsed)) return fallback;
+  return Math.max(min, Math.min(max, parsed));
 }
 
-function selectPositions(kind, count, start, end) {
+function evenPositions(count, start, end) {
   if (count <= 0) return [];
-  const preset = POSITION_PRESETS[kind] || [];
-  if (count <= preset.length) return preset.slice(0, count);
+  if (count === 1) return [roundPosition((start + end) / 2)];
+  const step = (end - start) / (count - 1);
+  return Array.from({ length: count }, (_, index) => roundPosition(start + step * index));
+}
 
-  const extra = evenPositions(count - preset.length, start, end).filter((x) => !preset.includes(x));
-  return [...preset, ...extra].slice(0, count);
+function selectDefaultPositions(field, count) {
+  if (count <= 0) return [];
+  const preset = POSITION_PRESETS[field.key] || [];
+  if (count <= preset.length) return preset.slice(0, count).map(roundPosition);
+
+  const extra = evenPositions(count - preset.length, field.start, field.end)
+    .filter((x) => !preset.includes(x));
+  return [...preset, ...extra].slice(0, count).map(roundPosition);
+}
+
+function sanitizePositionList(field, input, count) {
+  const fallback = selectDefaultPositions(field, count);
+  const raw = Array.isArray(input) ? input : [];
+  return Array.from({ length: count }, (_, index) => roundPosition(
+    clampNumber(raw[index], 0, 1, fallback[index] ?? fallback.at(-1) ?? 0.5),
+  ));
+}
+
+function roundPosition(value) {
+  return Number(Number(value).toFixed(4));
+}
+
+function roundPercent(value) {
+  return Number(Number(value).toFixed(1));
+}
+
+function formatPercent(value) {
+  const rounded = roundPercent(value * 100);
+  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
 }
 
 function uniqueId(kind, index) {
@@ -180,14 +266,27 @@ function createBranch(index, x) {
   };
 }
 
+export function getScenePositionInputName(sceneKey, index) {
+  const field = SCENE_FIELD_BY_KEY.get(sceneKey);
+  if (!field) throw new Error(`Unknown scene field: ${sceneKey}`);
+  return `scene-${field.kind}-x-${index + 1}`;
+}
+
+export function isSceneCountInputName(name = "") {
+  return SCENE_FIELDS.some((field) => field.inputName === name);
+}
+
 export function sanitizeSceneConfig(input = {}) {
   const base = isPlainObject(input) ? input : {};
-  return Object.fromEntries(
-    SCENE_FIELDS.map((field) => [
-      field.key,
-      clampInt(base[field.key], field.min, field.max, field.defaultValue),
-    ]),
-  );
+  const next = {};
+
+  for (const field of SCENE_FIELDS) {
+    const count = clampInt(base[field.key], field.min, field.max, field.defaultValue);
+    next[field.key] = count;
+    next[field.positionsKey] = sanitizePositionList(field, base[field.positionsKey], count);
+  }
+
+  return next;
 }
 
 export function sanitizeSiteStyle(input = {}) {
@@ -202,9 +301,25 @@ export function sanitizeSiteStyle(input = {}) {
 
 export function readSceneConfigFromForm(form) {
   const formData = new FormData(form);
-  return Object.fromEntries(
-    SCENE_FIELDS.map((field) => [field.key, Number(formData.get(field.inputName) || 0)]),
-  );
+  const next = {};
+
+  for (const field of SCENE_FIELDS) {
+    const count = clampInt(formData.get(field.inputName), field.min, field.max, field.defaultValue);
+    const fallbackPositions = selectDefaultPositions(field, count);
+    next[field.key] = count;
+    next[field.positionsKey] = Array.from({ length: count }, (_, index) => {
+      const fallbackPercent = (fallbackPositions[index] ?? 0.5) * 100;
+      const percent = clampNumber(
+        formData.get(getScenePositionInputName(field.key, index)),
+        POSITION_INPUT_MIN,
+        POSITION_INPUT_MAX,
+        fallbackPercent,
+      );
+      return roundPosition(percent / 100);
+    });
+  }
+
+  return next;
 }
 
 export function readStyleConfigFromForm(form) {
@@ -220,6 +335,14 @@ export function applyConfigToForm(form, config = {}) {
     if (input && "value" in input) {
       input.value = String(config[field.key] ?? field.defaultValue);
     }
+
+    const positions = Array.isArray(config[field.positionsKey]) ? config[field.positionsKey] : [];
+    positions.forEach((x, index) => {
+      const positionInput = form.elements.namedItem(getScenePositionInputName(field.key, index));
+      if (positionInput && "value" in positionInput) {
+        positionInput.value = String(roundPercent(x * 100));
+      }
+    });
   }
 
   for (const field of STYLE_FIELDS) {
@@ -230,25 +353,55 @@ export function applyConfigToForm(form, config = {}) {
   }
 }
 
+export function getScenePositionGroups(sceneConfig = {}) {
+  const scene = sanitizeSceneConfig(sceneConfig);
+  return SCENE_FIELDS.map((field) => ({
+    key: field.key,
+    label: `${field.label} placement`,
+    helper: `Each X value is a percentage from left (0) to right (100).`,
+    items: scene[field.positionsKey].map((x, index) => ({
+      key: `${field.kind}-${index + 1}`,
+      label: `${field.itemLabel} ${index + 1} X`,
+      inputName: getScenePositionInputName(field.key, index),
+      min: POSITION_INPUT_MIN,
+      max: POSITION_INPUT_MAX,
+      step: POSITION_INPUT_STEP,
+      value: roundPercent(x * 100),
+    })),
+  })).filter((group) => group.items.length > 0);
+}
+
 export function getSceneSummaryEntries(sceneConfig = {}) {
   const scene = sanitizeSceneConfig(sceneConfig);
-  return SCENE_FIELDS.map((field) => ({ label: field.label, value: scene[field.key] }));
+  const entries = [];
+
+  for (const field of SCENE_FIELDS) {
+    entries.push({ label: field.label, value: scene[field.key] });
+    if (scene[field.key] > 0) {
+      entries.push({
+        label: `${field.itemLabel} X positions`,
+        value: scene[field.positionsKey].map((x) => formatPercent(x)).join(", "),
+      });
+    }
+  }
+
+  return entries;
 }
 
 export function buildSceneProps(config = DEFAULT_SCENE_CONFIG) {
   const scene = sanitizeSceneConfig(config);
   const props = [];
 
-  selectPositions("lamps", scene.lamps, 0.16, 0.84).forEach((x, index) => {
+  scene.lampXs.forEach((x, index) => {
     props.push(createLamp(index, x));
   });
-  selectPositions("benches", scene.benches, 0.08, 0.86).forEach((x, index) => {
+  scene.benchXs.forEach((x, index) => {
     props.push(createBench(index, x));
   });
-  selectPositions("trees", scene.trees, 0.18, 0.9).forEach((x, index) => {
+  scene.treeXs.forEach((x, index) => {
     props.push(createTree(index, x));
   });
-  selectPositions("branches", scene.branches, 0.2, 0.8).forEach((x, index) => {
+  scene.branchXs.forEach((x, index) => {
     props.push(createBranch(index, x));
   });
 

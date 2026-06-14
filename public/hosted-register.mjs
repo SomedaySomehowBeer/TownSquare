@@ -1,5 +1,12 @@
 import { bindCopy, setStatus } from "./hosted-common.mjs";
-import { applyConfigToForm, readSceneConfigFromForm, readStyleConfigFromForm } from "./site-config.mjs";
+import {
+  applyConfigToForm,
+  getScenePositionGroups,
+  isSceneCountInputName,
+  readSceneConfigFromForm,
+  readStyleConfigFromForm,
+  sanitizeSceneConfig,
+} from "./site-config.mjs";
 import { mountTownSquare } from "./townsquare.mjs";
 
 const registerView = document.getElementById("register-view");
@@ -13,8 +20,70 @@ const styleSnippetEl = document.getElementById("style-snippet");
 const adminTokenEl = document.getElementById("admin-token");
 const adminLink = document.getElementById("admin-link");
 const previewRoot = document.getElementById("townsquare-root");
+const scenePositionFields = document.getElementById("scene-position-fields");
 
 let previewHandle = null;
+
+function renderScenePositionInputs(sceneConfig) {
+  if (!(scenePositionFields instanceof HTMLElement)) return;
+  const groups = getScenePositionGroups(sceneConfig);
+  scenePositionFields.replaceChildren();
+
+  if (groups.length === 0) {
+    const note = document.createElement("p");
+    note.className = "hosted-note";
+    note.textContent = "Add at least one prop above to place it manually.";
+    scenePositionFields.appendChild(note);
+    return;
+  }
+
+  for (const group of groups) {
+    const section = document.createElement("section");
+    section.className = "hosted-position-group";
+
+    const heading = document.createElement("div");
+    heading.className = "hosted-position-group-head";
+
+    const title = document.createElement("strong");
+    title.textContent = group.label;
+
+    const helper = document.createElement("p");
+    helper.className = "hosted-note";
+    helper.textContent = group.helper;
+
+    heading.append(title, helper);
+
+    const grid = document.createElement("div");
+    grid.className = "hosted-grid hosted-grid--compact";
+
+    for (const item of group.items) {
+      const label = document.createElement("label");
+      const text = document.createElement("span");
+      const input = document.createElement("input");
+
+      text.textContent = item.label;
+      input.name = item.inputName;
+      input.type = "number";
+      input.min = String(item.min);
+      input.max = String(item.max);
+      input.step = String(item.step);
+      input.value = String(item.value);
+      input.inputMode = "numeric";
+
+      label.append(text, input);
+      grid.appendChild(label);
+    }
+
+    section.append(heading, grid);
+    scenePositionFields.appendChild(section);
+  }
+}
+
+function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(form)) {
+  const next = sanitizeSceneConfig(sceneConfig);
+  renderScenePositionInputs(next);
+  applyConfigToForm(form, next);
+}
 
 function mountPreview() {
   if (!(previewRoot instanceof HTMLElement)) return;
@@ -42,7 +111,10 @@ function showSuccess(body) {
   window.scrollTo({ top: 0 });
 }
 
-form.addEventListener("input", () => {
+form.addEventListener("input", (event) => {
+  if (isSceneCountInputName(event.target?.name || "")) {
+    syncScenePositionInputs(readSceneConfigFromForm(form));
+  }
   mountPreview();
 });
 
@@ -83,4 +155,5 @@ bindCopy(document.getElementById("copy-token"), () => adminTokenEl.value, { fall
 bindCopy(document.getElementById("copy-snippet"), () => snippetEl.value, { fallbackTarget: snippetEl });
 bindCopy(document.getElementById("copy-style"), () => styleSnippetEl.value, { fallbackTarget: styleSnippetEl });
 applyConfigToForm(form);
+syncScenePositionInputs();
 mountPreview();
