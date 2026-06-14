@@ -686,6 +686,13 @@ async function main() {
   assert(siteAVisitor.hello.readingUrl === `${HTTP_ORIGIN}/docs/real-page`, "hosted site did not keep a same-origin reading URL");
   assert(siteBVisitor.hello.peers.length === 0, "hosted site B saw visitors from another site");
 
+  const cleanSiteAStats = await adminSiteApi(hostedA.site.siteKey, hostedA.adminToken);
+  assert(cleanSiteAStats.scene.visitors[0]?.color === "#5f6b73", "admin visitor stats did not include character color");
+  assert(cleanSiteAStats.scene.visitors[0]?.readingLabel === "real page", "admin visitor stats did not include reading label");
+  assert(cleanSiteAStats.scene.visitors[0]?.readingUrl === `${HTTP_ORIGIN}/docs/real-page`, "admin visitor stats did not include reading URL");
+  assert(cleanSiteAStats.scene.visitors[0]?.readingActive === true, "admin visitor stats did not include reading active state");
+  assert(cleanSiteAStats.scene.visitors[0]?.suspicious === false, "valid hosted visitor was marked suspicious");
+
   siteAVisitor.ws.send(JSON.stringify({
     type: "reading",
     readingLabel: "visiting your mom",
@@ -700,6 +707,23 @@ async function main() {
     )),
     "hosted site did not reject an off-site reading URL",
   );
+  const suspiciousSiteAStats = await adminSiteApi(hostedA.site.siteKey, hostedA.adminToken);
+  const suspiciousSiteAVisitor = suspiciousSiteAStats.scene.visitors[0];
+  assert(suspiciousSiteAVisitor?.suspicious === true, "rejected reading URL did not mark visitor suspicious");
+  assert(
+    suspiciousSiteAVisitor.suspiciousReasons.includes("off_origin_reading_url"),
+    "off-origin reading URL reason was not exposed to admin stats",
+  );
+  assert(suspiciousSiteAVisitor.lastOrigin === HTTP_ORIGIN, "visitor origin was not exposed to admin stats");
+
+  const suspiciousSiteBStats = await adminSiteApi(hostedB.site.siteKey, hostedB.adminToken);
+  const suspiciousSiteBVisitor = suspiciousSiteBStats.scene.visitors[0];
+  assert(suspiciousSiteBVisitor?.suspicious === true, "missing reading URL did not mark hosted visitor suspicious");
+  assert(
+    suspiciousSiteBVisitor.suspiciousReasons.includes("missing_reading_url"),
+    "missing reading URL reason was not exposed to admin stats",
+  );
+
   await assertServiceAdminShowsActiveVisitors(hostedA, hostedB);
 
   siteAVisitor.ws.close();

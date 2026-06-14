@@ -1128,16 +1128,109 @@ body {
   padding: 12px;
   border: 1px solid var(--hair-2);
   border-radius: 10px;
+  align-items: flex-start;
 }
 
-.visitor-row div {
+.visitor-row--suspicious {
+  border-color: color-mix(in oklab, #a8431f 44%, var(--hair-2));
+  background: color-mix(in oklab, #a8431f 5%, transparent);
+}
+
+.visitor-row__info {
   display: grid;
-  gap: 3px;
+  gap: 8px;
+  min-width: 0;
+}
+
+.visitor-row__title,
+.visitor-row__actions,
+.visitor-row__color,
+.visitor-row__reading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.visitor-row__title {
+  flex-wrap: wrap;
+}
+
+.visitor-row__actions {
+  flex: none;
+}
+
+.visitor-row__details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 12px;
+  min-width: 0;
 }
 
 .visitor-row span {
   color: var(--ink-soft);
   font-size: 0.86rem;
+}
+
+.visitor-row__badge,
+.visitor-row__state {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border-radius: 999px;
+  padding: 0 8px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  font-weight: 750;
+}
+
+.visitor-row__badge {
+  background: color-mix(in oklab, #a8431f 10%, var(--surface));
+  color: #a8431f;
+}
+
+.visitor-row__detail {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+}
+
+.visitor-row__detail-label {
+  flex: none;
+  color: var(--ink);
+  font-size: 0.78rem;
+}
+
+.visitor-row__detail span,
+.visitor-row__detail a,
+.visitor-row__detail code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.visitor-row__detail a {
+  color: var(--you-deep);
+  font-weight: 700;
+}
+
+.visitor-row__color {
+  min-width: 0;
+}
+
+.visitor-row__swatch {
+  flex: none;
+  width: 13px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--visitor-color);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, black 16%, transparent);
+}
+
+.visitor-row__color code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.78rem;
 }
 
 .service-sites {
@@ -1503,6 +1596,12 @@ body {
   .visitor-row {
     align-items: stretch;
     flex-direction: column;
+  }
+  .visitor-row__details {
+    grid-template-columns: 1fr;
+  }
+  .visitor-row__actions {
+    justify-content: flex-start;
   }
   .townsquare-host { margin-top: 32px; }
   .docs-shell { padding: 24px 14px 48px; gap: 8px; }

@@ -50,6 +50,7 @@ const TRUSTED_PROXY_IPS = new Set(
 const MAX_BROWSER_ID_LEN = 80;
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
 const MAX_READING_URL_LEN = 240;
+const MAX_USER_AGENT_LEN = 240;
 const MAX_SITE_NAME_LEN = 80;
 const MAX_EMAIL_LEN = 254;
 const MAX_ORIGIN_LEN = 240;
@@ -207,14 +208,16 @@ const MESSAGE_HANDLERS = {
   say: handleSay,
 };
 
-/** @returns {{connectionId:number,ws:any,scene:any,site:any,origin:string,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
-function createClient(connectionId, ws, scene, site, origin = "") {
+/** @returns {{connectionId:number,ws:any,scene:any,site:any,origin:string,ip:string,userAgent:string,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
+function createClient(connectionId, ws, scene, site, origin = "", ip = "", userAgent = "") {
   return {
     connectionId,
     ws,
     scene,
     site,
     origin,
+    ip,
+    userAgent: userAgent.slice(0, MAX_USER_AGENT_LEN),
     propsById: scene.propsById,
     identity: null,
     joined: false,
@@ -236,7 +239,7 @@ function syncClientSceneProps(client, message) {
   client.propsById = new Map(props.map((prop) => [prop.id, prop]));
 }
 
-/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,lastIp:string,lastUserAgent:string,lastOrigin:string,suspiciousReasons:Array<string>,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
@@ -249,6 +252,10 @@ function createIdentity(id, browserId, x) {
     readingLabel: "",
     readingUrl: "",
     readingActive: false,
+    lastIp: "",
+    lastUserAgent: "",
+    lastOrigin: "",
+    suspiciousReasons: [],
     clients: new Set(),
     joined: false,
     leaveTimer: null,
@@ -331,15 +338,76 @@ function readingUrlAllowedForClient(client, url) {
 
 function sanitizeReadingState(client, message, fallback = {}) {
   const hasReadingUrl = Object.hasOwn(message, "readingUrl");
-  const readingUrl = hasReadingUrl ? parseReadingUrl(message.readingUrl) : parseReadingUrl(fallback.readingUrl || "");
-  if (!readingUrl || !readingUrlAllowedForClient(client, readingUrl)) {
-    return { readingLabel: "", readingUrl: "" };
+  const rawReadingUrl = hasReadingUrl ? message.readingUrl : fallback.readingUrl || "";
+  if (!rawReadingUrl) {
+    return { readingLabel: "", readingUrl: "", rejectedReason: "missing_reading_url", rawReadingUrl: "" };
+  }
+
+  const readingUrl = parseReadingUrl(rawReadingUrl);
+  if (!readingUrl) {
+    return {
+      readingLabel: "",
+      readingUrl: "",
+      rejectedReason: "invalid_reading_url",
+      rawReadingUrl: typeof rawReadingUrl === "string" ? rawReadingUrl.slice(0, MAX_READING_URL_LEN) : "",
+    };
+  }
+
+  if (!readingUrlAllowedForClient(client, readingUrl)) {
+    return {
+      readingLabel: "",
+      readingUrl: "",
+      rejectedReason: "off_origin_reading_url",
+      rawReadingUrl: readingUrl.href,
+    };
   }
 
   return {
     readingLabel: labelFromReadingUrl(readingUrl),
     readingUrl: readingUrl.href,
+    rejectedReason: "",
+    rawReadingUrl: readingUrl.href,
   };
+}
+
+function rememberIdentityClient(identity, client) {
+  identity.lastIp = client.ip;
+  identity.lastUserAgent = client.userAgent;
+  identity.lastOrigin = client.origin;
+}
+
+function markIdentitySuspicious(identity, reason) {
+  if (!reason || identity.suspiciousReasons.includes(reason)) return;
+  identity.suspiciousReasons.push(reason);
+}
+
+function logPresenceAudit(client, identity, event, details = {}) {
+  if (!client.site) return;
+
+  console.warn(`[presence-audit] ${JSON.stringify({
+    event,
+    at: new Date().toISOString(),
+    siteKey: client.site.siteKey,
+    siteOrigin: client.site.origin,
+    visitorId: identity.id,
+    browserId: identity.browserId,
+    ip: client.ip,
+    origin: client.origin,
+    userAgent: client.userAgent,
+    displayName: identity.displayName,
+    color: identity.color,
+    ...details,
+  })}`);
+}
+
+function auditRejectedReading(client, identity, reading, phase) {
+  if (!client.site || !reading.rejectedReason) return;
+  markIdentitySuspicious(identity, reading.rejectedReason);
+  logPresenceAudit(client, identity, "reading_rejected", {
+    phase,
+    reason: reading.rejectedReason,
+    readingUrl: reading.rawReadingUrl,
+  });
 }
 
 function sanitizeCharacterColor(color) {
@@ -1326,6 +1394,14 @@ function getSceneStats(scene) {
       propId: identity.propId,
       displayName: identity.displayName,
       color: identity.color,
+      readingLabel: identity.readingLabel,
+      readingUrl: identity.readingUrl,
+      readingActive: identity.readingActive,
+      suspicious: identity.suspiciousReasons.length > 0,
+      suspiciousReasons: identity.suspiciousReasons,
+      lastIp: identity.lastIp,
+      lastUserAgent: identity.lastUserAgent,
+      lastOrigin: identity.lastOrigin,
       clientCount: identity.clients.size,
       messages: identity.messages,
     }));
@@ -1457,8 +1533,8 @@ function handleInit(client, message) {
   const previousReadingLabel = identity.readingLabel;
   const previousReadingUrl = identity.readingUrl;
   const previousReadingActive = identity.readingActive;
-  if (Object.hasOwn(message, "readingUrl")) {
-    const reading = sanitizeReadingState(client, message);
+  const reading = sanitizeReadingState(client, message, identity);
+  if (Object.hasOwn(message, "readingUrl") || reading.rejectedReason) {
     identity.readingLabel = reading.readingLabel;
     identity.readingUrl = reading.readingUrl;
   }
@@ -1468,6 +1544,8 @@ function handleInit(client, message) {
     identity.displayName = sanitizeDisplayName(message.displayName);
     identity.color = sanitizeCharacterColor(message.color);
   }
+  rememberIdentityClient(identity, client);
+  auditRejectedReading(client, identity, reading, "init");
 
   client.identity = identity;
   client.joined = true;
@@ -1591,6 +1669,8 @@ function handleReading(client, message) {
   const previousReadingLabel = client.identity.readingLabel;
   const previousReadingUrl = client.identity.readingUrl;
   const previousReadingActive = client.identity.readingActive;
+  rememberIdentityClient(client.identity, client);
+  auditRejectedReading(client, client.identity, reading, "update");
   if (
     readingLabel === previousReadingLabel
     && readingUrl === previousReadingUrl
@@ -1789,7 +1869,15 @@ wss.on("connection", (ws, req) => {
   }
   connectionCountByIp.set(ip, ipCount + 1);
 
-  const client = createClient(nextConnectionId++, ws, access.scene, access.site, origin || "");
+  const client = createClient(
+    nextConnectionId++,
+    ws,
+    access.scene,
+    access.site,
+    origin || "",
+    ip,
+    String(req.headers["user-agent"] || ""),
+  );
   access.scene.clients.set(client.connectionId, client);
   ws.isAlive = true;
 

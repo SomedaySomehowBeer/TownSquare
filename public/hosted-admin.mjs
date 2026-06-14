@@ -176,11 +176,78 @@ function renderSiteMeta(site, scene) {
   renderDefinitionList(metaEl, entries);
 }
 
+function appendText(parent, tagName, text, className = "") {
+  const element = document.createElement(tagName);
+  if (className) element.className = className;
+  element.textContent = text;
+  parent.appendChild(element);
+  return element;
+}
+
+function formatSuspiciousReasons(reasons = []) {
+  if (!Array.isArray(reasons) || reasons.length === 0) return "No flags";
+  return reasons.map((reason) => String(reason).replace(/_/g, " ")).join(", ");
+}
+
+function createVisitorDetail(label, value) {
+  const item = document.createElement("span");
+  item.className = "visitor-row__detail";
+  const labelEl = appendText(item, "strong", label);
+  labelEl.className = "visitor-row__detail-label";
+
+  if (value instanceof Node) {
+    item.appendChild(value);
+  } else {
+    appendText(item, "span", value || "Not reported");
+  }
+
+  return item;
+}
+
+function createColorDetail(color) {
+  const colorText = typeof color === "string" && color ? color : "Not reported";
+  const value = document.createElement("span");
+  value.className = "visitor-row__color";
+
+  if (colorText !== "Not reported") {
+    const swatch = document.createElement("span");
+    swatch.className = "visitor-row__swatch";
+    swatch.style.setProperty("--visitor-color", colorText);
+    value.appendChild(swatch);
+  }
+
+  appendText(value, "code", colorText);
+  return createVisitorDetail("Color", value);
+}
+
+function createReadingDetail(visitor) {
+  const label = String(visitor.readingLabel || "").trim();
+  const url = String(visitor.readingUrl || "").trim();
+  const value = document.createElement("span");
+  value.className = "visitor-row__reading";
+
+  if (url) {
+    const link = document.createElement("a");
+    link.href = url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = label || url;
+    value.appendChild(link);
+  } else {
+    appendText(value, "span", "No page reported");
+  }
+
+  appendText(value, "span", visitor.readingActive ? "active" : "away", "visitor-row__state");
+  return createVisitorDetail("Visiting", value);
+}
+
 function createVisitorRow(visitor) {
   const row = document.createElement("article");
   row.className = "visitor-row";
+  row.classList.toggle("visitor-row--suspicious", Boolean(visitor.suspicious));
 
   const info = document.createElement("div");
+  info.className = "visitor-row__info";
   const title = document.createElement("strong");
   const meta = document.createElement("span");
   const visitorName = String(visitor.displayName || "").trim();
@@ -189,7 +256,36 @@ function createVisitorRow(visitor) {
 
   title.textContent = visitorLabel;
   meta.textContent = `${visitorMeta}${visitor.clientCount} tab${visitor.clientCount === 1 ? "" : "s"} connected`;
-  info.append(title, meta);
+
+  const titleRow = document.createElement("div");
+  titleRow.className = "visitor-row__title";
+  titleRow.appendChild(title);
+  if (visitor.suspicious) {
+    appendText(titleRow, "span", "Flagged", "visitor-row__badge");
+  }
+
+  const details = document.createElement("div");
+  details.className = "visitor-row__details";
+  details.append(
+    createColorDetail(visitor.color),
+    createReadingDetail(visitor),
+    createVisitorDetail("Flags", formatSuspiciousReasons(visitor.suspiciousReasons)),
+  );
+  if (visitor.lastIp) details.appendChild(createVisitorDetail("IP", visitor.lastIp));
+  if (visitor.lastOrigin) details.appendChild(createVisitorDetail("Origin", visitor.lastOrigin));
+  if (visitor.lastUserAgent) {
+    const userAgent = String(visitor.lastUserAgent);
+    const compact = userAgent.length > 96 ? `${userAgent.slice(0, 93)}...` : userAgent;
+    const userAgentEl = document.createElement("span");
+    userAgentEl.title = userAgent;
+    userAgentEl.textContent = compact;
+    details.appendChild(createVisitorDetail("Agent", userAgentEl));
+  }
+
+  info.append(titleRow, meta, details);
+
+  const actions = document.createElement("div");
+  actions.className = "visitor-row__actions";
 
   const kick = document.createElement("button");
   kick.type = "button";
@@ -201,7 +297,8 @@ function createVisitorRow(visitor) {
   block.textContent = "Block";
   block.addEventListener("click", () => action("blockVisitor", { visitorId: visitor.id }));
 
-  row.append(info, kick, block);
+  actions.append(kick, block);
+  row.append(info, actions);
   return row;
 }
 
