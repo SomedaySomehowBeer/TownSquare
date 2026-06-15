@@ -2,7 +2,7 @@
  * DOM construction and avatar/scene rendering for the TownSquare widget.
  */
 
-import { DISPLAY_NAME_MAX, MESSAGE_MAX, READING_LABEL_MAX } from "./constants.mjs";
+import { DISPLAY_NAME_MAX, MESSAGE_MAX, PROPS, READING_LABEL_MAX } from "./constants.mjs";
 import { figureMarkup } from "./figure.mjs";
 
 /**
@@ -572,10 +572,9 @@ function setSendReady(avatar, ready) {
 
 /**
  * @param {HTMLElement} container
- * @param {Array<import("../scene-props.mjs").SceneProp>} props
  */
-export function renderProps(container, props = []) {
-  for (const prop of props) {
+export function renderProps(container) {
+  for (const prop of PROPS) {
     const el = document.createElement("div");
     el.className = `prop prop--${prop.id}`;
     el.style.left = `${(prop.x * 100).toFixed(2)}%`;
@@ -646,21 +645,20 @@ export function updatePose(avatar, pose) {
  * @param {AvatarView} avatar
  * @param {number} x
  * @param {string | null} propId
- * @param {Array<import("../scene-props.mjs").SceneProp>} props
  */
-export function updatePropEffects(avatar, x, propId, props = []) {
-  const activeProp = props.find((prop) => prop.id === propId);
+export function updatePropEffects(avatar, x, propId) {
+  const activeProp = PROPS.find((prop) => prop.id === propId);
   if (activeProp?.faceAway) {
     setFacing(avatar, x >= activeProp.x);
   }
 
   avatar.el.classList.toggle(
     "townsquare-avatar--shaded",
-    props.some((prop) => prop.shadeRadius && Math.abs(x - prop.x) < prop.shadeRadius),
+    PROPS.some((prop) => prop.shadeRadius && Math.abs(x - prop.x) < prop.shadeRadius),
   );
   avatar.el.classList.toggle(
     "townsquare-avatar--lit",
-    props.some((prop) => prop.lightRadius && Math.abs(x - prop.x) < prop.lightRadius),
+    PROPS.some((prop) => prop.lightRadius && Math.abs(x - prop.x) < prop.lightRadius),
   );
 }
 

@@ -11,8 +11,7 @@ import {
   updatePose,
   updatePropEffects,
 } from "./widget/dom.mjs";
-import { PROPS } from "./scene-props.mjs";
-import { MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS } from "./widget/constants.mjs";
+import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS } from "./widget/constants.mjs";
 
 const DEFAULT_CHARACTER_COUNT = 12;
 const MAX_CHARACTER_COUNT = 60;
@@ -173,9 +172,7 @@ function resetSelfSettle(self) {
 }
 
 function findSettleProp(x) {
-  return PROPS
-    .filter((prop) => prop.pose && prop.zoneRadius > 0)
-    .find((prop) => Math.abs(x - prop.x) < prop.zoneRadius);
+  return INTERACTIVE_PROPS.find((prop) => Math.abs(x - prop.x) < prop.zoneRadius);
 }
 
 function stepSelf(self, now, dt) {
@@ -189,13 +186,13 @@ function stepSelf(self, now, dt) {
     self.x = clamp(self.x + direction * MOVEMENT_SPEED * dt, MIN_X, MAX_X);
     renderAvatar(self.avatar, self.x);
     setFacing(self.avatar, direction < 0);
-    updatePropEffects(self.avatar, self.x, self.propId, PROPS);
+    updatePropEffects(self.avatar, self.x, self.propId);
     setWalking(self.avatar, true);
     return;
   }
 
   setWalking(self.avatar, false);
-  updatePropEffects(self.avatar, self.x, self.propId, PROPS);
+  updatePropEffects(self.avatar, self.x, self.propId);
   if (self.pose) return;
 
   const prop = findSettleProp(self.x);
@@ -217,7 +214,7 @@ function stepSelf(self, now, dt) {
   self.propId = prop.id;
   renderAvatar(self.avatar, self.x);
   updatePose(self.avatar, self.pose);
-  updatePropEffects(self.avatar, self.x, self.propId, PROPS);
+  updatePropEffects(self.avatar, self.x, self.propId);
 }
 
 function mountDevScene(count, walking) {
@@ -226,7 +223,7 @@ function mountDevScene(count, walking) {
   const { stage, status, helpButton, helpPanel } = renderShell(root);
   const unwireHelpPanel = wireHelpPanel(helpButton, helpPanel);
 
-  renderProps(stage, PROPS);
+  renderProps(stage);
   status.textContent = `You plus ${count} simulated ${count === 1 ? "character" : "characters"}`;
 
   const random = seededRandom(count * 9973);

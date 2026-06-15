@@ -16,18 +16,16 @@ function siteSocketUrl(siteKey) {
   return url.toString();
 }
 
-function connect({ x, browserId, browserSecret = "", siteKey = "", origin = "", displayName = "", color = "", readingLabel, readingUrl, readingActive, sceneConfig }) {
+function connect({ x, browserId, siteKey = "", origin = "", displayName = "", color = "", readingLabel, readingUrl, readingActive }) {
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(siteSocketUrl(siteKey), origin ? { headers: { Origin: origin } } : undefined);
     const seen = [];
 
     ws.on("open", () => {
       const init = { type: "init", x, browserId, displayName, color };
-      if (browserSecret) init.browserSecret = browserSecret;
       if (typeof readingLabel === "string") init.readingLabel = readingLabel;
       if (typeof readingUrl === "string") init.readingUrl = readingUrl;
       if (typeof readingActive === "boolean") init.readingActive = readingActive;
-      if (sceneConfig) init.sceneConfig = sceneConfig;
       ws.send(JSON.stringify(init));
     });
 
@@ -47,36 +45,12 @@ async function createSite(name) {
   const response = await fetch(`${HTTP_ORIGIN}/api/sites`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      name,
-      origin: HTTP_ORIGIN,
-      sceneConfig: {
-        benches: 1,
-        benchXs: [0.14],
-        trees: 2,
-        treeXs: [0.33, 0.81],
-        lamps: 1,
-        lampXs: [0.62],
-        birds: 2,
-      },
-      styleConfig: {
-        scene: "#e6dfd3",
-        page: "#f5efe7",
-        surface: "#fffaf6",
-        ink: "#2d2926",
-        accent: "#9d5c2f",
-      },
-    }),
+    body: JSON.stringify({ name, origin: HTTP_ORIGIN }),
   });
   const body = await response.json();
   assert(response.ok, body.error || "site registration failed");
   assert(body.site.siteKey, "registered site did not include a site key");
   assert(body.adminToken, "registered site did not include an admin token");
-  assert(body.styleSnippet.includes("#townsquare-root"), "registered site did not include a style snippet");
-  assert(body.site.sceneConfig?.birds === 2, "registered site did not persist scene config");
-  assert(body.site.sceneConfig?.benchXs?.[0] === 0.14, "registered site did not persist bench placement");
-  assert(body.site.sceneConfig?.treeXs?.[1] === 0.81, "registered site did not persist tree placement");
-  assert(body.site.styleConfig?.accent === "#9d5c2f", "registered site did not persist style config");
   return body;
 }
 
@@ -98,53 +72,7 @@ async function loginWithAdminToken(adminToken) {
 async function adminSiteApi(siteKey, adminToken) {
   const { response, body } = await postJson("/api/admin/site", { siteKey, adminToken });
   assert(response.ok, body.error || "site admin request failed");
-  assert(body.styleSnippet.includes("--you"), "site admin did not return style snippet");
-  assert(typeof body.site.sceneConfig?.benches === "number", "site admin did not return scene config");
   return body;
-}
-
-async function adminActionApi(siteKey, adminToken, action, payload = {}) {
-  const { response, body } = await postJson("/api/admin/action", {
-    siteKey,
-    adminToken,
-    action,
-    ...payload,
-  });
-  assert(response.ok, body.error || `site admin action failed: ${action}`);
-  return body;
-}
-
-async function assertAdminCustomizationCanBeUpdated(hostedSite) {
-  const updated = await adminActionApi(hostedSite.site.siteKey, hostedSite.adminToken, "updateCustomization", {
-    sceneConfig: {
-      benches: 4,
-      benchXs: [0.12, 0.31, 0.68, 0.9],
-      trees: 1,
-      treeXs: [0.44],
-      lamps: 2,
-      lampXs: [0.2, 0.8],
-      birds: 5,
-    },
-    styleConfig: {
-      scene: "#d9d0c5",
-      page: "#f6efe7",
-      surface: "#fff8f1",
-      ink: "#2f2925",
-      accent: "#336699",
-    },
-  });
-
-  assert(updated.site.sceneConfig?.benches === 4, "admin customization did not update scene config");
-  assert(updated.site.sceneConfig?.birds === 5, "admin customization did not update bird count");
-  assert(updated.site.sceneConfig?.benchXs?.[2] === 0.68, "admin customization did not update bench placement");
-  assert(updated.site.sceneConfig?.lampXs?.[1] === 0.8, "admin customization did not update lamp placement");
-  assert(updated.site.styleConfig?.accent === "#336699", "admin customization did not update accent color");
-
-  const refreshed = await adminSiteApi(hostedSite.site.siteKey, hostedSite.adminToken);
-  assert(refreshed.embedSnippet.includes('"benches":4'), "refreshed embed snippet did not include updated benches");
-  assert(refreshed.embedSnippet.includes('"benchXs":[0.12,0.31,0.68,0.9]'), "refreshed embed snippet did not include updated bench positions");
-  assert(refreshed.embedSnippet.includes('"birds":5'), "refreshed embed snippet did not include updated birds");
-  assert(refreshed.styleSnippet.includes("#336699"), "refreshed style snippet did not include updated accent color");
 }
 
 async function loginShouldFailWithAdminToken(adminToken) {
@@ -282,16 +210,6 @@ async function delay(ms) {
   await new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function waitFor(check, message, { timeout = 2500, interval = 25 } = {}) {
-  const startedAt = Date.now();
-  while (Date.now() - startedAt < timeout) {
-    const value = check();
-    if (value) return value;
-    await delay(interval);
-  }
-  throw new Error(message);
-}
-
 function assert(condition, message) {
   if (!condition) {
     throw new Error(message);
@@ -373,24 +291,19 @@ async function main() {
     readingLabel: "  Launch    notes  ",
     readingUrl: `${HTTP_ORIGIN}/notes/launch`,
   });
-  const secondSameBrowser = await connect({
-    x: 0.75,
-    browserId: "browser-a",
-    browserSecret: first.hello.browserSecret,
-  });
+  const secondSameBrowser = await connect({ x: 0.75, browserId: "browser-a" });
 
   await delay(100);
 
   assert(first.id === secondSameBrowser.id, "same-browser tabs did not reuse one shared identity");
   assert(first.hello.displayName === "Ada Lovelace", "display name was not normalized on init");
   assert(first.hello.color === "#3f7f63", "character color was not accepted on init");
-  assert(first.hello.readingLabel === "launch", "reading label was not derived from the URL on init");
+  assert(first.hello.readingLabel === "Launch notes", "reading label was not normalized on init");
   assert(first.hello.readingUrl === `${HTTP_ORIGIN}/notes/launch`, "reading URL was not accepted on init");
   assert(first.hello.readingActive === true, "reading should default to active on init");
-  assert(typeof first.hello.browserSecret === "string" && first.hello.browserSecret.length > 0, "hello did not include browser secret");
   assert(secondSameBrowser.hello.displayName === "Ada Lovelace", "same-browser tab did not inherit display name");
   assert(secondSameBrowser.hello.color === "#3f7f63", "same-browser tab did not inherit character color");
-  assert(secondSameBrowser.hello.readingLabel === "launch", "same-browser tab did not inherit reading label");
+  assert(secondSameBrowser.hello.readingLabel === "Launch notes", "same-browser tab did not inherit reading label");
   assert(secondSameBrowser.hello.readingUrl === `${HTTP_ORIGIN}/notes/launch`, "same-browser tab did not inherit reading URL");
   assert(secondSameBrowser.hello.readingActive === true, "same-browser tab did not inherit active reading state");
   assert(secondSameBrowser.hello.peers.length === 0, "same-browser tab should not see itself as a peer");
@@ -403,28 +316,20 @@ async function main() {
   assert(third.hello.peers.length === 1, "third client should see one existing visitor, not one per tab");
   assert(third.hello.peers[0].displayName === "Ada Lovelace", "peer snapshot did not include display name");
   assert(third.hello.peers[0].color === "#3f7f63", "peer snapshot did not include character color");
-  assert(third.hello.peers[0].readingLabel === "launch", "peer snapshot did not include reading label");
+  assert(third.hello.peers[0].readingLabel === "Launch notes", "peer snapshot did not include reading label");
   assert(third.hello.peers[0].readingUrl === `${HTTP_ORIGIN}/notes/launch`, "peer snapshot did not include reading URL");
   assert(third.hello.peers[0].readingActive === true, "peer snapshot did not include active reading state");
-  assert(!Object.hasOwn(third.hello.peers[0], "browserId"), "peer snapshot leaked browserId");
   assert(first.seen.some((message) => message.type === "join" && message.peer.id === third.id), "first client did not observe different-browser join");
-  const joinBroadcast = first.seen.find((message) => message.type === "join" && message.peer?.id === third.id);
-  assert(joinBroadcast && !Object.hasOwn(joinBroadcast.peer, "browserId"), "join broadcast leaked browserId");
 
-  const impersonator = await connect({ x: 0.8, browserId: "browser-a" });
-  assert(impersonator.id !== first.id, "stolen browserId reused victim visitor id");
-  assert(impersonator.hello.displayName !== "Ada Lovelace", "stolen browserId hijacked victim profile");
+  await delay(800);
 
-  const birdSpawn = await waitFor(
-    () => findLast(first.seen, (message) => message.type === "bird" && message.action === "spawn")
-      || first.hello.birds?.[0]
-      || third.hello.birds?.[0],
-    "ambient bird was never available in the scene",
-    { timeout: 4000 },
-  );
+  const birdSpawn = findLast(first.seen, (message) => message.type === "bird" && message.action === "spawn");
+  assert(birdSpawn, "ambient bird did not spawn after visitors joined");
   assert(typeof birdSpawn.x === "number", "bird spawn did not include x");
 
   const birdJoiner = await connect({ x: 0.4, browserId: "browser-bird-sync" });
+  await delay(100);
+
   assert(Array.isArray(birdJoiner.hello.birds), "hello did not include birds snapshot");
   assert(
     birdJoiner.hello.birds.some((bird) => bird.id === birdSpawn.id && bird.perchId === birdSpawn.perchId),
@@ -432,16 +337,18 @@ async function main() {
   );
 
   third.ws.send(JSON.stringify({ type: "move", x: birdSpawn.x }));
-  await waitFor(
-    () => first.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
+  await delay(100);
+
+  assert(
+    first.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
     "first client did not receive bird flee broadcast",
   );
-  await waitFor(
-    () => third.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
+  assert(
+    third.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
     "approaching visitor did not receive bird flee event",
   );
-  await waitFor(
-    () => birdJoiner.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
+  assert(
+    birdJoiner.seen.some((message) => message.type === "bird" && message.action === "flee" && message.id === birdSpawn.id),
     "other visitor did not receive bird flee broadcast",
   );
 
@@ -453,28 +360,25 @@ async function main() {
     readingLabel: "API reference",
     readingUrl: `${HTTP_ORIGIN}/docs/api`,
   }));
-  await waitFor(
-    () => first.seen.some((message) => (
+  await delay(100);
+
+  assert(
+    first.seen.some((message) => (
       message.type === "reading"
       && message.id === first.id
-      && message.readingLabel === "api"
+      && message.readingLabel === "API reference"
       && message.readingUrl === `${HTTP_ORIGIN}/docs/api`
     )),
     "reading update did not propagate to same-browser sibling",
   );
-  await waitFor(
-    () => third.seen.some((message) => (
+  assert(
+    third.seen.some((message) => (
       message.type === "reading"
       && message.id === first.id
-      && message.readingLabel === "api"
+      && message.readingLabel === "API reference"
       && message.readingUrl === `${HTTP_ORIGIN}/docs/api`
     )),
     "reading update did not propagate to other visitors",
-  );
-
-  assert(
-    !third.seen.some((message) => message.type === "reading" && message.readingLabel === "API reference"),
-    "server accepted a client-controlled reading label",
   );
 
   secondSameBrowser.ws.send(JSON.stringify({
@@ -500,8 +404,10 @@ async function main() {
     readingUrl: `${HTTP_ORIGIN}/docs/api`,
     readingActive: false,
   }));
-  await waitFor(
-    () => third.seen.some((message) => (
+  await delay(100);
+
+  assert(
+    third.seen.some((message) => (
       message.type === "reading"
       && message.id === first.id
       && message.readingActive === false
@@ -510,8 +416,10 @@ async function main() {
   );
 
   secondSameBrowser.ws.send(JSON.stringify({ type: "profile", displayName: "Ada", color: "#3f6fb5" }));
-  await waitFor(
-    () => first.seen.some((message) => (
+  await delay(100);
+
+  assert(
+    first.seen.some((message) => (
       message.type === "profile"
       && message.id === first.id
       && message.displayName === "Ada"
@@ -519,8 +427,8 @@ async function main() {
     )),
     "profile update did not propagate to same-browser sibling",
   );
-  await waitFor(
-    () => third.seen.some((message) => (
+  assert(
+    third.seen.some((message) => (
       message.type === "profile"
       && message.id === first.id
       && message.displayName === "Ada"
@@ -534,18 +442,22 @@ async function main() {
   secondSameBrowser.ws.send(JSON.stringify({ type: "say", text: "hello from shared browser" }));
   await delay(100);
   secondSameBrowser.ws.send(JSON.stringify({ type: "say", text: "this should be rate-limited away" }));
-  await waitFor(() => first.seen.some((message) => message.type === "move" && message.id === first.id), "same-browser move did not propagate to sibling tab");
-  await waitFor(() => first.seen.some((message) => message.type === "say" && message.id === first.id), "same-browser chat did not propagate to sibling tab");
-  await waitFor(() => third.seen.some((message) => message.type === "move" && message.id === first.id), "different browser did not observe shared visitor movement");
-  await waitFor(() => third.seen.some((message) => message.type === "say" && message.id === first.id), "different browser did not observe shared visitor chat");
+  await delay(100);
+
+  assert(first.seen.some((message) => message.type === "move" && message.id === first.id), "same-browser move did not propagate to sibling tab");
+  assert(first.seen.some((message) => message.type === "say" && message.id === first.id), "same-browser chat did not propagate to sibling tab");
+  assert(third.seen.some((message) => message.type === "move" && message.id === first.id), "different browser did not observe shared visitor movement");
+  assert(third.seen.some((message) => message.type === "say" && message.id === first.id), "different browser did not observe shared visitor chat");
   assert(
     !third.seen.some((message) => message.type === "say" && message.id === first.id && message.text === "this should be rate-limited away"),
     "chat rate limit did not suppress a rapid second message",
   );
 
   secondSameBrowser.ws.send(JSON.stringify({ type: "action", action: "jump" }));
-  await waitFor(() => first.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "jump"), "same-browser jump did not propagate to sibling tab");
-  await waitFor(() => third.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "jump"), "different browser did not observe shared visitor jump");
+  await delay(100);
+
+  assert(first.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "jump"), "same-browser jump did not propagate to sibling tab");
+  assert(third.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "jump"), "different browser did not observe shared visitor jump");
 
   await delay(1600);
   const longText = "x".repeat(200);
@@ -559,58 +471,56 @@ async function main() {
   secondSameBrowser.ws.send(JSON.stringify({ type: "move", x: 0.2 }));
   await delay(100);
   secondSameBrowser.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
-  const firstBenchState = await waitFor(
-    () => findLast(first.seen, (message) => message.type === "move" && message.id === first.id && message.pose === "sitting" && message.propId === "bench"),
-    "same-browser bench settle did not propagate to sibling tab",
-  );
-  await waitFor(
-    () => findLast(third.seen, (message) => message.type === "move" && message.id === first.id && message.pose === "sitting" && message.propId === "bench"),
-    "bench settle did not propagate to other visitors",
-  );
+  await delay(100);
+
+  const firstBenchState = findLast(first.seen, (message) => message.type === "move" && message.id === first.id && message.pose === "sitting");
+  const thirdBenchState = findLast(third.seen, (message) => message.type === "move" && message.id === first.id && message.pose === "sitting");
+
+  assert(firstBenchState, "same-browser bench settle did not propagate to sibling tab");
+  assert(thirdBenchState, "bench settle did not propagate to other visitors");
 
   third.ws.send(JSON.stringify({ type: "move", x: 0.2 }));
   await delay(100);
   third.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
-  const thirdSeatState = await waitFor(
-    () => findLast(first.seen, (message) => message.type === "move" && message.id === third.id && message.pose === "sitting" && message.propId === "bench"),
-    "second visitor did not settle onto the bench",
-  );
+  await delay(100);
+
+  const thirdSeatState = findLast(first.seen, (message) => message.type === "move" && message.id === third.id && message.pose === "sitting");
+  assert(thirdSeatState, "second visitor did not settle onto the bench");
   assert(Math.abs(thirdSeatState.x - firstBenchState.x) > 0.005, "bench seat allocation reused an occupied seat");
 
   secondSameBrowser.ws.send(JSON.stringify({ type: "move", x: 0.8 }));
   await delay(100);
   secondSameBrowser.ws.send(JSON.stringify({ type: "settle", propId: "tree" }));
-  const firstTreeState = await waitFor(
-    () => findLast(first.seen, (message) => (
-      message.type === "move"
-      && message.id === first.id
-      && message.pose === "resting"
-      && message.propId === "tree"
-    )),
-    "same-browser tree settle did not propagate to sibling tab",
-  );
-  await waitFor(
-    () => findLast(third.seen, (message) => (
-      message.type === "move"
-      && message.id === first.id
-      && message.pose === "resting"
-      && message.propId === "tree"
-    )),
-    "tree settle did not propagate to other visitors",
-  );
+  await delay(100);
+
+  const firstTreeState = findLast(first.seen, (message) => (
+    message.type === "move"
+    && message.id === first.id
+    && message.pose === "resting"
+    && message.propId === "tree"
+  ));
+  const thirdTreeState = findLast(third.seen, (message) => (
+    message.type === "move"
+    && message.id === first.id
+    && message.pose === "resting"
+    && message.propId === "tree"
+  ));
+
+  assert(firstTreeState, "same-browser tree settle did not propagate to sibling tab");
+  assert(thirdTreeState, "tree settle did not propagate to other visitors");
 
   third.ws.send(JSON.stringify({ type: "move", x: 0.8 }));
   await delay(100);
   third.ws.send(JSON.stringify({ type: "settle", propId: "tree" }));
-  const thirdTreeSeatState = await waitFor(
-    () => findLast(first.seen, (message) => (
-      message.type === "move"
-      && message.id === third.id
-      && message.pose === "resting"
-      && message.propId === "tree"
-    )),
-    "second visitor did not settle under the tree",
-  );
+  await delay(100);
+
+  const thirdTreeSeatState = findLast(first.seen, (message) => (
+    message.type === "move"
+    && message.id === third.id
+    && message.pose === "resting"
+    && message.propId === "tree"
+  ));
+  assert(thirdTreeSeatState, "second visitor did not settle under the tree");
   assert(Math.abs(thirdTreeSeatState.x - firstTreeState.x) > 0.005, "tree seat allocation reused an occupied seat");
 
   secondSameBrowser.ws.close();
@@ -619,58 +529,14 @@ async function main() {
   assert(!first.seen.some((message) => message.type === "leave" && message.id === first.id), "closing one same-browser tab incorrectly removed the shared visitor");
 
   third.ws.close();
-  await waitFor(
-    () => first.seen.some((message) => message.type === "leave" && message.id === third.id),
-    "first client did not observe different-browser leave",
-    { timeout: 2500 },
-  );
+  await delay(1700);
 
-  const previewBenchX = 0.31;
-  const preview = await connect({
-    x: previewBenchX,
-    browserId: "preview-custom-scene",
-    sceneConfig: {
-      benches: 1,
-      trees: 0,
-      lamps: 0,
-      birds: 0,
-      benchXs: [previewBenchX],
-    },
-  });
-  preview.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
-  const previewSeat = await waitFor(
-    () => findLast(preview.seen, (message) => (
-      message.type === "move"
-      && message.id === preview.id
-      && message.pose === "sitting"
-      && message.propId === "bench"
-    )),
-    "preview settle did not use the client scene config bench position",
-  );
-  assert(Math.abs(previewSeat.x - (previewBenchX - 0.01)) < 0.005, "preview bench seat was not snapped to the custom bench");
-
-  const defaultSceneWithoutConfig = await connect({
-    x: previewBenchX,
-    browserId: "preview-default-scene",
-  });
-  defaultSceneWithoutConfig.ws.send(JSON.stringify({ type: "settle", propId: "bench" }));
-  await delay(200);
-  assert(
-    !defaultSceneWithoutConfig.seen.some((message) => (
-      message.type === "move"
-      && message.id === defaultSceneWithoutConfig.id
-      && message.pose === "sitting"
-    )),
-    "default-scene preview should not settle onto a bench placed outside the shared default layout",
-  );
-  defaultSceneWithoutConfig.ws.close();
-  preview.ws.close();
+  assert(first.seen.some((message) => message.type === "leave" && message.id === third.id), "first client did not observe different-browser leave");
 
   const hostedA = await createSite("Smoke A");
   const hostedB = await createSite("Smoke B");
   assertAdminTokenStoredAsHash(hostedA.site.siteKey, hostedA.adminToken);
   assertAdminTokenStoredAsHash(hostedB.site.siteKey, hostedB.adminToken);
-  await assertAdminCustomizationCanBeUpdated(hostedA);
   const hostedALogin = await loginWithAdminToken(hostedA.adminToken);
   assert(hostedALogin.site.siteKey === hostedA.site.siteKey, "admin token login returned the wrong site");
 
@@ -680,8 +546,6 @@ async function main() {
     siteKey: hostedA.site.siteKey,
     origin: HTTP_ORIGIN,
     displayName: "Named Visitor",
-    readingLabel: "visiting your mom",
-    readingUrl: `${HTTP_ORIGIN}/docs/real-page`,
   });
   const siteBVisitor = await connect({
     x: 0.7,
@@ -693,48 +557,7 @@ async function main() {
   await delay(100);
 
   assert(siteAVisitor.hello.peers.length === 0, "hosted site A saw visitors from another site");
-  assert(siteAVisitor.hello.readingLabel === "real page", "hosted site accepted a custom reading label");
-  assert(siteAVisitor.hello.readingUrl === `${HTTP_ORIGIN}/docs/real-page`, "hosted site did not keep a same-origin reading URL");
   assert(siteBVisitor.hello.peers.length === 0, "hosted site B saw visitors from another site");
-
-  const cleanSiteAStats = await adminSiteApi(hostedA.site.siteKey, hostedA.adminToken);
-  assert(cleanSiteAStats.scene.visitors[0]?.color === "#5f6b73", "admin visitor stats did not include character color");
-  assert(cleanSiteAStats.scene.visitors[0]?.readingLabel === "real page", "admin visitor stats did not include reading label");
-  assert(cleanSiteAStats.scene.visitors[0]?.readingUrl === `${HTTP_ORIGIN}/docs/real-page`, "admin visitor stats did not include reading URL");
-  assert(cleanSiteAStats.scene.visitors[0]?.readingActive === true, "admin visitor stats did not include reading active state");
-  assert(cleanSiteAStats.scene.visitors[0]?.suspicious === false, "valid hosted visitor was marked suspicious");
-
-  siteAVisitor.ws.send(JSON.stringify({
-    type: "reading",
-    readingLabel: "visiting your mom",
-    readingUrl: "https://attacker.example/status",
-  }));
-  await waitFor(
-    () => siteAVisitor.seen.some((message) => (
-      message.type === "reading"
-      && message.id === siteAVisitor.id
-      && message.readingLabel === ""
-      && message.readingUrl === ""
-    )),
-    "hosted site did not reject an off-site reading URL",
-  );
-  const suspiciousSiteAStats = await adminSiteApi(hostedA.site.siteKey, hostedA.adminToken);
-  const suspiciousSiteAVisitor = suspiciousSiteAStats.scene.visitors[0];
-  assert(suspiciousSiteAVisitor?.suspicious === true, "rejected reading URL did not mark visitor suspicious");
-  assert(
-    suspiciousSiteAVisitor.suspiciousReasons.includes("off_origin_reading_url"),
-    "off-origin reading URL reason was not exposed to admin stats",
-  );
-  assert(suspiciousSiteAVisitor.lastOrigin === HTTP_ORIGIN, "visitor origin was not exposed to admin stats");
-
-  const suspiciousSiteBStats = await adminSiteApi(hostedB.site.siteKey, hostedB.adminToken);
-  const suspiciousSiteBVisitor = suspiciousSiteBStats.scene.visitors[0];
-  assert(suspiciousSiteBVisitor?.suspicious === true, "missing reading URL did not mark hosted visitor suspicious");
-  assert(
-    suspiciousSiteBVisitor.suspiciousReasons.includes("missing_reading_url"),
-    "missing reading URL reason was not exposed to admin stats",
-  );
-
   await assertServiceAdminShowsActiveVisitors(hostedA, hostedB);
 
   siteAVisitor.ws.close();

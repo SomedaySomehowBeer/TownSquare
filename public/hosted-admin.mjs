@@ -1,24 +1,3 @@
-import {
-  bindCopy,
-  renderDefinitionList,
-  renderKeyValueList,
-  setStatus,
-  setValueIfIdle,
-} from "./hosted-common.mjs";
-import {
-  applyConfigToForm,
-  bindSceneCountProse,
-  bindStyleColorFields,
-  getSceneSummaryEntries,
-  isSceneCountInputName,
-  readSceneConfigFromForm,
-  readStyleConfigFromForm,
-  renderScenePositionFields,
-  sanitizeSceneConfig,
-  sanitizeSiteStyle,
-} from "./site-config.mjs";
-import { mountTownSquare } from "./townsquare.mjs";
-
 const loginView = document.getElementById("login-view");
 const adminView = document.getElementById("admin-view");
 const loginForm = document.getElementById("login-form");
@@ -28,24 +7,12 @@ const loginStatusEl = document.getElementById("login-status");
 const signOutButton = document.getElementById("sign-out");
 const statusEl = document.getElementById("admin-status");
 const metaEl = document.getElementById("site-meta");
-const customizationForm = document.getElementById("customization-form");
-const customizationStatusEl = document.getElementById("customization-status");
-const saveCustomizationButton = document.getElementById("save-customization");
-const resetCustomizationButton = document.getElementById("reset-customization");
-const previewRoot = document.getElementById("townsquare-root");
-const scenePositionFields = document.getElementById("scene-position-fields");
 const snippetEl = document.getElementById("embed-snippet");
-const styleSnippetEl = document.getElementById("style-snippet");
-const sceneSummaryEl = document.getElementById("scene-summary");
 const copyButton = document.getElementById("copy-snippet");
-const copyStyleButton = document.getElementById("copy-style");
 const chatDisabledInput = document.getElementById("chat-disabled");
 const clearMessagesButton = document.getElementById("clear-messages");
 const disableSiteButton = document.getElementById("disable-site");
 const visitorList = document.getElementById("visitor-list");
-
-bindStyleColorFields(customizationForm);
-bindSceneCountProse(customizationForm);
 
 const STORAGE_KEY = "townsquare-admin-session";
 const REFRESH_INTERVAL_MS = 5000;
@@ -54,9 +21,17 @@ let currentSite = null;
 let siteKey = "";
 let adminToken = "";
 let refreshTimer = null;
-let previewHandle = null;
-let customizationBusy = false;
-let customizationSavedMessage = "";
+
+function setLoginStatus(message, isError = false) {
+  loginStatusEl.textContent = message;
+  loginStatusEl.hidden = !message;
+  loginStatusEl.classList.toggle("hosted-status--error", isError);
+}
+
+function setStatus(message, isError = false) {
+  statusEl.textContent = message;
+  statusEl.classList.toggle("hosted-status--error", isError);
+}
 
 function readStoredCredentials() {
   try {
@@ -88,26 +63,18 @@ function storeCredentials() {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ siteKey, adminToken }));
 }
 
-function destroyPreview() {
-  previewHandle?.destroy();
-  previewHandle = null;
-}
-
 function clearCredentials() {
   siteKey = "";
   adminToken = "";
   currentSite = null;
-  customizationSavedMessage = "";
-  destroyPreview();
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
 function showLogin(message = "", isError = false) {
   stopAutoRefresh();
-  destroyPreview();
   adminView.hidden = true;
   loginView.hidden = false;
-  setStatus(loginStatusEl, message, isError, { hideWhenEmpty: true });
+  setLoginStatus(message, isError);
   loginTokenEl.focus();
 }
 
@@ -151,274 +118,76 @@ function formatTime(value) {
   return new Date(value).toLocaleString();
 }
 
-function renderSceneSummary(sceneConfig = {}) {
-  renderKeyValueList(sceneSummaryEl, getSceneSummaryEntries(sceneConfig));
-}
-
-function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(customizationForm)) {
-  const next = sanitizeSceneConfig(sceneConfig);
-  renderScenePositionFields(scenePositionFields, next);
-  applyConfigToForm(customizationForm, next);
-}
-
-function renderSiteMeta(site, scene) {
-  const entries = [
-    { label: "Site", value: site.name },
-    { label: "Origin", value: site.origin },
-  ];
-  if (site.email) entries.push({ label: "Email", value: site.email });
-  entries.push(
-    { label: "Status", value: site.disabled ? "Disabled" : "Enabled" },
-    { label: "Verified", value: formatTime(site.verifiedAt) },
-    { label: "Active visitors", value: scene.activeVisitors },
-    { label: "Blocked", value: site.blockedCount },
-  );
-  renderDefinitionList(metaEl, entries);
-}
-
-function appendText(parent, tagName, text, className = "") {
-  const element = document.createElement(tagName);
-  if (className) element.className = className;
-  element.textContent = text;
-  parent.appendChild(element);
-  return element;
-}
-
-function formatSuspiciousReasons(reasons = []) {
-  if (!Array.isArray(reasons) || reasons.length === 0) return "No flags";
-  return reasons.map((reason) => String(reason).replace(/_/g, " ")).join(", ");
-}
-
-function createVisitorDetail(label, value) {
-  const item = document.createElement("span");
-  item.className = "visitor-row__detail";
-  const labelEl = appendText(item, "strong", label);
-  labelEl.className = "visitor-row__detail-label";
-
-  if (value instanceof Node) {
-    item.appendChild(value);
-  } else {
-    appendText(item, "span", value || "Not reported");
-  }
-
-  return item;
-}
-
-function createColorDetail(color) {
-  const colorText = typeof color === "string" && color ? color : "Not reported";
-  const value = document.createElement("span");
-  value.className = "visitor-row__color";
-
-  if (colorText !== "Not reported") {
-    const swatch = document.createElement("span");
-    swatch.className = "visitor-row__swatch";
-    swatch.style.setProperty("--visitor-color", colorText);
-    value.appendChild(swatch);
-  }
-
-  appendText(value, "code", colorText);
-  return createVisitorDetail("Color", value);
-}
-
-function createReadingDetail(visitor) {
-  const label = String(visitor.readingLabel || "").trim();
-  const url = String(visitor.readingUrl || "").trim();
-  const value = document.createElement("span");
-  value.className = "visitor-row__reading";
-
-  if (url) {
-    const link = document.createElement("a");
-    link.href = url;
-    link.target = "_blank";
-    link.rel = "noopener noreferrer";
-    link.textContent = label || url;
-    value.appendChild(link);
-  } else {
-    appendText(value, "span", "No page reported");
-  }
-
-  appendText(value, "span", visitor.readingActive ? "active" : "away", "visitor-row__state");
-  return createVisitorDetail("Visiting", value);
-}
-
-function createVisitorRow(visitor) {
-  const row = document.createElement("article");
-  row.className = "visitor-row";
-  row.classList.toggle("visitor-row--suspicious", Boolean(visitor.suspicious));
-
-  const info = document.createElement("div");
-  info.className = "visitor-row__info";
-  const title = document.createElement("strong");
-  const meta = document.createElement("span");
-  const visitorName = String(visitor.displayName || "").trim();
-  const visitorLabel = visitorName || `Visitor ${visitor.id}`;
-  const visitorMeta = visitorName ? `Visitor ${visitor.id} · ` : "";
-
-  title.textContent = visitorLabel;
-  meta.textContent = `${visitorMeta}${visitor.clientCount} tab${visitor.clientCount === 1 ? "" : "s"} connected`;
-
-  const titleRow = document.createElement("div");
-  titleRow.className = "visitor-row__title";
-  titleRow.appendChild(title);
-  if (visitor.suspicious) {
-    appendText(titleRow, "span", "Flagged", "visitor-row__badge");
-  }
-
-  const details = document.createElement("div");
-  details.className = "visitor-row__details";
-  details.append(
-    createColorDetail(visitor.color),
-    createReadingDetail(visitor),
-    createVisitorDetail("Flags", formatSuspiciousReasons(visitor.suspiciousReasons)),
-  );
-  if (visitor.lastIp) details.appendChild(createVisitorDetail("IP", visitor.lastIp));
-  if (visitor.lastOrigin) details.appendChild(createVisitorDetail("Origin", visitor.lastOrigin));
-  if (visitor.lastUserAgent) {
-    const userAgent = String(visitor.lastUserAgent);
-    const compact = userAgent.length > 96 ? `${userAgent.slice(0, 93)}...` : userAgent;
-    const userAgentEl = document.createElement("span");
-    userAgentEl.title = userAgent;
-    userAgentEl.textContent = compact;
-    details.appendChild(createVisitorDetail("Agent", userAgentEl));
-  }
-
-  info.append(titleRow, meta, details);
-
-  const actions = document.createElement("div");
-  actions.className = "visitor-row__actions";
-
-  const kick = document.createElement("button");
-  kick.type = "button";
-  kick.textContent = "Kick";
-  kick.addEventListener("click", () => action("kickVisitor", { visitorId: visitor.id }));
-
-  const block = document.createElement("button");
-  block.type = "button";
-  block.textContent = "Block";
-  block.addEventListener("click", () => action("blockVisitor", { visitorId: visitor.id }));
-
-  actions.append(kick, block);
-  row.append(info, actions);
-  return row;
-}
-
-function renderVisitors(scene) {
-  visitorList.replaceChildren();
-  if (scene.visitors.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "hosted-note";
-    empty.textContent = "No active visitors right now.";
-    visitorList.appendChild(empty);
-    return;
-  }
-
-  for (const visitor of scene.visitors) {
-    visitorList.appendChild(createVisitorRow(visitor));
-  }
-}
-
-function getCurrentCustomization() {
-  return {
-    sceneConfig: sanitizeSceneConfig(currentSite?.sceneConfig || {}),
-    styleConfig: sanitizeSiteStyle(currentSite?.styleConfig || {}),
-  };
-}
-
-function readCustomizationFromForm() {
-  return {
-    sceneConfig: sanitizeSceneConfig(readSceneConfigFromForm(customizationForm)),
-    styleConfig: sanitizeSiteStyle(readStyleConfigFromForm(customizationForm)),
-  };
-}
-
-function serializeCustomization(customization) {
-  return JSON.stringify({
-    sceneConfig: sanitizeSceneConfig(customization?.sceneConfig || {}),
-    styleConfig: sanitizeSiteStyle(customization?.styleConfig || {}),
-  });
-}
-
-function customizationIsDirty() {
-  if (!currentSite) return false;
-  return serializeCustomization(readCustomizationFromForm()) !== serializeCustomization(getCurrentCustomization());
-}
-
-function updateCustomizationButtons() {
-  const dirty = customizationIsDirty();
-  saveCustomizationButton.disabled = customizationBusy || !dirty;
-  resetCustomizationButton.disabled = customizationBusy || !dirty;
-}
-
-function updateCustomizationStatus() {
-  if (customizationBusy) {
-    setStatus(customizationStatusEl, "Saving customization...", false, { hideWhenEmpty: true });
-    return;
-  }
-
-  if (customizationSavedMessage) {
-    setStatus(customizationStatusEl, customizationSavedMessage, false, { hideWhenEmpty: true });
-    return;
-  }
-
-  if (customizationIsDirty()) {
-    setStatus(
-      customizationStatusEl,
-      "Previewing unsaved changes. Save to regenerate the embed snippet and CSS.",
-      false,
-      { hideWhenEmpty: true },
-    );
-    return;
-  }
-
-  setStatus(customizationStatusEl, "", false, { hideWhenEmpty: true });
-}
-
-function mountPreview() {
-  if (!(previewRoot instanceof HTMLElement)) return;
-  const customization = currentSite ? readCustomizationFromForm() : getCurrentCustomization();
-  destroyPreview();
-  previewHandle = mountTownSquare(previewRoot, {
-    serverOrigin: window.location.origin,
-    scene: customization.sceneConfig,
-    style: customization.styleConfig,
-    readingLabel: currentSite ? `${currentSite.name} preview` : "Admin preview",
-    readingUrl: window.location.href,
-  });
-}
-
-function syncCustomizationForm({ force = false } = {}) {
-  if (!currentSite || !(customizationForm instanceof HTMLFormElement)) return;
-  if (force || !customizationIsDirty()) {
-    const customization = getCurrentCustomization();
-    applyConfigToForm(customizationForm, { ...customization.sceneConfig, ...customization.styleConfig });
-    syncScenePositionInputs(customization.sceneConfig);
-    applyConfigToForm(customizationForm, { ...customization.sceneConfig, ...customization.styleConfig });
-  }
-  updateCustomizationButtons();
-  updateCustomizationStatus();
-  mountPreview();
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;");
 }
 
 function render(data) {
   currentSite = data.site;
   const scene = data.scene;
 
-  renderSiteMeta(currentSite, scene);
-  setValueIfIdle(snippetEl, data.embedSnippet);
-  setValueIfIdle(styleSnippetEl, data.styleSnippet);
-  renderSceneSummary(currentSite.sceneConfig);
-  renderVisitors(scene);
+  metaEl.innerHTML = `
+    <dl>
+      <div><dt>Site</dt><dd>${escapeHtml(currentSite.name)}</dd></div>
+      <div><dt>Origin</dt><dd>${escapeHtml(currentSite.origin)}</dd></div>
+      <div><dt>Status</dt><dd>${currentSite.disabled ? "Disabled" : "Enabled"}</dd></div>
+      <div><dt>Verified</dt><dd>${formatTime(currentSite.verifiedAt)}</dd></div>
+      <div><dt>Active visitors</dt><dd>${scene.activeVisitors}</dd></div>
+      <div><dt>Blocked</dt><dd>${currentSite.blockedCount}</dd></div>
+    </dl>
+  `;
 
+  if (document.activeElement !== snippetEl) {
+    snippetEl.value = data.embedSnippet;
+  }
   chatDisabledInput.checked = currentSite.chatDisabled;
   disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
-  syncCustomizationForm();
+
+  visitorList.replaceChildren();
+  if (scene.visitors.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "hosted-note";
+    empty.textContent = "No active visitors right now.";
+    visitorList.appendChild(empty);
+  }
+
+  for (const visitor of scene.visitors) {
+    const row = document.createElement("article");
+    row.className = "visitor-row";
+    const visitorName = String(visitor.displayName || "").trim();
+    const visitorLabel = visitorName || `Visitor ${visitor.id}`;
+    const visitorMeta = visitorName ? `Visitor ${visitor.id} · ` : "";
+    row.innerHTML = `
+      <div>
+        <strong>${escapeHtml(visitorLabel)}</strong>
+        <span>${escapeHtml(visitorMeta)}${visitor.clientCount} tab${visitor.clientCount === 1 ? "" : "s"} connected</span>
+      </div>
+    `;
+
+    const kick = document.createElement("button");
+    kick.type = "button";
+    kick.textContent = "Kick";
+    kick.addEventListener("click", () => action("kickVisitor", { visitorId: visitor.id }));
+
+    const block = document.createElement("button");
+    block.type = "button";
+    block.textContent = "Block";
+    block.addEventListener("click", () => action("blockVisitor", { visitorId: visitor.id }));
+
+    row.append(kick, block);
+    visitorList.appendChild(row);
+  }
 
   if (currentSite.disabled) {
-    setStatus(statusEl, "Site is disabled. Visitors cannot connect.", true);
+    setStatus("Site is disabled. Visitors cannot connect.", true);
   } else if (currentSite.verifiedAt) {
-    setStatus(statusEl, "Installed and active. Updates automatically.");
+    setStatus("Installed and active. Updates automatically.");
   } else {
-    setStatus(statusEl, "Waiting for the snippet to load from your site. Updates automatically.");
+    setStatus("Waiting for the snippet to load from your site. Updates automatically.");
   }
 }
 
@@ -446,7 +215,7 @@ async function loadSite({ silent = false } = {}) {
       return;
     }
     if (!silent) {
-      setStatus(statusEl, result.body.error || "Could not load this site.", true);
+      setStatus(result.body.error || "Could not load this site.", true);
     }
     return;
   }
@@ -459,50 +228,17 @@ async function loadSite({ silent = false } = {}) {
 async function action(name, data = {}) {
   const result = await api("/api/admin/action", { siteKey, adminToken, action: name, ...data });
   if (!result.ok) {
-    setStatus(statusEl, result.body.error || "Action failed.", true);
-    return false;
+    setStatus(result.body.error || "Action failed.", true);
+    return;
   }
 
   await loadSite();
-  return true;
 }
-
-customizationForm.addEventListener("input", (event) => {
-  customizationSavedMessage = "";
-  if (isSceneCountInputName(event.target?.name || "")) {
-    syncScenePositionInputs(readSceneConfigFromForm(customizationForm));
-  }
-  updateCustomizationButtons();
-  updateCustomizationStatus();
-  mountPreview();
-});
-
-customizationForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  customizationBusy = true;
-  customizationSavedMessage = "";
-  updateCustomizationButtons();
-  updateCustomizationStatus();
-
-  const ok = await action("updateCustomization", readCustomizationFromForm());
-
-  customizationBusy = false;
-  if (ok) {
-    customizationSavedMessage = "Customization saved. Copy the refreshed snippet and CSS below.";
-  }
-  updateCustomizationButtons();
-  updateCustomizationStatus();
-});
-
-resetCustomizationButton.addEventListener("click", () => {
-  customizationSavedMessage = "";
-  syncCustomizationForm({ force: true });
-});
 
 loginForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   loginSubmitButton.disabled = true;
-  setStatus(loginStatusEl, "Checking token...", false, { hideWhenEmpty: true });
+  setLoginStatus("Checking token...");
 
   adminToken = loginTokenEl.value.trim();
   siteKey = "";
@@ -511,7 +247,7 @@ loginForm.addEventListener("submit", async (event) => {
   loginSubmitButton.disabled = false;
   if (!adminView.hidden) {
     loginForm.reset();
-    setStatus(loginStatusEl, "", false, { hideWhenEmpty: true });
+    setLoginStatus("");
   }
 });
 
@@ -520,8 +256,19 @@ signOutButton.addEventListener("click", () => {
   showLogin("Signed out. Your token was forgotten on this device.");
 });
 
-bindCopy(copyButton, () => snippetEl.value, { fallbackTarget: snippetEl });
-bindCopy(copyStyleButton, () => styleSnippetEl.value, { fallbackTarget: styleSnippetEl });
+copyButton.addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(snippetEl.value);
+  } catch {
+    snippetEl.focus();
+    snippetEl.select();
+    return;
+  }
+  copyButton.textContent = "Copied";
+  setTimeout(() => {
+    copyButton.textContent = "Copy snippet";
+  }, 1200);
+});
 
 chatDisabledInput.addEventListener("change", () => action("setChatDisabled", { disabled: chatDisabledInput.checked }));
 clearMessagesButton.addEventListener("click", () => action("clearMessages"));

@@ -41,21 +41,11 @@ const DEFAULT_DEV_ORIGINS = new Set([
   `https://localhost:${PORT}`,
 ]);
 const MAX_CONNECTIONS = Number(process.env.MAX_CONNECTIONS || 100);
-const MAX_CONNECTIONS_PER_IP = Number(process.env.MAX_CONNECTIONS_PER_IP || 8);
-const INIT_TIMEOUT_MS = Number(process.env.INIT_TIMEOUT_MS || 5000);
-const TRUSTED_PROXY_IPS = new Set(
-  String(process.env.TRUSTED_PROXY_IPS || "127.0.0.1,::1,::ffff:127.0.0.1")
-    .split(",").map((s) => s.trim()).filter(Boolean),
-);
 const MAX_BROWSER_ID_LEN = 80;
-const MAX_BROWSER_SECRET_LEN = 64;
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
 const MAX_READING_URL_LEN = 240;
-const MAX_USER_AGENT_LEN = 240;
 const MAX_SITE_NAME_LEN = 80;
-const MAX_EMAIL_LEN = 254;
 const MAX_ORIGIN_LEN = 240;
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
 const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
 const LAST_SEEN_SAVE_INTERVAL_MS = 60000;
@@ -68,6 +58,7 @@ const INACTIVE_CHECK_INTERVAL_MS = Number(process.env.INACTIVE_CHECK_INTERVAL_MS
 const HEARTBEAT_INTERVAL_MS = 30000;
 const BIRD_TICK_INTERVAL_MS = 1000;
 const TELEGRAM_API_TIMEOUT_MS = 5000;
+const MAX_BIRDS = 3;
 const BIRD_FLEE_RADIUS = 0.07;
 const BIRD_SPAWN_MIN_MS = Number(process.env.BIRD_SPAWN_MIN_MS || 12000);
 const BIRD_SPAWN_MAX_MS = Number(process.env.BIRD_SPAWN_MAX_MS || 22000);
@@ -119,21 +110,6 @@ function loadEnvFile(filePath = path.join(__dirname, ".env")) {
 let PROPS_BY_ID = new Map();
 /** @type {Array<import("./public/bird-perches.mjs").BirdPerch>} */
 let BIRD_PERCHES = [];
-let DEFAULT_SITE_SCENE_CONFIG = { benches: 2, trees: 1, lamps: 1, birds: 3 };
-let DEFAULT_SITE_STYLE = {
-  scene: "#e4e2dd",
-  page: "#efede9",
-  surface: "#fdf8f4",
-  ink: "#2a2926",
-  accent: "#c8641f",
-  other: "#26241f",
-  ground: "rgba(42, 41, 38, 0.16)",
-};
-let sanitizeSceneConfig = (config) => ({ ...DEFAULT_SITE_SCENE_CONFIG, ...(config || {}) });
-let sanitizeSiteStyle = (style) => ({ ...DEFAULT_SITE_STYLE, ...(style || {}) });
-let buildSceneProps = () => [];
-let buildBirdPerches = () => [];
-let buildSiteCss = () => "";
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -203,22 +179,17 @@ const MESSAGE_HANDLERS = {
   move: handleMove,
   profile: handleProfile,
   reading: handleReading,
-  sceneConfig: handleSceneConfig,
   settle: handleSettle,
   say: handleSay,
 };
 
-/** @returns {{connectionId:number,ws:any,scene:any,site:any,origin:string,ip:string,userAgent:string,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
-function createClient(connectionId, ws, scene, site, origin = "", ip = "", userAgent = "") {
+/** @returns {{connectionId:number,ws:any,identity:any,joined:boolean,readingActive:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
+function createClient(connectionId, ws, scene, site) {
   return {
     connectionId,
     ws,
     scene,
     site,
-    origin,
-    ip,
-    userAgent: userAgent.slice(0, MAX_USER_AGENT_LEN),
-    propsById: scene.propsById,
     identity: null,
     joined: false,
     readingActive: false,
@@ -228,23 +199,11 @@ function createClient(connectionId, ws, scene, site, origin = "", ip = "", userA
   };
 }
 
-function syncClientSceneProps(client, message) {
-  if (client.site) {
-    client.propsById = client.scene.propsById;
-    return;
-  }
-
-  const config = isPlainObject(message.sceneConfig) ? message.sceneConfig : DEFAULT_SITE_SCENE_CONFIG;
-  const props = buildSceneProps(sanitizeSceneConfig(config));
-  client.propsById = new Map(props.map((prop) => [prop.id, prop]));
-}
-
-/** @returns {{id:number,browserId:string,browserSecret:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,lastIp:string,lastUserAgent:string,lastOrigin:string,suspiciousReasons:Array<string>,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
+/** @returns {{id:number,browserId:string,x:number,pose:string|null,propId:string|null,displayName:string,color:string,readingLabel:string,readingUrl:string,readingActive:boolean,clients:Set<any>,joined:boolean,leaveTimer:any,inactiveKick:boolean,lastActivityAt:number,awaySince:number|null,messages:Array<{text:string,at:number}>}} */
 function createIdentity(id, browserId, x) {
   return {
     id,
     browserId,
-    browserSecret: crypto.randomBytes(32).toString("hex"),
     x,
     pose: null,
     propId: null,
@@ -253,10 +212,6 @@ function createIdentity(id, browserId, x) {
     readingLabel: "",
     readingUrl: "",
     readingActive: false,
-    lastIp: "",
-    lastUserAgent: "",
-    lastOrigin: "",
-    suspiciousReasons: [],
     clients: new Set(),
     joined: false,
     leaveTimer: null,
@@ -280,11 +235,6 @@ function clampPosition(x) {
 function sanitizeBrowserId(browserId) {
   if (typeof browserId !== "string") return "";
   return browserId.slice(0, MAX_BROWSER_ID_LEN).replace(/[^a-zA-Z0-9_-]/g, "");
-}
-
-function sanitizeBrowserSecret(browserSecret) {
-  if (typeof browserSecret !== "string") return "";
-  return browserSecret.slice(0, MAX_BROWSER_SECRET_LEN).replace(/[^a-f0-9]/gi, "");
 }
 
 function sanitizeMessage(text) {
@@ -312,110 +262,6 @@ function sanitizeReadingUrl(readingUrl) {
   }
 }
 
-function parseReadingUrl(readingUrl) {
-  const sanitized = sanitizeReadingUrl(readingUrl);
-  if (!sanitized) return null;
-  try {
-    return new URL(sanitized);
-  } catch {
-    return null;
-  }
-}
-
-function labelFromReadingUrl(url) {
-  const segment = url.pathname.split("/").filter(Boolean).pop() || "";
-  if (!segment) return sanitizeReadingLabel(url.hostname.replace(/^www\./, ""));
-
-  try {
-    return sanitizeReadingLabel(decodeURIComponent(segment)
-      .replace(/\.[a-z0-9]+$/i, "")
-      .replace(/[-_]+/g, " "));
-  } catch {
-    return sanitizeReadingLabel(segment.replace(/[-_]+/g, " "));
-  }
-}
-
-function readingUrlAllowedForClient(client, url) {
-  const urlOrigin = normalizeOrigin(url.origin);
-  if (!urlOrigin) return false;
-  if (client.site) return urlOrigin === client.site.origin;
-  return !client.origin || urlOrigin === client.origin;
-}
-
-function sanitizeReadingState(client, message, fallback = {}) {
-  const hasReadingUrl = Object.hasOwn(message, "readingUrl");
-  const rawReadingUrl = hasReadingUrl ? message.readingUrl : fallback.readingUrl || "";
-  if (!rawReadingUrl) {
-    return { readingLabel: "", readingUrl: "", rejectedReason: "missing_reading_url", rawReadingUrl: "" };
-  }
-
-  const readingUrl = parseReadingUrl(rawReadingUrl);
-  if (!readingUrl) {
-    return {
-      readingLabel: "",
-      readingUrl: "",
-      rejectedReason: "invalid_reading_url",
-      rawReadingUrl: typeof rawReadingUrl === "string" ? rawReadingUrl.slice(0, MAX_READING_URL_LEN) : "",
-    };
-  }
-
-  if (!readingUrlAllowedForClient(client, readingUrl)) {
-    return {
-      readingLabel: "",
-      readingUrl: "",
-      rejectedReason: "off_origin_reading_url",
-      rawReadingUrl: readingUrl.href,
-    };
-  }
-
-  return {
-    readingLabel: labelFromReadingUrl(readingUrl),
-    readingUrl: readingUrl.href,
-    rejectedReason: "",
-    rawReadingUrl: readingUrl.href,
-  };
-}
-
-function rememberIdentityClient(identity, client) {
-  identity.lastIp = client.ip;
-  identity.lastUserAgent = client.userAgent;
-  identity.lastOrigin = client.origin;
-}
-
-function markIdentitySuspicious(identity, reason) {
-  if (!reason || identity.suspiciousReasons.includes(reason)) return;
-  identity.suspiciousReasons.push(reason);
-}
-
-function logPresenceAudit(client, identity, event, details = {}) {
-  if (!client.site) return;
-
-  console.warn(`[presence-audit] ${JSON.stringify({
-    event,
-    at: new Date().toISOString(),
-    siteKey: client.site.siteKey,
-    siteOrigin: client.site.origin,
-    visitorId: identity.id,
-    browserId: identity.browserId,
-    ip: client.ip,
-    origin: client.origin,
-    userAgent: client.userAgent,
-    displayName: identity.displayName,
-    color: identity.color,
-    ...details,
-  })}`);
-}
-
-function auditRejectedReading(client, identity, reading, phase) {
-  if (!client.site || !reading.rejectedReason) return;
-  markIdentitySuspicious(identity, reading.rejectedReason);
-  logPresenceAudit(client, identity, "reading_rejected", {
-    phase,
-    reason: reading.rejectedReason,
-    readingUrl: reading.rawReadingUrl,
-  });
-}
-
 function sanitizeCharacterColor(color) {
   return CHARACTER_COLORS.has(color) ? color : DEFAULT_CHARACTER_COLOR;
 }
@@ -429,13 +275,6 @@ function sanitizeSiteName(name, origin) {
   } catch {
     return "Untitled site";
   }
-}
-
-function parseOptionalEmail(email) {
-  const clean = typeof email === "string" ? email.trim().slice(0, MAX_EMAIL_LEN) : "";
-  if (!clean) return { ok: true, email: null };
-  if (!EMAIL_RE.test(clean)) return { ok: false, email: null };
-  return { ok: true, email: clean };
 }
 
 function createToken(prefix, bytes = 18) {
@@ -491,7 +330,6 @@ function resolvePublicFile(requestUrl, hostHeader) {
     ["/register", "/register.html"],
     ["/admin", "/admin.html"],
     ["/service-admin", "/service-admin.html"],
-    ["/docs", "/docs.html"],
   ]);
   const pathname = aliases.get(url.pathname) || url.pathname;
   const normalized = path.normalize(pathname).replace(/^\.+/, "");
@@ -613,26 +451,6 @@ async function sendTelegramChatNotification(site, identity, text, at) {
   }
 }
 
-function getSceneConfig(site) {
-  return sanitizeSceneConfig(site?.sceneConfig || DEFAULT_SITE_SCENE_CONFIG);
-}
-
-function getStyleConfig(site) {
-  return sanitizeSiteStyle(site?.styleConfig || DEFAULT_SITE_STYLE);
-}
-
-function getSceneProps(site) {
-  return site ? buildSceneProps(getSceneConfig(site)) : Array.from(PROPS_BY_ID.values());
-}
-
-function getSceneBirdPerches(site) {
-  return site ? buildBirdPerches(getSceneProps(site)) : BIRD_PERCHES;
-}
-
-function buildStyleSnippet(site) {
-  return buildSiteCss(getStyleConfig(site));
-}
-
 function buildEmbedSnippet(req, site) {
   const serverOrigin = getPublicOrigin(req);
 
@@ -643,8 +461,7 @@ function buildEmbedSnippet(req, site) {
 
   mountTownSquare(document.getElementById("townsquare-root"), {
     serverOrigin: "${serverOrigin}",
-    siteKey: "${site.siteKey}",
-    scene: ${JSON.stringify(getSceneConfig(site))}
+    siteKey: "${site.siteKey}"
   });
 </script>`;
 }
@@ -659,22 +476,9 @@ function buildAdminUrl(req, adminToken) {
 const registrationsByIp = new Map();
 const adminAuthFailuresByIp = new Map();
 const serviceAdminAuthFailuresByIp = new Map();
-const connectionCountByIp = new Map();
 
 function getRequestIp(req) {
-  const remote = req.socket.remoteAddress || "unknown";
-  if (!TRUSTED_PROXY_IPS.has(remote)) return remote;
-
-  const forwarded = req.headers["x-forwarded-for"];
-  if (forwarded) {
-    const first = String(forwarded).split(",")[0].trim();
-    if (first) return first;
-  }
-
-  const realIp = req.headers["x-real-ip"];
-  if (realIp) return String(realIp).trim();
-
-  return remote;
+  return req.socket.remoteAddress || "unknown";
 }
 
 function recentBucket(map, key, limit) {
@@ -736,19 +540,7 @@ function handleRegisterSite(req, res) {
       return;
     }
 
-    const parsedEmail = parseOptionalEmail(body.email);
-    if (!parsedEmail.ok) {
-      sendJson(res, 400, { error: "Enter a valid email address, or leave the field empty." });
-      return;
-    }
-
-    const { site, adminToken } = createSiteRecord({
-      name: body.name,
-      origin,
-      email: parsedEmail.email,
-      sceneConfig: body.sceneConfig,
-      styleConfig: body.styleConfig,
-    });
+    const { site, adminToken } = createSiteRecord({ name: body.name, origin });
     sitesByKey.set(site.siteKey, site);
     saveSites();
 
@@ -757,7 +549,6 @@ function handleRegisterSite(req, res) {
       adminToken,
       adminUrl: buildAdminUrl(req, adminToken),
       embedSnippet: buildEmbedSnippet(req, site),
-      styleSnippet: buildStyleSnippet(site),
     });
   });
 }
@@ -772,8 +563,7 @@ function sendAdminSite(req, res, site, adminToken) {
     site: publicSite(site),
     adminUrl: buildAdminUrl(req, adminToken),
     embedSnippet: buildEmbedSnippet(req, site),
-    styleSnippet: buildStyleSnippet(site),
-    scene: getSceneStats(getScene(site.siteKey, site)),
+    scene: getSceneStats(getScene(site.siteKey)),
   });
 }
 
@@ -821,15 +611,6 @@ function handleAdminLogin(req, res) {
 }
 
 const ADMIN_ACTIONS = {
-  updateCustomization(site, scene, body) {
-    site.sceneConfig = sanitizeSceneConfig(body.sceneConfig);
-    site.styleConfig = sanitizeSiteStyle(body.styleConfig);
-    touchSite(site);
-
-    if (scene.clients.size === 0) {
-      scenes.delete(site.siteKey);
-    }
-  },
   setChatDisabled(site, scene, body) {
     site.chatDisabled = Boolean(body.disabled);
     touchSite(site);
@@ -1017,6 +798,7 @@ function send(ws, message) {
 function snapshotIdentity(identity) {
   return {
     id: identity.id,
+    browserId: identity.browserId,
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
@@ -1071,31 +853,19 @@ function disconnectInactiveIdentity(identity) {
   if (!identity.joined) return;
   clearLeaveTimer(identity);
   identity.inactiveKick = true;
-  const awayMin = identity.awaySince ? Math.round((Date.now() - identity.awaySince) / 60000) : null;
-  const idleMin = identity.lastActivityAt ? Math.round((Date.now() - identity.lastActivityAt) / 60000) : null;
-  console.log(`[inactive] kicking visitor ${identity.id} (away=${awayMin}m idle=${idleMin}m clients=${identity.clients.size})`);
   closeIdentityClients(identity, 4001, "inactive");
 }
 
 function sweepInactiveIdentities(now = Date.now()) {
   if (INACTIVE_DISCONNECT_MS <= 0) return;
 
-  let total = 0, kicked = 0;
   for (const scene of scenes.values()) {
     for (const identity of scene.identities.values()) {
-      if (!identity.joined) continue;
-      total++;
-      const idleMs = identity.lastActivityAt > 0 ? now - identity.lastActivityAt : -1;
-      const awayMs = identity.awaySince !== null ? now - identity.awaySince : -1;
       if (isIdentityInactive(identity, now)) {
-        kicked++;
         disconnectInactiveIdentity(identity);
-      } else if (idleMs > 60000 || awayMs > 60000) {
-        console.log(`[sweep] id=${identity.id} clients=${identity.clients.size} readingActive=${identity.readingActive} idle=${Math.round(idleMs/60000)}m away=${awayMs < 0 ? "null" : Math.round(awayMs/60000) + "m"}`);
       }
     }
   }
-  if (total > 0) console.log(`[sweep] checked=${total} kicked=${kicked}`);
 }
 
 function clearLeaveTimer(identity) {
@@ -1140,29 +910,11 @@ function emitIdentityState(identity, options = {}) {
   broadcast(scene, message, { exceptConnectionId });
 }
 
-function createEphemeralIdentity(scene, fallbackX, connectionId) {
-  const key = `connection-${connectionId}`;
-  const existing = scene.identityByBrowser.get(key);
-  if (existing) {
-    return existing;
-  }
-
-  const identity = createIdentity(scene.nextIdentityId++, key, fallbackX);
-  identity.scene = scene;
-  scene.identities.set(identity.id, identity);
-  scene.identityByBrowser.set(key, identity);
-  return identity;
-}
-
-function getOrCreateIdentity(scene, browserId, browserSecret, fallbackX, connectionId) {
+function getOrCreateIdentity(scene, browserId, fallbackX, connectionId) {
   const key = sanitizeBrowserId(browserId) || `connection-${connectionId}`;
   const existing = scene.identityByBrowser.get(key);
   if (existing) {
-    const cleanSecret = sanitizeBrowserSecret(browserSecret);
-    if (cleanSecret && cleanSecret === existing.browserSecret) {
-      return existing;
-    }
-    return createEphemeralIdentity(scene, fallbackX, connectionId);
+    return existing;
   }
 
   const identity = createIdentity(scene.nextIdentityId++, key, fallbackX);
@@ -1230,7 +982,7 @@ function occupiedBirdPerchIds(scene) {
 
 function pickFreeBirdPerch(scene) {
   const occupied = occupiedBirdPerchIds(scene);
-  const free = scene.birdPerches.filter((perch) => !occupied.has(perch.id));
+  const free = BIRD_PERCHES.filter((perch) => !occupied.has(perch.id));
   if (free.length === 0) return null;
   return free[Math.floor(Math.random() * free.length)];
 }
@@ -1263,7 +1015,7 @@ function maybeFleeBirds(scene, playerX) {
 }
 
 function spawnBird(scene) {
-  if (scene.birds.size >= scene.maxBirds) return false;
+  if (scene.birds.size >= MAX_BIRDS) return false;
 
   const perch = pickFreeBirdPerch(scene);
   if (!perch) return false;
@@ -1291,21 +1043,15 @@ function spawnBird(scene) {
 
 function tickSceneBirds(scene, now) {
   if (!sceneHasJoinedClients(scene)) return;
-  if (scene.birds.size >= scene.maxBirds) return;
+  if (scene.birds.size >= MAX_BIRDS) return;
   if (now < scene.nextSpawnAt) return;
   spawnBird(scene);
 }
 
-function createScene(key, site = null) {
+function createScene(key) {
   const now = Date.now();
-  const config = getSceneConfig(site);
-  const props = getSceneProps(site);
   return {
     key,
-    props,
-    propsById: new Map(props.map((prop) => [prop.id, prop])),
-    birdPerches: getSceneBirdPerches(site),
-    maxBirds: config.birds,
     clients: new Map(),
     identities: new Map(),
     identityByBrowser: new Map(),
@@ -1316,7 +1062,7 @@ function createScene(key, site = null) {
   };
 }
 
-function createSiteRecord({ name, origin, email, sceneConfig, styleConfig }) {
+function createSiteRecord({ name, origin }) {
   const now = Date.now();
   const adminToken = createToken("admin", 24);
   return {
@@ -1326,9 +1072,6 @@ function createSiteRecord({ name, origin, email, sceneConfig, styleConfig }) {
       adminTokenHash: hashAdminToken(adminToken),
       name: sanitizeSiteName(name, origin),
       origin,
-      email: email || null,
-      sceneConfig: sanitizeSceneConfig(sceneConfig),
-      styleConfig: sanitizeSiteStyle(styleConfig),
       disabled: false,
       chatDisabled: false,
       verifiedAt: null,
@@ -1387,9 +1130,6 @@ function publicSite(site) {
     siteKey: site.siteKey,
     name: site.name,
     origin: site.origin,
-    email: site.email || null,
-    sceneConfig: getSceneConfig(site),
-    styleConfig: getStyleConfig(site),
     disabled: site.disabled,
     chatDisabled: site.chatDisabled,
     verifiedAt: site.verifiedAt,
@@ -1399,11 +1139,11 @@ function publicSite(site) {
   };
 }
 
-function getScene(sceneKey, site = null) {
+function getScene(sceneKey) {
   const existing = scenes.get(sceneKey);
   if (existing) return existing;
 
-  const scene = createScene(sceneKey, site);
+  const scene = createScene(sceneKey);
   scenes.set(sceneKey, scene);
   return scene;
 }
@@ -1419,14 +1159,6 @@ function getSceneStats(scene) {
       propId: identity.propId,
       displayName: identity.displayName,
       color: identity.color,
-      readingLabel: identity.readingLabel,
-      readingUrl: identity.readingUrl,
-      readingActive: identity.readingActive,
-      suspicious: identity.suspiciousReasons.length > 0,
-      suspiciousReasons: identity.suspiciousReasons,
-      lastIp: identity.lastIp,
-      lastUserAgent: identity.lastUserAgent,
-      lastOrigin: identity.lastOrigin,
       clientCount: identity.clients.size,
       messages: identity.messages,
     }));
@@ -1438,7 +1170,7 @@ function validateSiteAccess(reqUrl) {
   const url = new URL(reqUrl, `http://${HOST}:${PORT}`);
   const siteKey = url.searchParams.get("siteKey") || "";
   if (!siteKey) {
-    return { ok: true, scene: getScene("default", null), site: null };
+    return { ok: true, scene: getScene("default"), site: null };
   }
 
   const site = sitesByKey.get(siteKey);
@@ -1446,7 +1178,7 @@ function validateSiteAccess(reqUrl) {
     return { ok: false, status: 403, reason: "site disabled or unknown" };
   }
 
-  return { ok: true, scene: getScene(site.siteKey, site), site };
+  return { ok: true, scene: getScene(site.siteKey), site };
 }
 
 function isOriginAllowedForSite(origin, site) {
@@ -1542,8 +1274,6 @@ const wss = new WebSocketServer({
 function handleInit(client, message) {
   if (client.joined) return;
 
-  syncClientSceneProps(client, message);
-
   const nextX = clampPosition(message.x);
   const fallbackX = nextX ?? randomSpawnX();
   const { scene, site } = client;
@@ -1553,15 +1283,16 @@ function handleInit(client, message) {
     return;
   }
 
-  const identity = getOrCreateIdentity(scene, message.browserId, message.browserSecret, fallbackX, client.connectionId);
+  const identity = getOrCreateIdentity(scene, message.browserId, fallbackX, client.connectionId);
   clearLeaveTimer(identity);
   const previousReadingLabel = identity.readingLabel;
   const previousReadingUrl = identity.readingUrl;
   const previousReadingActive = identity.readingActive;
-  const reading = sanitizeReadingState(client, message, identity);
-  if (Object.hasOwn(message, "readingUrl") || reading.rejectedReason) {
-    identity.readingLabel = reading.readingLabel;
-    identity.readingUrl = reading.readingUrl;
+  if (Object.hasOwn(message, "readingLabel")) {
+    identity.readingLabel = sanitizeReadingLabel(message.readingLabel);
+  }
+  if (Object.hasOwn(message, "readingUrl")) {
+    identity.readingUrl = sanitizeReadingUrl(message.readingUrl);
   }
   client.readingActive = message.readingActive !== false;
 
@@ -1569,8 +1300,6 @@ function handleInit(client, message) {
     identity.displayName = sanitizeDisplayName(message.displayName);
     identity.color = sanitizeCharacterColor(message.color);
   }
-  rememberIdentityClient(identity, client);
-  auditRejectedReading(client, identity, reading, "init");
 
   client.identity = identity;
   client.joined = true;
@@ -1584,7 +1313,6 @@ function handleInit(client, message) {
   send(client.ws, {
     type: "hello",
     id: identity.id,
-    browserSecret: identity.browserSecret,
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
@@ -1689,14 +1417,12 @@ function handleProfile(client, message) {
 function handleReading(client, message) {
   if (!client.identity) return;
 
-  const reading = sanitizeReadingState(client, message, client.identity);
-  const { readingLabel, readingUrl } = reading;
+  const readingLabel = sanitizeReadingLabel(message.readingLabel);
+  const readingUrl = sanitizeReadingUrl(message.readingUrl);
   const readingActive = message.readingActive !== false;
   const previousReadingLabel = client.identity.readingLabel;
   const previousReadingUrl = client.identity.readingUrl;
   const previousReadingActive = client.identity.readingActive;
-  rememberIdentityClient(client.identity, client);
-  auditRejectedReading(client, client.identity, reading, "update");
   if (
     readingLabel === previousReadingLabel
     && readingUrl === previousReadingUrl
@@ -1727,14 +1453,9 @@ function handleReading(client, message) {
   });
 }
 
-function handleSceneConfig(client, message) {
-  if (client.site) return;
-  syncClientSceneProps(client, message);
-}
-
 function handleSettle(client, message) {
   if (!client.identity) return;
-  const prop = client.propsById.get(message.propId);
+  const prop = PROPS_BY_ID.get(message.propId);
   if (!prop?.pose) return;
 
   const identity = client.identity;
@@ -1872,7 +1593,6 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  const origin = normalizeOrigin(req.headers.origin || "");
   const originAllowed = access.site
     ? isOriginAllowedForSite(req.headers.origin, access.site)
     : isAllowedOrigin(req.headers.origin, req.headers.host);
@@ -1887,44 +1607,17 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  const ip = getRequestIp(req);
-  const ipCount = connectionCountByIp.get(ip) ?? 0;
-  if (ipCount >= MAX_CONNECTIONS_PER_IP) {
-    ws.close(1013, "too many connections");
-    return;
-  }
-  connectionCountByIp.set(ip, ipCount + 1);
-
-  const client = createClient(
-    nextConnectionId++,
-    ws,
-    access.scene,
-    access.site,
-    origin || "",
-    ip,
-    String(req.headers["user-agent"] || ""),
-  );
+  const client = createClient(nextConnectionId++, ws, access.scene, access.site);
   access.scene.clients.set(client.connectionId, client);
   ws.isAlive = true;
-
-  const initTimer = setTimeout(() => {
-    if (!client.joined) ws.close(4008, "init timeout");
-  }, INIT_TIMEOUT_MS);
 
   ws.on("message", (raw) => handleClientMessage(client, raw));
   ws.on("pong", () => {
     ws.isAlive = true;
   });
   ws.on("close", () => {
-    clearTimeout(initTimer);
     client.scene.clients.delete(client.connectionId);
     handleClientClose(client);
-    const remaining = (connectionCountByIp.get(ip) ?? 1) - 1;
-    if (remaining <= 0) {
-      connectionCountByIp.delete(ip);
-    } else {
-      connectionCountByIp.set(ip, remaining);
-    }
   });
   ws.on("error", () => {
     // close handler owns cleanup
@@ -1938,7 +1631,11 @@ wss.on("close", () => {
 });
 
 async function startServer() {
-  await loadSharedModules();
+  const { PROPS } = await import("./public/scene-props.mjs");
+  PROPS_BY_ID = new Map(PROPS.map((prop) => [prop.id, prop]));
+
+  const birdPerches = await import("./public/bird-perches.mjs");
+  BIRD_PERCHES = birdPerches.BIRD_PERCHES;
 
   const shared = await import("./public/shared-constants.mjs");
   MIN_X = shared.MIN_X;
@@ -1953,25 +1650,6 @@ async function startServer() {
   server.listen(PORT, HOST, () => {
     console.log(`TownSquare server running at http://${HOST}:${PORT}`);
   });
-}
-
-async function loadSharedModules() {
-  const [siteConfig, scenePropsModule, birdPerchesModule] = await Promise.all([
-    import("./public/site-config.mjs"),
-    import("./public/scene-props.mjs"),
-    import("./public/bird-perches.mjs"),
-  ]);
-
-  DEFAULT_SITE_SCENE_CONFIG = siteConfig.DEFAULT_SCENE_CONFIG;
-  DEFAULT_SITE_STYLE = siteConfig.DEFAULT_SITE_STYLE;
-  sanitizeSceneConfig = siteConfig.sanitizeSceneConfig;
-  sanitizeSiteStyle = siteConfig.sanitizeSiteStyle;
-  buildSceneProps = siteConfig.buildSceneProps;
-  buildBirdPerches = siteConfig.buildBirdPerches;
-  buildSiteCss = siteConfig.buildSiteCss;
-
-  PROPS_BY_ID = new Map(scenePropsModule.PROPS.map((prop) => [prop.id, prop]));
-  BIRD_PERCHES = birdPerchesModule.BIRD_PERCHES;
 }
 
 startServer().catch((error) => {

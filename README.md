@@ -27,17 +27,16 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 - `public/tokens.css` — shared design tokens (imported by widget.css and page.css)
 - `public/demo.mjs` — local demo bootstrap
 - `public/index.html` — demo host page for local development
-- `public/register.html` — no-account hosted site registration + preview page
+- `public/register.html` — no-account hosted site registration page
 - `public/admin.html` — token-protected hosted site admin page
-- `public/site-config.mjs` — shared scene/style config helpers for widget + server
 - `public/service-admin.html` — service-level registered site management page
 - `public/dev.html` — local simulation page for configurable walking/talking characters
 - `public/walk-sandbox.html` — local walk-cycle inspection sandbox
 - `scripts/smoke-test.js` — automated websocket smoke test
 - `spec.md` — product truth
 - `roadmap.md` — product-facing sequencing
-- `public/docs.html` — in-app docs page (customization + deployment guide), served at `/docs`
 - `docs/architecture.md` — current boundaries and future hosted shape
+- `docs/deployment.md` — self-hosting and embed instructions
 
 ## Requirements
 
@@ -129,36 +128,10 @@ Notes:
 - `serverOrigin` is the realtime/backend origin the widget should connect to.
 - `socketPath` defaults to `/live`; set it explicitly when your reverse proxy exposes TownSquare on a different websocket path such as `/townsquare/live`.
 - `siteKey` is only needed when using one hosted TownSquare server for multiple registered sites.
-- `scene` lets you configure prop counts per mount/site (`benches`, `trees`, `lamps`, `birds`).
-- `style` lets you override TownSquare CSS tokens without forking widget styles.
 - The host page owns placement and surrounding layout.
 - TownSquare owns the scene, movement, chat, and realtime transport inside the mount root.
 
-Example with local customization:
-
-```js
-mountTownSquare(document.getElementById("townsquare-root"), {
-  serverOrigin: "https://your-townsquare-host",
-  scene: {
-    benches: 1,
-    trees: 2,
-    lamps: 1,
-    birds: 3,
-  },
-  style: {
-    scene: "#e6dfd3",
-    page: "#f5efe7",
-    surface: "#fffaf6",
-    ink: "#2d2926",
-    accent: "#9d5c2f",
-  },
-});
-```
-
 ## Hosted registration
-
-For a user-facing guide to all current configuration options, see the in-app docs at `/docs` (source: `public/docs.html`).
-
 
 TownSquare can also run as a tiny hosted service.
 Open:
@@ -170,13 +143,9 @@ https://your-townsquare-host/register
 The flow is intentionally accountless:
 
 - enter a website URL
-- choose scene props and color overrides
-- preview the square live before creating it
 - receive an embed snippet with a public site key
-- receive a generated CSS snippet for the selected style
 - receive a private admin token and admin link
 - paste the snippet into the website
-- paste the CSS into the site stylesheet
 
 The public `siteKey` routes visitors into that site's isolated scene.
 The private admin token is the password for settings and moderation.
@@ -188,8 +157,6 @@ The admin page can:
 
 - show install/seen status
 - show active visitors
-- edit scene/style customization with a live preview
-- regenerate the current embed snippet and CSS
 - kick or block active visitors
 - disable chat
 - disable the site

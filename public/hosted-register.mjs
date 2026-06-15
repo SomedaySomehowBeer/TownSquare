@@ -1,16 +1,3 @@
-import { bindCopy, setStatus } from "./hosted-common.mjs";
-import {
-  applyConfigToForm,
-  bindSceneCountProse,
-  bindStyleColorFields,
-  isSceneCountInputName,
-  readSceneConfigFromForm,
-  readStyleConfigFromForm,
-  renderScenePositionFields,
-  sanitizeSceneConfig,
-} from "./site-config.mjs";
-import { mountTownSquare } from "./townsquare.mjs";
-
 const registerView = document.getElementById("register-view");
 const successView = document.getElementById("success-view");
 const form = document.getElementById("register-form");
@@ -18,35 +5,32 @@ const submitButton = document.getElementById("register-submit");
 const statusEl = document.getElementById("register-status");
 const successSiteEl = document.getElementById("success-site");
 const snippetEl = document.getElementById("embed-snippet");
-const styleSnippetEl = document.getElementById("style-snippet");
 const adminTokenEl = document.getElementById("admin-token");
 const adminLink = document.getElementById("admin-link");
-const previewRoot = document.getElementById("townsquare-root");
-const scenePositionFields = document.getElementById("scene-position-fields");
 
-let previewHandle = null;
-
-function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(form)) {
-  const next = sanitizeSceneConfig(sceneConfig);
-  renderScenePositionFields(scenePositionFields, next);
-  applyConfigToForm(form, next);
+function setStatus(message, isError = false) {
+  statusEl.textContent = message;
+  statusEl.hidden = !message;
+  statusEl.classList.toggle("hosted-status--error", isError);
 }
 
-function mountPreview() {
-  if (!(previewRoot instanceof HTMLElement)) return;
-  const scene = readSceneConfigFromForm(form);
-  const style = readStyleConfigFromForm(form);
-  if (previewHandle) {
-    previewHandle.updateConfig({ scene, style });
-    return;
-  }
-  previewHandle = mountTownSquare(previewRoot, {
-    serverOrigin: window.location.origin,
-    scene,
-    style,
-    solo: true,
-    readingLabel: "Registration preview",
-    readingUrl: window.location.href,
+function bindCopy(buttonId, source) {
+  const button = document.getElementById(buttonId);
+  const originalText = button.textContent;
+
+  button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(source.value);
+    } catch {
+      source.focus();
+      source.select();
+      return;
+    }
+
+    button.textContent = "Copied";
+    setTimeout(() => {
+      button.textContent = originalText;
+    }, 1200);
   });
 }
 
@@ -54,27 +38,17 @@ function showSuccess(body) {
   successSiteEl.textContent = `${body.site.name} — ${body.site.origin}`;
   adminTokenEl.value = body.adminToken;
   snippetEl.value = body.embedSnippet;
-  styleSnippetEl.value = body.styleSnippet;
   adminLink.href = body.adminUrl;
 
-  previewHandle?.destroy();
-  previewHandle = null;
   registerView.hidden = true;
   successView.hidden = false;
   window.scrollTo({ top: 0 });
 }
 
-form.addEventListener("input", (event) => {
-  if (isSceneCountInputName(event.target?.name || "")) {
-    syncScenePositionInputs(readSceneConfigFromForm(form));
-  }
-  mountPreview();
-});
-
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   submitButton.disabled = true;
-  setStatus(statusEl, "Creating your TownSquare...", false, { hideWhenEmpty: true });
+  setStatus("Creating your TownSquare...");
 
   try {
     const formData = new FormData(form);
@@ -84,32 +58,23 @@ form.addEventListener("submit", async (event) => {
       body: JSON.stringify({
         origin: formData.get("origin"),
         name: formData.get("name"),
-        email: formData.get("email"),
-        sceneConfig: readSceneConfigFromForm(form),
-        styleConfig: readStyleConfigFromForm(form),
       }),
     });
 
     const body = await response.json();
     if (!response.ok) {
-      setStatus(statusEl, body.error || "Could not create this TownSquare.", true, { hideWhenEmpty: true });
+      setStatus(body.error || "Could not create this TownSquare.", true);
       return;
     }
 
-    setStatus(statusEl, "", false, { hideWhenEmpty: true });
+    setStatus("");
     showSuccess(body);
   } catch {
-    setStatus(statusEl, "Could not reach the server. Check your connection and try again.", true, { hideWhenEmpty: true });
+    setStatus("Could not reach the server. Check your connection and try again.", true);
   } finally {
     submitButton.disabled = false;
   }
 });
 
-bindCopy(document.getElementById("copy-token"), () => adminTokenEl.value, { fallbackTarget: adminTokenEl });
-bindCopy(document.getElementById("copy-snippet"), () => snippetEl.value, { fallbackTarget: snippetEl });
-bindCopy(document.getElementById("copy-style"), () => styleSnippetEl.value, { fallbackTarget: styleSnippetEl });
-bindStyleColorFields(form);
-bindSceneCountProse(form);
-applyConfigToForm(form);
-syncScenePositionInputs();
-mountPreview();
+bindCopy("copy-token", adminTokenEl);
+bindCopy("copy-snippet", snippetEl);

@@ -56,9 +56,6 @@
  * @property {string} socketUrl
  * @property {string} browserId
  * @property {Map<string, PeerState>} peers
- * @property {Array<import("../scene-props.mjs").SceneProp>} sceneProps
- * @property {Map<string, import("../scene-props.mjs").SceneProp>} propsById
- * @property {Map<string, import("../bird-perches.mjs").BirdPerch>} birdPerchesById
  * @property {ReturnType<typeof setTimeout> | null} reconnectTimer
  * @property {HTMLElement} app
  * @property {HTMLElement} stage

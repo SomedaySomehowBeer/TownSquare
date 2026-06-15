@@ -3,7 +3,7 @@
  */
 
 import { layoutBubbleColumns } from "./bubble-layout.mjs";
-import { MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, SEND_INTERVAL_MS } from "./constants.mjs";
+import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, SEND_INTERVAL_MS } from "./constants.mjs";
 import { playJump, renderAvatar, setFacing, setWalking, updatePose, updatePropEffects } from "./dom.mjs";
 
 /**
@@ -36,9 +36,9 @@ export function maybeRequestPropSettle(ctx, now) {
   if (self.pose) return;
   if (socket.readyState !== WebSocket.OPEN) return;
 
-  const prop = ctx.sceneProps
-    .filter((candidate) => candidate.pose && candidate.zoneRadius > 0)
-    .find((candidate) => Math.abs(self.x - candidate.x) < candidate.zoneRadius);
+  const prop = INTERACTIVE_PROPS.find((candidate) => (
+    Math.abs(self.x - candidate.x) < candidate.zoneRadius
+  ));
   if (!prop) {
     resetPropSettle(ctx);
     return;
@@ -103,7 +103,7 @@ export function triggerJump(ctx) {
   ctx.self.pose = null;
   ctx.self.propId = null;
   updatePose(ctx.self.avatar, ctx.self.pose);
-  updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId, ctx.sceneProps);
+  updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
   playJump(ctx.self.avatar);
 
   if (ctx.socket.readyState === WebSocket.OPEN) {
@@ -155,20 +155,16 @@ export function tick(ctx, now) {
     }
     renderAvatar(ctx.self.avatar, ctx.self.x);
     setFacing(ctx.self.avatar, direction < 0);
-    updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId, ctx.sceneProps);
+    updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
     setWalking(ctx.self.avatar, true);
     maybeSendMove(ctx);
   } else {
     setWalking(ctx.self.avatar, false);
-    updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId, ctx.sceneProps);
+    updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
     maybeRequestPropSettle(ctx, now);
   }
 
-  layoutBubbleColumns(
-    ctx.stage,
-    ctx.options.solo === true ? [ctx.self] : [ctx.self, ...ctx.peers.values()],
-    ctx.self.x,
-  );
+  layoutBubbleColumns(ctx.stage, [ctx.self, ...ctx.peers.values()], ctx.self.x);
 
   ctx.frameHandle = requestAnimationFrame((nextNow) => tick(ctx, nextNow));
 }

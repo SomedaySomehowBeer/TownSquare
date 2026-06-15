@@ -14,15 +14,10 @@ import {
   setStatusMessage,
   updateStatus,
 } from "./presence.mjs";
-import { getBrowserSecret, saveBrowserSecret } from "./utils.mjs";
 
 /**
  * @typedef {import("./context.mjs").WidgetContext} WidgetContext
  */
-
-function isSolo(ctx) {
-  return ctx.options.solo === true;
-}
 
 const WALK_BUMP_MS = 120;
 const INITIAL_RECONNECT_DELAY_MS = 500;
@@ -55,7 +50,7 @@ function applyJump(ctx, id) {
   presence.pose = null;
   presence.propId = null;
   updatePose(presence.avatar, presence.pose);
-  updatePropEffects(presence.avatar, presence.x, presence.propId, ctx.sceneProps);
+  updatePropEffects(presence.avatar, presence.x, presence.propId);
   playJump(presence.avatar);
 }
 
@@ -73,22 +68,16 @@ export function wireSocket(ctx) {
 
     socket.addEventListener("open", () => {
       reconnectDelay = INITIAL_RECONNECT_DELAY_MS;
-      const init = {
+      socket.send(JSON.stringify({
         type: "init",
         browserId,
-        browserSecret: getBrowserSecret(),
         x: self.x,
         displayName: self.displayName,
         color: self.color,
         readingLabel: self.readingLabel,
         readingUrl: self.readingUrl,
         readingActive: self.readingActive,
-      };
-      const siteKey = ctx.options.siteKey || ctx.root.dataset.townsquareSiteKey || "";
-      if (!siteKey && ctx.options.scene) {
-        init.sceneConfig = ctx.options.scene;
-      }
-      socket.send(JSON.stringify(init));
+      }));
     });
 
     socket.addEventListener("error", () => {
@@ -111,17 +100,14 @@ export function wireSocket(ctx) {
 
       if (message.type === "hello") {
         self.id = message.id;
-        saveBrowserSecret(message.browserSecret);
         applySelfState(ctx, message);
         // Backlog seeds the hover tray only — it never pops a live bubble, so a
         // refresh doesn't replay everyone's last messages into the scene.
         for (const recent of message.messages || []) {
           recordMessage(self.avatar, recent);
         }
-        if (!isSolo(ctx)) {
-          for (const peer of message.peers) {
-            applyPeerState(ctx, peer);
-          }
+        for (const peer of message.peers) {
+          applyPeerState(ctx, peer);
         }
         syncBirdsFromHello(ctx, message.birds);
         updateStatus(ctx);
@@ -138,16 +124,12 @@ export function wireSocket(ctx) {
       }
 
       if (message.type === "join") {
-        if (!isSolo(ctx)) {
-          applyPeerState(ctx, message.peer);
-        }
+        applyPeerState(ctx, message.peer);
         return;
       }
 
       if (message.type === "leave") {
-        if (!isSolo(ctx)) {
-          removePeer(ctx, message.id);
-        }
+        removePeer(ctx, message.id);
         return;
       }
 
@@ -161,8 +143,6 @@ export function wireSocket(ctx) {
           return;
         }
 
-        if (isSolo(ctx)) return;
-
         const peer = applyPeerState(ctx, message);
         if (!peer.pose) {
           bumpWalking(peer);
@@ -172,9 +152,7 @@ export function wireSocket(ctx) {
 
       if (message.type === "action") {
         if (message.action === "jump") {
-          if (message.id === self.id || !isSolo(ctx)) {
-            applyJump(ctx, message.id);
-          }
+          applyJump(ctx, message.id);
         }
         return;
       }
@@ -189,8 +167,6 @@ export function wireSocket(ctx) {
           return;
         }
 
-        if (isSolo(ctx)) return;
-
         const peer = peers.get(message.id);
         if (!peer) return;
         if (ctx.quiet) {
@@ -202,16 +178,12 @@ export function wireSocket(ctx) {
       }
 
       if (message.type === "profile") {
-        if (message.id === self.id || !isSolo(ctx)) {
-          applyProfileState(ctx, message);
-        }
+        applyProfileState(ctx, message);
         return;
       }
 
       if (message.type === "reading") {
-        if (message.id === self.id || !isSolo(ctx)) {
-          applyReadingState(ctx, message);
-        }
+        applyReadingState(ctx, message);
       }
     });
 
