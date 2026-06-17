@@ -60,7 +60,7 @@ import {
  * @property {{ scene?: string, page?: string, surface?: string, ink?: string, accent?: string, other?: string, ground?: string }} [style] A single flat palette written as inline CSS variables on the mount root. Pass this only when you want JS to own the palette for the current `theme` (e.g. the live preview). Omit it to theme via CSS instead — set the same tokens (`--scene`, `--page`, `--surface`, `--ink`, `--you`, `--other`, `--ground`) on `#townsquare-root` in your own stylesheet; when `style` is absent the widget writes nothing inline so your rules win.
  * @property {string} [readingLabel] Explicit page label. Defaults to the page heading, then document title.
  * @property {string} [readingUrl] Explicit page URL. Defaults to the current browser URL.
- * @property {"auto" | "light" | "dark"} [theme="auto"] Widget palette. `auto` follows `prefers-color-scheme`; use `dark` when the host page has a manual dark toggle.
+ * @property {"auto" | "light" | "dark" | "host"} [theme="auto"] Widget palette. `auto` follows `prefers-color-scheme`; `host` follows common host-page dark mode signals.
  * @property {boolean} [preview=false] Static registration-style preview: fixed spawn position, no live socket, and in-place scene/style updates via the mount handle.
  * @property {boolean} [solo=false] Live socket, but hide other visitors. Useful for registration/admin previews on shared default scenes.
  */
@@ -129,7 +129,7 @@ export function mountTownSquare(root, options = {}) {
   const coarsePointer = typeof window.matchMedia === "function"
     && window.matchMedia("(pointer: coarse)").matches;
 
-  applyWidgetTheme(root, resolveWidgetTheme(root, options));
+  const unwatchTheme = applyWidgetTheme(root, resolveWidgetTheme(root, options));
   root.replaceChildren();
 
   const {
@@ -309,6 +309,7 @@ export function mountTownSquare(root, options = {}) {
     },
     destroy() {
       ctx.disposed = true;
+      unwatchTheme();
       stopGameLoop(ctx);
       destroyBirds(ctx);
       unwireKeyboard(ctx);

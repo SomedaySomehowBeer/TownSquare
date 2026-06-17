@@ -571,7 +571,8 @@ function buildEmbedSnippet(req, site) {
   mountTownSquare(document.getElementById("townsquare-root"), {
     serverOrigin: "${serverOrigin}",
     siteKey: "${site.siteKey}",
-    scene: ${JSON.stringify(getSceneConfig(site))}
+    scene: ${JSON.stringify(getSceneConfig(site))},
+    theme: "host"
   });
 </script>`;
 }
