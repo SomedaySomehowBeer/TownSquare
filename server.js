@@ -116,16 +116,11 @@ let PROPS_BY_ID = new Map();
 let BIRD_PERCHES = [];
 let DEFAULT_SITE_SCENE_CONFIG = { benches: 2, trees: 1, lamps: 1, birds: 3 };
 let DEFAULT_SITE_STYLE = {
-  scene: "#e4e2dd",
-  page: "#efede9",
-  surface: "#fdf8f4",
-  ink: "#2a2926",
-  accent: "#c8641f",
-  other: "#26241f",
-  ground: "rgba(42, 41, 38, 0.16)",
+  light: { scene: "#e4e2dd", page: "#efede9", surface: "#fdf8f4", ink: "#2a2926", accent: "#c8641f", other: "#26241f", ground: "rgba(42, 41, 38, 0.16)" },
+  dark: { scene: "#242521", page: "#181917", surface: "#24231f", ink: "#f2eee6", accent: "#df8a43", other: "#ddd7cc", ground: "rgba(242, 238, 230, 0.18)" },
 };
 let sanitizeSceneConfig = (config) => ({ ...DEFAULT_SITE_SCENE_CONFIG, ...(config || {}) });
-let sanitizeSiteStyle = (style) => ({ ...DEFAULT_SITE_STYLE, ...(style || {}) });
+let sanitizeSiteStyle = (style) => (style && (style.light || style.dark) ? style : { ...DEFAULT_SITE_STYLE, light: { ...DEFAULT_SITE_STYLE.light, ...(style || {}) } });
 let buildSceneProps = () => [];
 let buildBirdPerches = () => [];
 let buildSiteCss = () => "";

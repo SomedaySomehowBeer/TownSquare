@@ -161,6 +161,10 @@ body {
 
 .hosted-preview-dock .hosted-section-head {
   flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   width: min(760px, 100%);
   margin: 0 auto;
   padding: 8px 16px 0;
@@ -696,6 +700,49 @@ body {
 
 .hosted-grid--compact {
   gap: 12px;
+}
+
+.hosted-style-modes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.hosted-style-col__head {
+  margin: 0 0 8px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hosted-preview-modes {
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--hair-2);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--surface) 80%, transparent);
+}
+
+.hosted-preview-mode {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 3px 12px;
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+}
+
+.hosted-preview-mode.is-active {
+  color: var(--ink);
+  background: var(--surface);
+  box-shadow: 0 1px 2px rgba(42, 41, 38, 0.12);
 }
 
 .hosted-form label {

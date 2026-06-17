@@ -56,8 +56,22 @@ let currentSite = null;
 let siteKey = "";
 let adminToken = "";
 let previewHandle = null;
+let previewMode = "light";
 let customizationBusy = false;
 let customizationSavedMessage = "";
+
+const previewModeButtons = document.querySelectorAll("[data-preview-mode]");
+for (const button of previewModeButtons) {
+  button.addEventListener("click", () => {
+    previewMode = button.dataset.previewMode === "dark" ? "dark" : "light";
+    for (const other of previewModeButtons) {
+      const active = other === button;
+      other.classList.toggle("is-active", active);
+      other.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    mountPreview();
+  });
+}
 
 const setLoginStatus = createStatusSetter(loginStatusEl, { toggleHidden: true });
 const setStatus = createStatusSetter(statusEl);
@@ -191,7 +205,8 @@ function mountPreview() {
   previewHandle = mountTownSquare(previewRoot, {
     serverOrigin: window.location.origin,
     scene: customization.sceneConfig,
-    style: customization.styleConfig,
+    style: customization.styleConfig[previewMode],
+    theme: previewMode,
     solo: true,
     readingLabel: currentSite ? `${currentSite.name} preview` : "Admin preview",
     readingUrl: window.location.href,

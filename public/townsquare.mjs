@@ -39,7 +39,6 @@ import {
   buildSceneProps,
   DEFAULT_SCENE_CONFIG,
   sanitizeSceneConfig,
-  sanitizeSiteStyle,
 } from "./shared/site-config.mjs";
 import {
   applyWidgetTheme,
@@ -58,7 +57,7 @@ import {
  * @property {string} [socketPath="/live"] WebSocket path on the server origin.
  * @property {string} [siteKey] Hosted TownSquare site key. Self-hosted embeds can omit it.
  * @property {{ benches?: number, trees?: number, lamps?: number, branches?: number, benchXs?: number[], treeXs?: number[], lampXs?: number[], branchXs?: number[] }} [scene] Scene prop counts and optional per-prop X positions (0..1).
- * @property {{ scene?: string, page?: string, surface?: string, ink?: string, accent?: string, other?: string, ground?: string }} [style] Palette overrides written as inline CSS variables on the mount root. Pass this only when you want JS to own the palette (e.g. the live preview). Omit it to theme via CSS instead — set the same tokens (`--scene`, `--page`, `--surface`, `--ink`, `--you`, `--other`, `--ground`) on `#townsquare-root` in your own stylesheet; when `style` is absent the widget writes nothing inline so your rules win.
+ * @property {{ scene?: string, page?: string, surface?: string, ink?: string, accent?: string, other?: string, ground?: string }} [style] A single flat palette written as inline CSS variables on the mount root. Pass this only when you want JS to own the palette for the current `theme` (e.g. the live preview). Omit it to theme via CSS instead — set the same tokens (`--scene`, `--page`, `--surface`, `--ink`, `--you`, `--other`, `--ground`) on `#townsquare-root` in your own stylesheet; when `style` is absent the widget writes nothing inline so your rules win.
  * @property {string} [readingLabel] Explicit page label. Defaults to the page heading, then document title.
  * @property {string} [readingUrl] Explicit page URL. Defaults to the current browser URL.
  * @property {"auto" | "light" | "dark"} [theme="auto"] Widget palette. `auto` follows `prefers-color-scheme`; use `dark` when the host page has a manual dark toggle.
@@ -151,7 +150,7 @@ export function mountTownSquare(root, options = {}) {
   // cascade — tokens.css defaults plus any host stylesheet rules on
   // #townsquare-root — so inline styles never beat host CSS.
   if (options.style) {
-    applySiteStyle(root, sanitizeSiteStyle(options.style));
+    applySiteStyle(root, options.style);
   }
   renderProps(stage, sceneProps);
 
@@ -304,9 +303,8 @@ export function mountTownSquare(root, options = {}) {
         }
       }
       if (style) {
-        const styleConfig = sanitizeSiteStyle(style);
-        ctx.options = { ...ctx.options, style: styleConfig };
-        applySiteStyle(root, styleConfig);
+        ctx.options = { ...ctx.options, style };
+        applySiteStyle(root, style);
       }
     },
     destroy() {

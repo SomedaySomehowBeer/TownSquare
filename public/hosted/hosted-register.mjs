@@ -26,6 +26,8 @@ const previewRoot = document.getElementById("townsquare-root");
 const scenePositionFields = document.getElementById("scene-position-fields");
 
 let previewHandle = null;
+let previewMode = "light";
+const previewModeButtons = document.querySelectorAll("[data-preview-mode]");
 
 function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(form)) {
   const next = sanitizeSceneConfig(sceneConfig);
@@ -33,21 +35,35 @@ function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(form)) {
   applyConfigToForm(form, next);
 }
 
-function mountPreview() {
+function mountPreview({ remount = false } = {}) {
   if (!(previewRoot instanceof HTMLElement)) return;
   const scene = readSceneConfigFromForm(form);
-  const style = readStyleConfigFromForm(form);
-  if (previewHandle) {
-    previewHandle.updateConfig({ scene, style });
+  const palette = readStyleConfigFromForm(form)[previewMode];
+  if (previewHandle && !remount) {
+    previewHandle.updateConfig({ scene, style: palette });
     return;
   }
+  previewHandle?.destroy();
   previewHandle = mountTownSquare(previewRoot, {
     serverOrigin: window.location.origin,
     scene,
-    style,
+    style: palette,
+    theme: previewMode,
     solo: true,
     readingLabel: "Registration preview",
     readingUrl: window.location.href,
+  });
+}
+
+for (const button of previewModeButtons) {
+  button.addEventListener("click", () => {
+    previewMode = button.dataset.previewMode === "dark" ? "dark" : "light";
+    for (const other of previewModeButtons) {
+      const active = other === button;
+      other.classList.toggle("is-active", active);
+      other.setAttribute("aria-pressed", active ? "true" : "false");
+    }
+    mountPreview({ remount: true });
   });
 }
 

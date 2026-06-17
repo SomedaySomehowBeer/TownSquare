@@ -93,47 +93,97 @@
             <div class="hosted-section-head">
               <h2 id="style-config-title">Style overrides</h2>
             </div>
-            <div class="hosted-grid hosted-grid--compact">
-              <label>
-                <span>Background</span>
-                <div class="hosted-color-control">
-                  <input id="style-scene" type="color" value="#e4e2dd" data-style-picker="style-scene" />
-                  <input type="hidden" name="style-scene" value="#e4e2dd" />
-                  <button type="button" class="hosted-color-clear" data-style-clear="style-scene" aria-pressed="false">None</button>
+            <div class="hosted-style-modes">
+              <div class="hosted-style-col">
+                <h3 class="hosted-style-col__head">Light</h3>
+                <div class="hosted-grid hosted-grid--compact">
+                  <label>
+                    <span>Background</span>
+                    <div class="hosted-color-control">
+                      <input id="style-light-scene" type="color" value="#e4e2dd" data-style-picker="style-light-scene" />
+                      <input type="hidden" name="style-light-scene" value="#e4e2dd" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-light-scene" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Ground</span>
+                    <div class="hosted-color-control">
+                      <input id="style-light-page" type="color" value="#efede9" data-style-picker="style-light-page" />
+                      <input type="hidden" name="style-light-page" value="#efede9" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-light-page" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Buttons and Tags</span>
+                    <div class="hosted-color-control">
+                      <input id="style-light-surface" type="color" value="#fdf8f4" data-style-picker="style-light-surface" />
+                      <input type="hidden" name="style-light-surface" value="#fdf8f4" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-light-surface" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Ink</span>
+                    <div class="hosted-color-control">
+                      <input id="style-light-ink" type="color" value="#2a2926" data-style-picker="style-light-ink" />
+                      <input type="hidden" name="style-light-ink" value="#2a2926" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-light-ink" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Accent</span>
+                    <div class="hosted-color-control">
+                      <input id="style-light-accent" type="color" value="#c8641f" data-style-picker="style-light-accent" />
+                      <input type="hidden" name="style-light-accent" value="#c8641f" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-light-accent" aria-pressed="false">None</button>
+                    </div>
+                  </label>
                 </div>
-              </label>
-              <label>
-                <span>Ground</span>
-                <div class="hosted-color-control">
-                  <input id="style-page" type="color" value="#efede9" data-style-picker="style-page" />
-                  <input type="hidden" name="style-page" value="#efede9" />
-                  <button type="button" class="hosted-color-clear" data-style-clear="style-page" aria-pressed="false">None</button>
+              </div>
+              <div class="hosted-style-col">
+                <h3 class="hosted-style-col__head">Dark</h3>
+                <div class="hosted-grid hosted-grid--compact">
+                  <label>
+                    <span>Background</span>
+                    <div class="hosted-color-control">
+                      <input id="style-dark-scene" type="color" value="#242521" data-style-picker="style-dark-scene" />
+                      <input type="hidden" name="style-dark-scene" value="#242521" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-dark-scene" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Ground</span>
+                    <div class="hosted-color-control">
+                      <input id="style-dark-page" type="color" value="#181917" data-style-picker="style-dark-page" />
+                      <input type="hidden" name="style-dark-page" value="#181917" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-dark-page" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Buttons and Tags</span>
+                    <div class="hosted-color-control">
+                      <input id="style-dark-surface" type="color" value="#24231f" data-style-picker="style-dark-surface" />
+                      <input type="hidden" name="style-dark-surface" value="#24231f" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-dark-surface" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Ink</span>
+                    <div class="hosted-color-control">
+                      <input id="style-dark-ink" type="color" value="#f2eee6" data-style-picker="style-dark-ink" />
+                      <input type="hidden" name="style-dark-ink" value="#f2eee6" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-dark-ink" aria-pressed="false">None</button>
+                    </div>
+                  </label>
+                  <label>
+                    <span>Accent</span>
+                    <div class="hosted-color-control">
+                      <input id="style-dark-accent" type="color" value="#df8a43" data-style-picker="style-dark-accent" />
+                      <input type="hidden" name="style-dark-accent" value="#df8a43" />
+                      <button type="button" class="hosted-color-clear" data-style-clear="style-dark-accent" aria-pressed="false">None</button>
+                    </div>
+                  </label>
                 </div>
-              </label>
-              <label>
-                <span>Buttons and Tags</span>
-                <div class="hosted-color-control">
-                  <input id="style-surface" type="color" value="#fdf8f4" data-style-picker="style-surface" />
-                  <input type="hidden" name="style-surface" value="#fdf8f4" />
-                  <button type="button" class="hosted-color-clear" data-style-clear="style-surface" aria-pressed="false">None</button>
-                </div>
-              </label>
-              <label>
-                <span>Ink</span>
-                <div class="hosted-color-control">
-                  <input id="style-ink" type="color" value="#2a2926" data-style-picker="style-ink" />
-                  <input type="hidden" name="style-ink" value="#2a2926" />
-                  <button type="button" class="hosted-color-clear" data-style-clear="style-ink" aria-pressed="false">None</button>
-                </div>
-              </label>
-              <label>
-                <span>Accent</span>
-                <div class="hosted-color-control">
-                  <input id="style-accent" type="color" value="#c8641f" data-style-picker="style-accent" />
-                  <input type="hidden" name="style-accent" value="#c8641f" />
-                  <button type="button" class="hosted-color-clear" data-style-clear="style-accent" aria-pressed="false">None</button>
-                </div>
-              </label>
+              </div>
             </div>
           </section>
 
@@ -145,6 +195,10 @@
         <section class="hosted-section hosted-preview-dock" aria-labelledby="preview-title">
           <div class="hosted-section-head">
             <h2 id="preview-title">Preview</h2>
+            <div class="hosted-preview-modes" role="group" aria-label="Preview theme">
+              <button type="button" class="hosted-preview-mode is-active" data-preview-mode="light" aria-pressed="true">Light</button>
+              <button type="button" class="hosted-preview-mode" data-preview-mode="dark" aria-pressed="false">Dark</button>
+            </div>
           </div>
           <div class="townsquare-host">
             <div id="townsquare-root"></div>

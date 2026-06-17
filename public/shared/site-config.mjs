@@ -66,18 +66,35 @@ export const SCENE_BIRDS_FIELD = Object.freeze({
   defaultValue: 3,
 });
 
+export const STYLE_MODES = Object.freeze(["light", "dark"]);
+
+// `defaultValue` is the light palette default; `darkValue` mirrors the dark
+// tokens in public/tokens.css so a brand-new site's dark palette matches the
+// stock dark theme out of the box.
 export const STYLE_FIELDS = Object.freeze([
-  Object.freeze({ key: "scene", label: "Background", inputName: "style-scene", defaultValue: "#e4e2dd", cssVar: "--scene" }),
-  Object.freeze({ key: "page", label: "Ground", inputName: "style-page", defaultValue: "#efede9", cssVar: "--page" }),
-  Object.freeze({ key: "surface", label: "Buttons and Tags", inputName: "style-surface", defaultValue: "#fdf8f4", cssVar: "--surface" }),
-  Object.freeze({ key: "ink", label: "Ink", inputName: "style-ink", defaultValue: "#2a2926", cssVar: "--ink" }),
-  Object.freeze({ key: "accent", label: "Accent", inputName: "style-accent", defaultValue: "#c8641f", cssVar: "--you" }),
-  Object.freeze({ key: "other", label: "Other", inputName: "style-other", defaultValue: "#26241f", cssVar: "--other" }),
-  Object.freeze({ key: "ground", label: "Ground line", inputName: "style-ground", defaultValue: "rgba(42, 41, 38, 0.16)", cssVar: "--ground" }),
+  Object.freeze({ key: "scene", label: "Background", inputName: "style-scene", defaultValue: "#e4e2dd", darkValue: "#242521", cssVar: "--scene" }),
+  Object.freeze({ key: "page", label: "Ground", inputName: "style-page", defaultValue: "#efede9", darkValue: "#181917", cssVar: "--page" }),
+  Object.freeze({ key: "surface", label: "Buttons and Tags", inputName: "style-surface", defaultValue: "#fdf8f4", darkValue: "#24231f", cssVar: "--surface" }),
+  Object.freeze({ key: "ink", label: "Ink", inputName: "style-ink", defaultValue: "#2a2926", darkValue: "#f2eee6", cssVar: "--ink" }),
+  Object.freeze({ key: "accent", label: "Accent", inputName: "style-accent", defaultValue: "#c8641f", darkValue: "#df8a43", cssVar: "--you" }),
+  Object.freeze({ key: "other", label: "Other", inputName: "style-other", defaultValue: "#26241f", darkValue: "#ddd7cc", cssVar: "--other" }),
+  Object.freeze({ key: "ground", label: "Ground line", inputName: "style-ground", defaultValue: "rgba(42, 41, 38, 0.16)", darkValue: "rgba(242, 238, 230, 0.18)", cssVar: "--ground" }),
 ]);
 
 const SCENE_FIELD_BY_KEY = new Map(SCENE_FIELDS.map((field) => [field.key, field]));
 const STYLE_VAR_MAP = new Map(STYLE_FIELDS.map((field) => [field.key, field.cssVar]));
+
+/**
+ * Form input name for a style token in a given palette mode, e.g.
+ * `style-light-accent` / `style-dark-accent`.
+ *
+ * @param {"light"|"dark"} mode
+ * @param {{ key: string }} field
+ * @returns {string}
+ */
+export function styleInputName(mode, field) {
+  return `style-${mode}-${field.key}`;
+}
 
 const POSITION_PRESETS = Object.freeze({
   benches: Object.freeze([0.2, 0.72, 0.46, 0.08, 0.58, 0.86]),
@@ -87,9 +104,18 @@ const POSITION_PRESETS = Object.freeze({
 
 export const DEFAULT_SCENE_CONFIG = Object.freeze(buildDefaultSceneConfig());
 
-export const DEFAULT_SITE_STYLE = Object.freeze(
+export const DEFAULT_SITE_STYLE_LIGHT = Object.freeze(
   Object.fromEntries(STYLE_FIELDS.map((field) => [field.key, field.defaultValue])),
 );
+
+export const DEFAULT_SITE_STYLE_DARK = Object.freeze(
+  Object.fromEntries(STYLE_FIELDS.map((field) => [field.key, field.darkValue])),
+);
+
+export const DEFAULT_SITE_STYLE = Object.freeze({
+  light: DEFAULT_SITE_STYLE_LIGHT,
+  dark: DEFAULT_SITE_STYLE_DARK,
+});
 
 const BENCH_SVG = `
   <svg viewBox="0 0 50 18" preserveAspectRatio="xMidYMax meet" aria-hidden="true">
@@ -278,18 +304,45 @@ export function isTransparentStyleValue(value) {
   return typeof value === "string" && value.trim().toLowerCase() === STYLE_TRANSPARENT;
 }
 
-export function sanitizeSiteStyle(input = {}) {
+/**
+ * Sanitize one flat palette (the 7 style tokens) against a set of defaults.
+ *
+ * @param {Record<string, unknown>} input
+ * @param {Record<string, string>} [defaults=DEFAULT_SITE_STYLE_LIGHT]
+ * @returns {Record<string, string>}
+ */
+export function sanitizeStylePalette(input = {}, defaults = DEFAULT_SITE_STYLE_LIGHT) {
   const base = isPlainObject(input) ? input : {};
   const next = {};
-  for (const { key, defaultValue } of STYLE_FIELDS) {
+  for (const { key } of STYLE_FIELDS) {
+    const fallback = defaults[key];
     const value = typeof base[key] === "string" ? base[key].trim() : "";
     if (isTransparentStyleValue(value)) {
       next[key] = STYLE_TRANSPARENT;
       continue;
     }
-    next[key] = value && value.length <= 64 && SAFE_COLOR_RE.test(value) ? value : defaultValue;
+    next[key] = value && value.length <= 64 && SAFE_COLOR_RE.test(value) ? value : fallback;
   }
   return next;
+}
+
+/**
+ * Normalize a stored/site style config into `{ light, dark }`. A legacy flat
+ * config (no `light`/`dark` keys) is read as the light palette; dark falls back
+ * to the stock dark defaults.
+ *
+ * @param {unknown} input
+ * @returns {{ light: Record<string, string>, dark: Record<string, string> }}
+ */
+export function sanitizeSiteStyle(input = {}) {
+  const base = isPlainObject(input) ? input : {};
+  const hasModes = isPlainObject(base.light) || isPlainObject(base.dark);
+  const lightInput = hasModes ? base.light : base;
+  const darkInput = hasModes ? base.dark : null;
+  return {
+    light: sanitizeStylePalette(lightInput, DEFAULT_SITE_STYLE_LIGHT),
+    dark: sanitizeStylePalette(darkInput || {}, DEFAULT_SITE_STYLE_DARK),
+  };
 }
 
 export function readSceneConfigFromForm(form) {
@@ -324,15 +377,17 @@ export function readSceneConfigFromForm(form) {
 
 export function readStyleConfigFromForm(form) {
   const formData = new FormData(form);
-  return Object.fromEntries(
+  const readPalette = (mode) => Object.fromEntries(
     STYLE_FIELDS.map((field) => {
-      const hiddenInput = form.querySelector(`input[type="hidden"][name="${field.inputName}"]`);
+      const name = styleInputName(mode, field);
+      const hiddenInput = form.querySelector(`input[type="hidden"][name="${name}"]`);
       const raw = hiddenInput instanceof HTMLInputElement
         ? hiddenInput.value
-        : formData.get(field.inputName);
+        : formData.get(name);
       return [field.key, String(raw || "").trim()];
     }),
   );
+  return { light: readPalette("light"), dark: readPalette("dark") };
 }
 
 export function applyConfigToForm(form, config = {}) {
@@ -356,11 +411,16 @@ export function applyConfigToForm(form, config = {}) {
     birdsInput.value = String(config[SCENE_BIRDS_FIELD.key] ?? SCENE_BIRDS_FIELD.defaultValue);
   }
 
-  for (const field of STYLE_FIELDS) {
-    const input = form.querySelector(`input[type="hidden"][name="${field.inputName}"]`)
-      ?? form.elements.namedItem(field.inputName);
-    if (input && "value" in input) {
-      input.value = String(config[field.key] ?? field.defaultValue);
+  for (const mode of STYLE_MODES) {
+    const palette = isPlainObject(config[mode]) ? config[mode] : {};
+    const defaults = mode === "dark" ? DEFAULT_SITE_STYLE_DARK : DEFAULT_SITE_STYLE_LIGHT;
+    for (const field of STYLE_FIELDS) {
+      const name = styleInputName(mode, field);
+      const input = form.querySelector(`input[type="hidden"][name="${name}"]`)
+        ?? form.elements.namedItem(name);
+      if (input && "value" in input) {
+        input.value = String(palette[field.key] ?? defaults[field.key]);
+      }
     }
   }
 
@@ -428,21 +488,75 @@ export function bindSceneCountProse(form) {
 export function bindStyleColorFields(form) {
   if (!(form instanceof HTMLFormElement)) return;
 
-  for (const field of STYLE_FIELDS) {
-    const valueInput = form.querySelector(`input[type="hidden"][name="${field.inputName}"]`);
-    if (!(valueInput instanceof HTMLInputElement)) continue;
+  for (const mode of STYLE_MODES) {
+    for (const field of STYLE_FIELDS) {
+      const fieldDefault = mode === "dark" ? field.darkValue : field.defaultValue;
+      const valueInput = form.querySelector(`input[type="hidden"][name="${styleInputName(mode, field)}"]`);
+      if (!(valueInput instanceof HTMLInputElement)) continue;
 
-    const control = valueInput.closest(".hosted-color-control");
-    if (!(control instanceof HTMLElement)) continue;
+      const control = valueInput.closest(".hosted-color-control");
+      if (!(control instanceof HTMLElement)) continue;
 
-    if (control.dataset.styleColorBound === "true") continue;
-    control.dataset.styleColorBound = "true";
+      if (control.dataset.styleColorBound === "true") continue;
+      control.dataset.styleColorBound = "true";
 
-    const picker = control.querySelector("[data-style-picker]");
-    const clearButton = control.querySelector("[data-style-clear]");
+      const picker = control.querySelector("[data-style-picker]");
+      const clearButton = control.querySelector("[data-style-clear]");
 
-    const syncFromValue = () => {
+      const syncFromValue = () => {
+        const transparent = isTransparentStyleValue(valueInput.value);
+        if (picker instanceof HTMLInputElement) {
+          picker.disabled = transparent;
+          if (!transparent && /^#[0-9a-f]{6}$/i.test(valueInput.value)) {
+            picker.value = valueInput.value;
+          }
+        }
+        if (clearButton instanceof HTMLButtonElement) {
+          clearButton.setAttribute("aria-pressed", transparent ? "true" : "false");
+        }
+        control.classList.toggle("hosted-color-control--transparent", transparent);
+      };
+
+      if (picker instanceof HTMLInputElement) {
+        picker.addEventListener("input", () => {
+          valueInput.value = picker.value;
+          syncFromValue();
+          valueInput.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      }
+
+      if (clearButton instanceof HTMLButtonElement) {
+        clearButton.addEventListener("click", () => {
+          const makeTransparent = !isTransparentStyleValue(valueInput.value);
+          valueInput.value = makeTransparent ? STYLE_TRANSPARENT : fieldDefault;
+          if (!makeTransparent && picker instanceof HTMLInputElement) {
+            picker.value = fieldDefault;
+          }
+          syncFromValue();
+          valueInput.dispatchEvent(new Event("input", { bubbles: true }));
+        });
+      }
+
+      syncFromValue();
+    }
+  }
+}
+
+export function syncStyleColorFields(form) {
+  if (!(form instanceof HTMLFormElement)) return;
+
+  for (const mode of STYLE_MODES) {
+    for (const field of STYLE_FIELDS) {
+      const valueInput = form.querySelector(`input[type="hidden"][name="${styleInputName(mode, field)}"]`);
+      if (!(valueInput instanceof HTMLInputElement)) continue;
+
+      const control = valueInput.closest(".hosted-color-control");
+      if (!(control instanceof HTMLElement)) continue;
+
+      const picker = control.querySelector("[data-style-picker]");
+      const clearButton = control.querySelector("[data-style-clear]");
       const transparent = isTransparentStyleValue(valueInput.value);
+
       if (picker instanceof HTMLInputElement) {
         picker.disabled = transparent;
         if (!transparent && /^#[0-9a-f]{6}$/i.test(valueInput.value)) {
@@ -453,56 +567,7 @@ export function bindStyleColorFields(form) {
         clearButton.setAttribute("aria-pressed", transparent ? "true" : "false");
       }
       control.classList.toggle("hosted-color-control--transparent", transparent);
-    };
-
-    if (picker instanceof HTMLInputElement) {
-      picker.addEventListener("input", () => {
-        valueInput.value = picker.value;
-        syncFromValue();
-        valueInput.dispatchEvent(new Event("input", { bubbles: true }));
-      });
     }
-
-    if (clearButton instanceof HTMLButtonElement) {
-      clearButton.addEventListener("click", () => {
-        const makeTransparent = !isTransparentStyleValue(valueInput.value);
-        valueInput.value = makeTransparent ? STYLE_TRANSPARENT : field.defaultValue;
-        if (!makeTransparent && picker instanceof HTMLInputElement) {
-          picker.value = field.defaultValue;
-        }
-        syncFromValue();
-        valueInput.dispatchEvent(new Event("input", { bubbles: true }));
-      });
-    }
-
-    syncFromValue();
-  }
-}
-
-export function syncStyleColorFields(form) {
-  if (!(form instanceof HTMLFormElement)) return;
-
-  for (const field of STYLE_FIELDS) {
-    const valueInput = form.querySelector(`input[type="hidden"][name="${field.inputName}"]`);
-    if (!(valueInput instanceof HTMLInputElement)) continue;
-
-    const control = valueInput.closest(".hosted-color-control");
-    if (!(control instanceof HTMLElement)) continue;
-
-    const picker = control.querySelector("[data-style-picker]");
-    const clearButton = control.querySelector("[data-style-clear]");
-    const transparent = isTransparentStyleValue(valueInput.value);
-
-    if (picker instanceof HTMLInputElement) {
-      picker.disabled = transparent;
-      if (!transparent && /^#[0-9a-f]{6}$/i.test(valueInput.value)) {
-        picker.value = valueInput.value;
-      }
-    }
-    if (clearButton instanceof HTMLButtonElement) {
-      clearButton.setAttribute("aria-pressed", transparent ? "true" : "false");
-    }
-    control.classList.toggle("hosted-color-control--transparent", transparent);
   }
 }
 
@@ -686,8 +751,16 @@ export function buildBirdPerches(props = []) {
   return perches;
 }
 
-export function applySiteStyle(root, style = DEFAULT_SITE_STYLE) {
-  const next = sanitizeSiteStyle(style);
+/**
+ * Apply one flat palette to a root element as inline CSS variables. Used by the
+ * JS-owned path (the registration/admin live preview). The hosted embed leaves
+ * theming to CSS — see buildSiteCss.
+ *
+ * @param {HTMLElement} root
+ * @param {Record<string, string>} [palette=DEFAULT_SITE_STYLE_LIGHT]
+ */
+export function applySiteStyle(root, palette = DEFAULT_SITE_STYLE_LIGHT) {
+  const next = sanitizeStylePalette(palette, DEFAULT_SITE_STYLE_LIGHT);
   for (const [key, cssVar] of STYLE_VAR_MAP) {
     root.style.setProperty(cssVar, next[key]);
   }
@@ -697,18 +770,44 @@ export function applySiteStyle(root, style = DEFAULT_SITE_STYLE) {
   root.style.setProperty("--muted", next.ink);
 }
 
-export function buildSiteCss(style = DEFAULT_SITE_STYLE, selector = "#townsquare-root") {
-  const next = sanitizeSiteStyle(style);
-  const lines = [`${selector} {`];
+function paletteDeclarations(palette) {
+  const lines = [];
   for (const [key, cssVar] of STYLE_VAR_MAP) {
-    lines.push(`  ${cssVar}: ${next[key]};`);
+    lines.push(`  ${cssVar}: ${palette[key]};`);
   }
   lines.push("  --scene-edge: color-mix(in oklab, var(--scene) 88%, var(--page) 12%);");
   lines.push("  --you-deep: var(--you);");
   lines.push("  --text: var(--ink);");
   lines.push("  --muted: var(--ink);");
-  lines.push("}");
   return lines.join("\n");
+}
+
+/**
+ * Build the scoped CSS a hosted site pastes into its page. Emits separate light
+ * and dark palettes. The selector is doubled (e.g. `#townsquare-root#townsquare-root`)
+ * so its specificity beats the stock light/dark token rules in tokens.css in
+ * every theme state (light, explicit dark, and auto/`prefers-color-scheme`).
+ *
+ * @param {unknown} style A `{ light, dark }` site style config (legacy flat is normalized).
+ * @param {string} [selector="#townsquare-root"]
+ * @returns {string}
+ */
+export function buildSiteCss(style = DEFAULT_SITE_STYLE, selector = "#townsquare-root") {
+  const next = sanitizeSiteStyle(style);
+  const scope = `${selector}${selector}`;
+  return [
+    `${scope} {`,
+    paletteDeclarations(next.light),
+    "}",
+    `${scope}[data-townsquare-theme="dark"] {`,
+    paletteDeclarations(next.dark),
+    "}",
+    "@media (prefers-color-scheme: dark) {",
+    `  ${scope}:is(:not([data-townsquare-theme]), [data-townsquare-theme="auto"]) {`,
+    paletteDeclarations(next.dark),
+    "  }",
+    "}",
+  ].join("\n");
 }
 
 function isPlainObject(value) {

@@ -64,7 +64,7 @@ async function assertCustomizationPersists() {
       origin: HTTP_ORIGIN,
       email: "owner@example.com",
       sceneConfig: { benches: 3, trees: 2, lamps: 1, birds: 6, benchXs: [0.14, 0.5, 0.82] },
-      styleConfig: { accent: "#9d5c2f" },
+      styleConfig: { light: { accent: "#9d5c2f" }, dark: { accent: "#ffcc00" } },
     }),
   });
   const body = await response.json();
@@ -73,20 +73,38 @@ async function assertCustomizationPersists() {
   assert(body.site.sceneConfig?.benches === 3, "registered site did not persist scene config");
   assert(body.site.sceneConfig?.birds === 6, "registered site did not persist bird count");
   assert(body.site.sceneConfig?.benchXs?.[0] === 0.14, "registered site did not persist bench placement");
-  assert(body.site.styleConfig?.accent === "#9d5c2f", "registered site did not persist style config");
+  assert(body.site.styleConfig?.light?.accent === "#9d5c2f", "registered site did not persist light accent");
+  assert(body.site.styleConfig?.dark?.accent === "#ffcc00", "registered site did not persist dark accent");
   assert(body.embedSnippet.includes("scene:"), "embed snippet did not include the scene config");
-  assert(typeof body.styleSnippet === "string" && body.styleSnippet.includes("--you"), "missing scoped style snippet");
+  assert(
+    typeof body.styleSnippet === "string"
+      && body.styleSnippet.includes("#townsquare-root#townsquare-root")
+      && body.styleSnippet.includes('[data-townsquare-theme="dark"]')
+      && body.styleSnippet.includes("#ffcc00"),
+    "style snippet missing the doubled-specificity selector or the dark palette block",
+  );
+
+  // Legacy flat styleConfig normalizes: flat becomes light, dark falls back to defaults.
+  const legacy = await postJson("/api/sites", {
+    name: "Legacy Style",
+    origin: HTTP_ORIGIN,
+    styleConfig: { accent: "#112233" },
+  });
+  assert(legacy.response.ok, legacy.body.error || "legacy-style site registration failed");
+  assert(legacy.body.site.styleConfig?.light?.accent === "#112233", "legacy flat style did not become the light palette");
+  assert(legacy.body.site.styleConfig?.dark?.accent === "#df8a43", "legacy flat style did not default the dark palette");
 
   const updated = await postJson("/api/admin/action", {
     siteKey: body.site.siteKey,
     adminToken: body.adminToken,
     action: "updateCustomization",
     sceneConfig: { benches: 4, trees: 1, lamps: 2, birds: 2 },
-    styleConfig: { accent: "#336699" },
+    styleConfig: { light: { accent: "#336699" }, dark: { accent: "#aabbcc" } },
   });
   assert(updated.response.ok, updated.body.error || "admin customization update failed");
   assert(updated.body.site.sceneConfig?.benches === 4, "admin customization did not update scene config");
-  assert(updated.body.site.styleConfig?.accent === "#336699", "admin customization did not update accent color");
+  assert(updated.body.site.styleConfig?.light?.accent === "#336699", "admin customization did not update light accent");
+  assert(updated.body.site.styleConfig?.dark?.accent === "#aabbcc", "admin customization did not update dark accent");
 }
 
 async function loginWithAdminToken(adminToken) {
