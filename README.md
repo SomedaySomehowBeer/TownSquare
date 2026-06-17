@@ -35,8 +35,8 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 - `scripts/smoke-test.js` — automated websocket smoke test
 - `spec.md` — product truth
 - `roadmap.md` — product-facing sequencing
+- `public/docs.html` — in-app docs page (usage + deployment guide), served at `/docs`
 - `docs/architecture.md` — current boundaries and future hosted shape
-- `docs/deployment.md` — self-hosting and embed instructions
 
 ## Requirements
 
@@ -132,6 +132,8 @@ Notes:
 - TownSquare owns the scene, movement, chat, and realtime transport inside the mount root.
 
 ## Hosted registration
+
+For a user-facing guide to using and managing a TownSquare, see the in-app docs at `/docs` (source: `public/docs.html`).
 
 TownSquare can also run as a tiny hosted service.
 Open:

@@ -99,6 +99,31 @@ body {
   font-weight: 650;
 }
 
+.page-support {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hair-2);
+}
+
+.support-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font: 500 0.8rem var(--font);
+  text-decoration: none;
+  box-shadow: inset 0 0 0 1px var(--hair-2);
+}
+
+.support-link:hover {
+  color: var(--ink);
+  background: var(--surface);
+}
+
 .townsquare-host {
   width: min(1100px, 100%);
   margin: 48px auto 0;
@@ -763,6 +788,304 @@ body {
   color: #a8431f;
 }
 
+/* Docs page — long-form usage + deployment guide. */
+.docs-page {
+  min-height: 100vh;
+}
+
+.docs-shell {
+  width: min(1080px, 100%);
+  margin: 0 auto;
+  padding: 32px 16px 64px;
+  display: grid;
+  gap: 32px;
+  grid-template-columns: 1fr;
+}
+
+@media (min-width: 880px) {
+  .docs-shell {
+    grid-template-columns: 13.5rem minmax(0, 1fr);
+    gap: 44px;
+  }
+}
+
+.docs-home {
+  display: inline-block;
+  margin-bottom: 18px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  font-weight: 650;
+  text-decoration: none;
+}
+
+.docs-home:hover {
+  color: var(--ink);
+}
+
+.docs-nav {
+  display: grid;
+  gap: 2px;
+}
+
+/* Collapsible "On this page" toggle — shown on mobile, hidden on desktop. */
+.docs-toc__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  border: 1px solid var(--hair-2);
+  border-radius: var(--r-sm);
+  color: var(--ink-soft);
+  font-size: 0.85rem;
+  font-weight: 650;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.docs-toc__summary::-webkit-details-marker {
+  display: none;
+}
+
+.docs-toc__summary::after {
+  content: "▾";
+  font-size: 0.75em;
+  transition: transform 0.15s ease;
+}
+
+.docs-toc__details[open] .docs-toc__summary::after {
+  transform: rotate(180deg);
+}
+
+.docs-toc__details .docs-nav {
+  margin-top: 12px;
+}
+
+@media (min-width: 880px) {
+  .docs-toc {
+    position: sticky;
+    top: 24px;
+    align-self: start;
+    max-height: calc(100vh - 48px);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  /* On desktop the nav is always open; show the label as a plain heading. */
+  .docs-toc__summary {
+    padding: 0;
+    border: 0;
+    color: var(--ink-faint);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    cursor: default;
+    pointer-events: none;
+  }
+
+  .docs-toc__summary::after {
+    content: none;
+  }
+
+  .docs-toc__details > .docs-nav {
+    display: grid;
+    margin-top: 12px;
+  }
+}
+
+.docs-nav__group {
+  margin: 18px 0 6px;
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.docs-nav__group:first-child {
+  margin-top: 0;
+}
+
+.docs-nav a {
+  display: block;
+  padding: 4px 10px;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  font-size: 0.9rem;
+  line-height: 1.35;
+  text-decoration: none;
+}
+
+.docs-nav a:hover {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.docs-main {
+  min-width: 0;
+}
+
+.docs-article {
+  width: min(720px, 100%);
+}
+
+.docs-article > .eyebrow {
+  margin-bottom: 6px;
+}
+
+.docs-article h1 {
+  margin: 0 0 14px;
+  font-size: clamp(1.9rem, 5vw, 2.8rem);
+  line-height: 1.02;
+}
+
+.docs-lead {
+  margin: 0 0 8px;
+  color: var(--ink-soft);
+  font-size: 1.08rem;
+  line-height: 1.55;
+}
+
+.docs-section {
+  margin-top: 40px;
+  padding-top: 28px;
+  border-top: 1px solid var(--hair);
+  scroll-margin-top: 24px;
+}
+
+.docs-section h2 {
+  margin: 0 0 12px;
+  font-size: 1.45rem;
+  line-height: 1.15;
+}
+
+.docs-section--lead h2 {
+  font-size: clamp(1.6rem, 4vw, 2.1rem);
+}
+
+.docs-section--lead .eyebrow {
+  margin-bottom: 8px;
+}
+
+.docs-section h3 {
+  margin: 24px 0 8px;
+  font-size: 1.05rem;
+  font-weight: 650;
+}
+
+.docs-article p {
+  margin: 0 0 14px;
+  color: color-mix(in oklab, var(--text) 90%, var(--muted) 10%);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.docs-article ul,
+.docs-article ol {
+  margin: 0 0 14px;
+  padding-left: 22px;
+}
+
+.docs-article li {
+  margin: 4px 0;
+  color: color-mix(in oklab, var(--text) 90%, var(--muted) 10%);
+  font-size: 1rem;
+  line-height: 1.6;
+}
+
+.docs-article a {
+  color: var(--you-deep);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.docs-article a:hover {
+  text-decoration: underline;
+}
+
+.docs-article code {
+  padding: 0.12em 0.4em;
+  border-radius: 6px;
+  background: var(--surface-2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.86em;
+}
+
+.docs-article pre {
+  margin: 0 0 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--hair-2);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+  overflow-x: auto;
+}
+
+.docs-article pre code {
+  padding: 0;
+  border-radius: 0;
+  background: none;
+  color: var(--ink);
+  font-size: 0.84rem;
+  line-height: 1.55;
+}
+
+.docs-note {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-left: 3px solid var(--you);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  background: var(--you-tint);
+}
+
+.docs-article .docs-note {
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.docs-table {
+  width: 100%;
+  margin: 0 0 16px;
+  border-collapse: collapse;
+  font-size: 0.94rem;
+}
+
+.docs-table th,
+.docs-table td {
+  padding: 9px 12px;
+  border-bottom: 1px solid var(--hair-2);
+  text-align: left;
+  vertical-align: top;
+}
+
+.docs-table thead th {
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.docs-table td:first-child {
+  white-space: nowrap;
+  font-weight: 600;
+}
+
+.docs-table code {
+  white-space: nowrap;
+}
+
+.docs-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 40px;
+  padding-top: 22px;
+  border-top: 1px solid var(--hair-2);
+}
+
 @media (max-width: 640px) {
   .page-card { padding: 20px; border-radius: 20px; }
   .hosted-panel { padding: 20px; }
@@ -778,6 +1101,11 @@ body {
     flex-direction: column;
   }
   .townsquare-host { margin-top: 32px; }
+  .docs-shell { padding: 24px 14px 48px; gap: 8px; }
+  .docs-footer {
+    flex-direction: column;
+    align-items: flex-start;
+  }
   .dev-toolbar {
     align-items: stretch;
     flex-direction: column;
