@@ -1,4 +1,4 @@
-import { bindCopy } from "./ui-common.mjs";
+import { bindCopy } from "../lib/ui-common.mjs";
 import { createAutoRefresh, createStatusSetter, escapeHtml, formatTime, postJson } from "./hosted-common.mjs";
 
 const loginView = document.getElementById("login-view");

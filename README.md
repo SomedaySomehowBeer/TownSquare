@@ -20,18 +20,17 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 ## Repo shape
 
 - `server.js` — Node server for static assets, health checks, and WebSocket presence
-- `public/townsquare.mjs` — reusable embeddable widget mount API
+- `public/townsquare.mjs` — reusable embeddable widget mount API (public embed URL `/townsquare.mjs`)
 - `public/widget/` — widget implementation modules (DOM, chat, presence, protocol, movement)
+- `public/shared/` — protocol/scene definitions shared with the server (`shared-constants`, `scene-props`, `bird-perches`)
 - `public/widget.css` — embeddable widget styling (scoped to `#townsquare-root`)
 - `public/page.css` — full-page chrome for TownSquare host pages only
 - `public/tokens.css` — shared design tokens (imported by widget.css and page.css)
+- `public/lib/` — generic browser helpers shared across pages (e.g. `ui-common.mjs`)
 - `public/demo.mjs` — local demo bootstrap
 - `public/index.html` — demo host page for local development
-- `public/register.html` — no-account hosted site registration page
-- `public/admin.html` — token-protected hosted site admin page
-- `public/service-admin.html` — service-level registered site management page
-- `public/dev.html` — local simulation page for configurable walking/talking characters
-- `public/walk-sandbox.html` — local walk-cycle inspection sandbox
+- `public/hosted/` — hosted registration/admin pages and scripts, served at `/register`, `/admin`, `/service-admin`
+- `public/dev/` — local dev tooling: `dev.html` (simulation, `/dev`) and `walk-sandbox.html` (`/walk-sandbox`)
 - `scripts/smoke-test.js` — automated websocket smoke test
 - `spec.md` — product truth
 - `roadmap.md` — product-facing sequencing
@@ -99,13 +98,13 @@ http://127.0.0.1:8787/healthz
 For local scene stress testing with one controllable local user plus simulated visitors, use:
 
 ```text
-http://127.0.0.1:8787/dev.html?characters=24
+http://127.0.0.1:8787/dev?characters=24
 ```
 
 For frame-by-frame walk-cycle review, use:
 
 ```text
-http://127.0.0.1:8787/walk-sandbox.html
+http://127.0.0.1:8787/walk-sandbox
 ```
 
 ## Embed the widget into another site

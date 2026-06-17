@@ -4,7 +4,7 @@
  * Motion is CSS-only; this module never runs in the animation frame loop.
  */
 
-import { BIRD_PERCHES_BY_ID } from "../bird-perches.mjs";
+import { BIRD_PERCHES_BY_ID } from "../shared/bird-perches.mjs";
 import { MAX_X, MIN_X } from "./constants.mjs";
 
 const BIRD_FLYING_SVG = `

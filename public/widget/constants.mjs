@@ -2,7 +2,7 @@
  * Shared timing, movement, and scene constants for the embeddable widget.
  */
 
-import { PROPS } from "../scene-props.mjs";
+import { PROPS } from "../shared/scene-props.mjs";
 
 export { PROPS };
 export {
@@ -16,7 +16,7 @@ export {
   MIN_X,
   READING_LABEL_MAX,
   randomSpawnX,
-} from "../shared-constants.mjs";
+} from "../shared/shared-constants.mjs";
 
 export const BUBBLE_TTL_MS = 6000;
 /** Bubble linger time in expanded (fullscreen) mode — more room to read the scene. */

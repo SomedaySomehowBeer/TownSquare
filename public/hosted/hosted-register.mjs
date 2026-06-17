@@ -1,4 +1,4 @@
-import { bindCopy } from "./ui-common.mjs";
+import { bindCopy } from "../lib/ui-common.mjs";
 import { createStatusSetter } from "./hosted-common.mjs";
 
 const registerView = document.getElementById("register-view");

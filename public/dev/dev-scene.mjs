@@ -1,7 +1,7 @@
-import { DEFAULT_LAYOUT_CONFIG, layoutBubbleColumns, layoutConfigFor } from "./widget/bubble-layout.mjs";
-import { sayMessage } from "./widget/chat.mjs";
-import { createExpandController } from "./widget/expand.mjs";
-import { clamp } from "./widget/math.mjs";
+import { DEFAULT_LAYOUT_CONFIG, layoutBubbleColumns, layoutConfigFor } from "../widget/bubble-layout.mjs";
+import { sayMessage } from "../widget/chat.mjs";
+import { createExpandController } from "../widget/expand.mjs";
+import { clamp } from "../widget/math.mjs";
 import {
   createAvatar,
   renderAvatar,
@@ -12,9 +12,9 @@ import {
   setWalking,
   updatePose,
   updatePropEffects,
-} from "./widget/dom.mjs";
-import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, randomSpawnX } from "./widget/constants.mjs";
-import { bindCopy } from "./ui-common.mjs";
+} from "../widget/dom.mjs";
+import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, randomSpawnX } from "../widget/constants.mjs";
+import { bindCopy } from "../lib/ui-common.mjs";
 
 const DEFAULT_CHARACTER_COUNT = 12;
 const MAX_CHARACTER_COUNT = 60;
@@ -222,7 +222,7 @@ function mountDevScene(count, walking) {
   const { app, stage, status, helpButton, helpPanel, expandButton } = renderShell(root);
   const unwireHelpPanel = wireHelpPanel(helpButton, helpPanel);
 
-  /** @type {import("./widget/dom.mjs").AvatarView[]} */
+  /** @type {import("../widget/dom.mjs").AvatarView[]} */
   let sceneAvatars = [];
 
   const expandController = createExpandController({

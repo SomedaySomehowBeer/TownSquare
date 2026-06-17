@@ -67,7 +67,7 @@ const BIRD_SPAWN_MAX_MS = Number(process.env.BIRD_SPAWN_MAX_MS || 22000);
 const BIRD_FIRST_SPAWN_MS = Number(process.env.BIRD_FIRST_SPAWN_MS || 500);
 
 // Wire-protocol limits and the character palette, shared with the widget.
-// Populated from public/shared-constants.mjs in startServer (the server is
+// Populated from public/shared/shared-constants.mjs in startServer (the server is
 // CommonJS, so the shared ES module is loaded via dynamic import).
 let MIN_X;
 let MAX_X;
@@ -109,9 +109,9 @@ function loadEnvFile(filePath = path.join(__dirname, ".env")) {
   }
 }
 
-/** @type {Map<string, import("./public/scene-props.mjs").SceneProp>} */
+/** @type {Map<string, import("./public/shared/scene-props.mjs").SceneProp>} */
 let PROPS_BY_ID = new Map();
-/** @type {Array<import("./public/bird-perches.mjs").BirdPerch>} */
+/** @type {Array<import("./public/shared/bird-perches.mjs").BirdPerch>} */
 let BIRD_PERCHES = [];
 
 const MIME_TYPES = {
@@ -337,11 +337,13 @@ function resolvePublicFile(requestUrl, hostHeader) {
   const url = new URL(requestUrl, `http://${hostHeader}`);
   const aliases = new Map([
     ["/", "/index.html"],
-    ["/register", "/register.html"],
-    ["/admin", "/admin.html"],
-    ["/service-admin", "/service-admin.html"],
+    ["/register", "/hosted/register.html"],
+    ["/admin", "/hosted/admin.html"],
+    ["/service-admin", "/hosted/service-admin.html"],
     ["/docs", "/docs.html"],
     ["/changelog", "/changelog.html"],
+    ["/dev", "/dev/dev.html"],
+    ["/walk-sandbox", "/dev/walk-sandbox.html"],
   ]);
   const pathname = aliases.get(url.pathname) || url.pathname;
   const normalized = path.normalize(pathname).replace(/^\.+/, "");
@@ -1696,13 +1698,13 @@ wss.on("close", () => {
 });
 
 async function startServer() {
-  const { PROPS } = await import("./public/scene-props.mjs");
+  const { PROPS } = await import("./public/shared/scene-props.mjs");
   PROPS_BY_ID = new Map(PROPS.map((prop) => [prop.id, prop]));
 
-  const birdPerches = await import("./public/bird-perches.mjs");
+  const birdPerches = await import("./public/shared/bird-perches.mjs");
   BIRD_PERCHES = birdPerches.BIRD_PERCHES;
 
-  const shared = await import("./public/shared-constants.mjs");
+  const shared = await import("./public/shared/shared-constants.mjs");
   MIN_X = shared.MIN_X;
   MAX_X = shared.MAX_X;
   MAX_MESSAGE_LEN = shared.MESSAGE_MAX;
