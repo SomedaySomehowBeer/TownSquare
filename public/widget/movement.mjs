@@ -3,8 +3,17 @@
  */
 
 import { layoutBubbleColumns } from "./bubble-layout.mjs";
-import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, SEND_INTERVAL_MS } from "./constants.mjs";
-import { playJump, renderAvatar, setFacing, setWalking, updatePose, updatePropEffects } from "./dom.mjs";
+import { HIGH_FIVE_DISTANCE, INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, SEND_INTERVAL_MS } from "./constants.mjs";
+import {
+  playHighFive,
+  playJump,
+  playRaisedHand,
+  renderAvatar,
+  setFacing,
+  setWalking,
+  updatePose,
+  updatePropEffects,
+} from "./dom.mjs";
 
 /**
  * @typedef {import("./context.mjs").WidgetContext} WidgetContext
@@ -77,6 +86,7 @@ export function maybeSendMove(ctx) {
 }
 
 const JUMP_COOLDOWN_MS = 560;
+const HIGH_FIVE_COOLDOWN_MS = 360;
 
 /**
  * @param {EventTarget | null} target
@@ -108,6 +118,58 @@ export function triggerJump(ctx) {
 
   if (ctx.socket.readyState === WebSocket.OPEN) {
     ctx.socket.send(JSON.stringify({ type: "action", action: "jump" }));
+  }
+}
+
+/**
+ * @param {WidgetContext} ctx
+ * @returns {import("./context.mjs").PeerState | null}
+ */
+function nearestRaisedHandPeer(ctx) {
+  let match = null;
+  let bestDistance = HIGH_FIVE_DISTANCE;
+  for (const peer of ctx.peers.values()) {
+    if (!peer.avatar.el.classList.contains("townsquare-avatar--raised-hand")) continue;
+    const distance = Math.abs(peer.x - ctx.self.x);
+    if (distance > bestDistance) continue;
+    match = peer;
+    bestDistance = distance;
+  }
+  return match;
+}
+
+/**
+ * @param {WidgetContext} ctx
+ */
+export function triggerHighFive(ctx) {
+  if (ctx.quiet) return;
+
+  const now = Date.now();
+  if (now - ctx.self.lastHighFiveAt < HIGH_FIVE_COOLDOWN_MS) return;
+  ctx.self.lastHighFiveAt = now;
+
+  resetPropSettle(ctx);
+  ctx.self.pose = null;
+  ctx.self.propId = null;
+  updatePose(ctx.self.avatar, ctx.self.pose);
+  updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId);
+  setWalking(ctx.self.avatar, false);
+
+  const peer = nearestRaisedHandPeer(ctx);
+  if (peer) {
+    setFacing(ctx.self.avatar, peer.x < ctx.self.x);
+    setFacing(peer.avatar, ctx.self.x < peer.x);
+    playHighFive(ctx.self.avatar);
+    playHighFive(peer.avatar);
+    if (ctx.socket.readyState === WebSocket.OPEN) {
+      ctx.socket.send(JSON.stringify({ type: "action", action: "high-five", targetId: peer.id }));
+    }
+    return;
+  }
+
+  playRaisedHand(ctx.self.avatar);
+  if (ctx.socket.readyState === WebSocket.OPEN) {
+    ctx.socket.send(JSON.stringify({ type: "action", action: "raise-hand" }));
   }
 }
 
@@ -198,6 +260,9 @@ export function wireKeyboard(ctx) {
     if (event.key === "ArrowRight") ctx.self.movingRight = true;
     if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "j") {
       triggerJump(ctx);
+    }
+    if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "h") {
+      triggerHighFive(ctx);
     }
   };
 

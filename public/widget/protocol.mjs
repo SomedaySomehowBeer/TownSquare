@@ -4,7 +4,7 @@
 
 import { recordMessage, sayMessage } from "./chat.mjs";
 import { applyBirdFlee, applyBirdSpawn, syncBirdsFromHello } from "./birds.mjs";
-import { playJump, setWalking, updatePose, updatePropEffects } from "./dom.mjs";
+import { playHighFive, playJump, playRaisedHand, setFacing, setWalking, updatePose, updatePropEffects } from "./dom.mjs";
 import {
   applyPeerState,
   applyProfileState,
@@ -52,7 +52,39 @@ function applyJump(ctx, id) {
   presence.propId = null;
   updatePose(presence.avatar, presence.pose);
   updatePropEffects(presence.avatar, presence.x, presence.propId);
+  setWalking(presence.avatar, false);
   playJump(presence.avatar);
+}
+
+function presenceById(ctx, id) {
+  return id === ctx.self.id ? ctx.self : ctx.peers.get(id);
+}
+
+function applyRaiseHand(ctx, id) {
+  const presence = presenceById(ctx, id);
+  if (!presence) return;
+  presence.pose = null;
+  presence.propId = null;
+  updatePose(presence.avatar, presence.pose);
+  updatePropEffects(presence.avatar, presence.x, presence.propId);
+  setWalking(presence.avatar, false);
+  playRaisedHand(presence.avatar);
+}
+
+function applyHighFive(ctx, id, targetId) {
+  const initiator = presenceById(ctx, id);
+  const target = presenceById(ctx, targetId);
+  if (!initiator || !target) return;
+  for (const presence of [initiator, target]) {
+    presence.pose = null;
+    presence.propId = null;
+    updatePose(presence.avatar, presence.pose);
+    updatePropEffects(presence.avatar, presence.x, presence.propId);
+    setWalking(presence.avatar, false);
+    playHighFive(presence.avatar);
+  }
+  setFacing(initiator.avatar, target.x < initiator.x);
+  setFacing(target.avatar, initiator.x < target.x);
 }
 
 /**
@@ -156,6 +188,10 @@ export function wireSocket(ctx) {
       if (message.type === "action") {
         if (message.action === "jump") {
           applyJump(ctx, message.id);
+        } else if (message.action === "raise-hand") {
+          applyRaiseHand(ctx, message.id);
+        } else if (message.action === "high-five") {
+          applyHighFive(ctx, message.id, message.targetId);
         }
         return;
       }

@@ -53,6 +53,7 @@ const LAST_SEEN_SAVE_INTERVAL_MS = 60000;
 const MOVE_THROTTLE_MS = 40;
 const ACTION_THROTTLE_MS = 560;
 const CHAT_THROTTLE_MS = 1500;
+const HIGH_FIVE_DISTANCE = 0.07;
 const RECONNECT_GRACE_MS = 1500;
 const INACTIVE_DISCONNECT_MS = Number(process.env.INACTIVE_DISCONNECT_MS || 30 * 60 * 1000);
 const INACTIVE_CHECK_INTERVAL_MS = Number(process.env.INACTIVE_CHECK_INTERVAL_MS || 60000);
@@ -1436,19 +1437,29 @@ function handleMove(client, message) {
 
 function handleAction(client, message) {
   if (!client.identity) return;
-  if (message.action !== "jump") return;
+  if (!["jump", "raise-hand", "high-five"].includes(message.action)) return;
 
   const now = Date.now();
   if (now - client.lastActionAt < ACTION_THROTTLE_MS) return;
 
+  let targetId = null;
+  if (message.action === "high-five") {
+    targetId = Number(message.targetId);
+    const target = Number.isInteger(targetId) ? client.scene.identities.get(targetId) : null;
+    if (!target || !target.joined || target.id === client.identity.id) return;
+    if (Math.abs(target.x - client.identity.x) > HIGH_FIVE_DISTANCE) return;
+  }
+
   client.lastActionAt = now;
   clearPose(client.identity);
   touchIdentityActivity(client.identity, now);
-  broadcast(client.scene, {
+  const action = {
     type: "action",
     id: client.identity.id,
-    action: "jump",
-  }, { exceptConnectionId: client.connectionId });
+    action: message.action,
+  };
+  if (targetId !== null) action.targetId = targetId;
+  broadcast(client.scene, action, { exceptConnectionId: client.connectionId });
 }
 
 function handleProfile(client, message) {

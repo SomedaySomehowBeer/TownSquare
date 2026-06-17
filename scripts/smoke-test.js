@@ -489,6 +489,21 @@ async function main() {
   assert(first.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "jump"), "same-browser jump did not propagate to sibling tab");
   assert(third.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "jump"), "different browser did not observe shared visitor jump");
 
+  await delay(600);
+  third.ws.send(JSON.stringify({ type: "move", x: 0.6 }));
+  await delay(100);
+  secondSameBrowser.ws.send(JSON.stringify({ type: "action", action: "raise-hand" }));
+  await delay(100);
+
+  assert(first.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "raise-hand"), "same-browser raise-hand did not propagate to sibling tab");
+  assert(third.seen.some((message) => message.type === "action" && message.id === first.id && message.action === "raise-hand"), "different browser did not observe shared visitor raise-hand");
+
+  third.ws.send(JSON.stringify({ type: "action", action: "high-five", targetId: first.id }));
+  await delay(100);
+
+  assert(first.seen.some((message) => message.type === "action" && message.id === third.id && message.action === "high-five" && message.targetId === first.id), "target visitor did not observe high-five");
+  assert(secondSameBrowser.seen.some((message) => message.type === "action" && message.id === third.id && message.action === "high-five" && message.targetId === first.id), "same-browser tab did not observe high-five targeting shared visitor");
+
   await delay(1600);
   const longText = "x".repeat(200);
   secondSameBrowser.ws.send(JSON.stringify({ type: "say", text: longText }));

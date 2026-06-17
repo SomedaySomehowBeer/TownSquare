@@ -28,5 +28,8 @@ export const PROP_SETTLE_MS = 700;
 export const GHOST_STACK_MAX = 4;
 export const MOVEMENT_SPEED = 0.22;
 export const SEND_INTERVAL_MS = 45;
+export const HIGH_FIVE_DISTANCE = 0.07;
+export const RAISED_HAND_MS = 5000;
+export const HIGH_FIVE_MS = 760;
 
 export const INTERACTIVE_PROPS = PROPS.filter((prop) => prop.pose && prop.zoneRadius > 0);

@@ -125,6 +125,7 @@ export function mountTownSquare(root, options = {}) {
       lastSentX: spawnX,
       lastSendAt: 0,
       lastJumpAt: 0,
+      lastHighFiveAt: 0,
       pose: null,
       propId: null,
       displayName: profile.displayName,

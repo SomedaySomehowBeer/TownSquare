@@ -2,7 +2,7 @@
  * DOM construction and avatar/scene rendering for the TownSquare widget.
  */
 
-import { DISPLAY_NAME_MAX, MESSAGE_MAX, PROPS, READING_LABEL_MAX } from "./constants.mjs";
+import { DISPLAY_NAME_MAX, HIGH_FIVE_MS, MESSAGE_MAX, PROPS, RAISED_HAND_MS, READING_LABEL_MAX } from "./constants.mjs";
 import { figureMarkup } from "./figure.mjs";
 
 /**
@@ -39,6 +39,8 @@ import { figureMarkup } from "./figure.mjs";
  * @property {HTMLInputElement} [input]
  * @property {HTMLButtonElement} [send]
  * @property {ReturnType<typeof setTimeout> | null} [jumpTimer]
+ * @property {ReturnType<typeof setTimeout> | null} [raisedHandTimer]
+ * @property {ReturnType<typeof setTimeout> | null} [highFiveTimer]
  */
 
 const ENTER_ICON = `
@@ -127,7 +129,7 @@ export function renderShell(container) {
 
   const instructions = document.createElement("p");
   instructions.textContent =
-    "Move with the arrow keys, press J to jump, or tap where you want to walk. Tap your nameplate to chat, and tap a character to see their recent messages.";
+    "Move with the arrow keys, press J to jump, press H to show a high-five or high-five a nearby visitor showing one, and tap where you want to walk. Tap your nameplate to chat, and tap a character to see their recent messages.";
 
   const link = document.createElement("a");
   link.href = TOWNSQUARE_URL;
@@ -616,6 +618,7 @@ export function setFacing(avatar, movingLeft) {
  * @param {boolean} walking
  */
 export function setWalking(avatar, walking) {
+  if (walking) clearHighFiveState(avatar);
   avatar.el.classList.toggle("townsquare-avatar--walking", walking);
 }
 
@@ -631,6 +634,50 @@ export function playJump(avatar) {
     avatar.el.classList.remove("townsquare-avatar--jumping");
     avatar.jumpTimer = null;
   }, 560);
+}
+
+/**
+ * @param {AvatarView} avatar
+ */
+export function clearRaisedHand(avatar) {
+  clearTimeout(avatar.raisedHandTimer);
+  avatar.raisedHandTimer = null;
+  avatar.el.classList.remove("townsquare-avatar--raised-hand");
+}
+
+/**
+ * @param {AvatarView} avatar
+ */
+export function clearHighFiveState(avatar) {
+  clearRaisedHand(avatar);
+  clearTimeout(avatar.highFiveTimer);
+  avatar.highFiveTimer = null;
+  avatar.el.classList.remove("townsquare-avatar--high-five");
+}
+
+/**
+ * @param {AvatarView} avatar
+ */
+export function playRaisedHand(avatar) {
+  clearTimeout(avatar.raisedHandTimer);
+  avatar.el.classList.add("townsquare-avatar--raised-hand");
+  avatar.raisedHandTimer = setTimeout(() => {
+    avatar.el.classList.remove("townsquare-avatar--raised-hand");
+    avatar.raisedHandTimer = null;
+  }, RAISED_HAND_MS);
+}
+
+/**
+ * @param {AvatarView} avatar
+ */
+export function playHighFive(avatar) {
+  clearHighFiveState(avatar);
+  void avatar.el.offsetWidth;
+  avatar.el.classList.add("townsquare-avatar--high-five");
+  avatar.highFiveTimer = setTimeout(() => {
+    avatar.el.classList.remove("townsquare-avatar--high-five");
+    avatar.highFiveTimer = null;
+  }, HIGH_FIVE_MS);
 }
 
 /**

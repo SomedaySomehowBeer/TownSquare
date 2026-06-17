@@ -88,6 +88,7 @@ http://127.0.0.1:8787/healthz
   - two tabs from the same browser still share one visitor
   - a different browser or browser profile shows a second visitor
   - arrow keys move your figure left/right
+  - pressing H shows a high-five emoji, and a nearby second visitor pressing H high-fives you
   - movement is reflected in the other window
   - pausing by the bench or tree settles the visitor into a seat
   - chat messages appear above the figure and also enter the recent-message tray

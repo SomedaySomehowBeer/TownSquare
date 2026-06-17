@@ -19,6 +19,7 @@
  * @property {number} lastSentX
  * @property {number} lastSendAt
  * @property {number} lastJumpAt
+ * @property {number} lastHighFiveAt
  * @property {string | null} pose
  * @property {string | null} propId
  * @property {string} displayName
