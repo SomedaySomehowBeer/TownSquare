@@ -5,14 +5,12 @@ import {
   escapeHtml,
   formatTime,
   postJson,
-  renderKeyValueList,
 } from "./hosted-common.mjs";
 import {
   applyConfigToForm,
   applySceneConfigToForm,
   bindSceneCountProse,
   bindStyleColorFields,
-  getSceneSummaryEntries,
   isSceneCountInputName,
   readSceneConfigFromForm,
   readStyleConfigFromForm,
@@ -41,7 +39,6 @@ const scenePositionFields = document.getElementById("scene-position-fields");
 const styleOverrideFields = document.getElementById("style-override-fields");
 const snippetEl = document.getElementById("embed-snippet");
 const styleSnippetEl = document.getElementById("style-snippet");
-const sceneSummaryEl = document.getElementById("scene-summary");
 const copyButton = document.getElementById("copy-snippet");
 const copyStyleButton = document.getElementById("copy-style");
 const chatDisabledInput = document.getElementById("chat-disabled");
@@ -60,6 +57,7 @@ let currentSite = null;
 let siteKey = "";
 let adminToken = "";
 let previewHandle = null;
+let mountedPreviewKey = "";
 let previewMode = "light";
 let customizationBusy = false;
 let customizationSavedMessage = "";
@@ -115,6 +113,12 @@ function storeCredentials() {
 function destroyPreview() {
   previewHandle?.destroy();
   previewHandle = null;
+  mountedPreviewKey = "";
+}
+
+function previewMountKey() {
+  const customization = currentSite ? readCustomizationFromForm() : getCurrentCustomization();
+  return `${serializeCustomization(customization)}:${previewMode}`;
 }
 
 function clearCredentials() {
@@ -139,10 +143,6 @@ function showAdmin() {
   loginView.hidden = true;
   adminView.hidden = false;
   autoRefresh.start();
-}
-
-function renderSceneSummary(sceneConfig = {}) {
-  renderKeyValueList(sceneSummaryEl, getSceneSummaryEntries(sceneConfig));
 }
 
 function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(customizationForm)) {
@@ -204,8 +204,12 @@ function updateCustomizationStatus() {
 
 function mountPreview() {
   if (!(previewRoot instanceof HTMLElement)) return;
+  const key = previewMountKey();
+  if (previewHandle && key === mountedPreviewKey) return;
+
   const customization = currentSite ? readCustomizationFromForm() : getCurrentCustomization();
   destroyPreview();
+  mountedPreviewKey = key;
   previewHandle = mountTownSquare(previewRoot, {
     serverOrigin: window.location.origin,
     scene: customization.sceneConfig,
@@ -250,7 +254,6 @@ function render(data) {
   if (document.activeElement !== styleSnippetEl) {
     styleSnippetEl.value = data.styleSnippet;
   }
-  renderSceneSummary(currentSite.sceneConfig);
   chatDisabledInput.checked = currentSite.chatDisabled;
   disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
   syncCustomizationForm();

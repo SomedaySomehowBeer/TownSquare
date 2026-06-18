@@ -217,11 +217,6 @@ function roundPercent(value) {
   return Number(Number(value).toFixed(1));
 }
 
-function formatPercent(value) {
-  const rounded = roundPercent(value * 100);
-  return Number.isInteger(rounded) ? `${rounded}%` : `${rounded.toFixed(1)}%`;
-}
-
 function uniqueId(kind, index) {
   return index === 0 ? kind : `${kind}-${index + 1}`;
 }
@@ -816,25 +811,6 @@ export function renderScenePositionFields(container, sceneConfig = {}) {
     prose.appendChild(run);
     container.appendChild(prose);
   }
-}
-
-export function getSceneSummaryEntries(sceneConfig = {}) {
-  const scene = sanitizeSceneConfig(sceneConfig);
-  const entries = [];
-
-  for (const field of SCENE_FIELDS) {
-    entries.push({ label: field.label, value: scene[field.key] });
-    if (scene[field.key] > 0) {
-      entries.push({
-        label: `${field.itemLabel} X positions`,
-        value: scene[field.positionsKey].map((x) => formatPercent(x)).join(", "),
-      });
-    }
-  }
-
-  entries.push({ label: SCENE_BIRDS_FIELD.label, value: scene[SCENE_BIRDS_FIELD.key] });
-
-  return entries;
 }
 
 export function buildSceneProps(config = DEFAULT_SCENE_CONFIG) {

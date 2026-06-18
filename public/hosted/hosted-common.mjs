@@ -119,25 +119,6 @@ export function setValueIfIdle(input, value) {
 }
 
 /**
- * Render `{ label, value }` entries as `<div><strong/><span/></div>` rows.
- *
- * @param {HTMLElement} container
- * @param {Array<{ label: string, value: unknown }>} entries
- */
-export function renderKeyValueList(container, entries) {
-  container.replaceChildren();
-  for (const entry of entries) {
-    const row = document.createElement("div");
-    const key = document.createElement("strong");
-    const value = document.createElement("span");
-    key.textContent = entry.label;
-    value.textContent = String(entry.value);
-    row.append(key, value);
-    container.appendChild(row);
-  }
-}
-
-/**
  * Render `{ label, value }` entries as a `<dl>` definition list.
  *
  * @param {HTMLElement} container
