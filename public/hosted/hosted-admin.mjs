@@ -6,6 +6,8 @@ import {
   applySceneConfigToForm,
   bindSceneCountProse,
   bindStyleColorFields,
+  DEFAULT_SCENE_CONFIG,
+  DEFAULT_SITE_STYLE,
   isSceneCountInputName,
   readSceneConfigFromForm,
   readStyleConfigFromForm,
@@ -106,6 +108,18 @@ function getCurrentCustomization() {
   };
 }
 
+function getDefaultCustomization() {
+  return {
+    sceneConfig: sanitizeSceneConfig(DEFAULT_SCENE_CONFIG),
+    styleConfig: sanitizeSiteStyle(DEFAULT_SITE_STYLE),
+  };
+}
+
+function applyCustomizationToForm(customization) {
+  applyConfigToForm(customizationForm, { ...customization.sceneConfig, ...customization.styleConfig });
+  syncScenePositionInputs(customization.sceneConfig);
+}
+
 function readCustomizationFromForm() {
   return {
     sceneConfig: sanitizeSceneConfig(readSceneConfigFromForm(customizationForm)),
@@ -194,9 +208,7 @@ function syncCustomizationForm({ force = false } = {}) {
   if (!currentSite || !(customizationForm instanceof HTMLFormElement)) return;
   const shouldApply = force || !customizationTouched || !customizationIsDirty();
   if (shouldApply) {
-    const customization = getCurrentCustomization();
-    applyConfigToForm(customizationForm, { ...customization.sceneConfig, ...customization.styleConfig });
-    syncScenePositionInputs(customization.sceneConfig);
+    applyCustomizationToForm(getCurrentCustomization());
     if (force) customizationTouched = false;
   }
   updateCustomizationButtons();
@@ -304,7 +316,12 @@ customizationForm.addEventListener("submit", async (event) => {
 resetCustomizationButton.addEventListener("click", () => {
   clearAutoSaveTimer();
   customizationSavedMessage = "";
-  syncCustomizationForm({ force: true });
+  customizationTouched = false;
+  applyCustomizationToForm(getDefaultCustomization());
+  updateCustomizationButtons();
+  updateCustomizationStatus();
+  preview.mount({ remount: true });
+  scheduleAutoSave();
 });
 
 chatDisabledInput.addEventListener("change", () => session.action("setChatDisabled", { disabled: chatDisabledInput.checked }));
