@@ -223,14 +223,20 @@ Useful flags:
 ```bash
 scripts/deploy.sh --local
 scripts/deploy.sh --skip-checks
+scripts/deploy.sh --tag staging
 scripts/deploy.sh --ref origin/main
 scripts/deploy.sh --env-file ./ops/my-deploy.env
 ```
 
+By default, the script deploys the local `production` tag. Use `--tag` for
+another tag. It resolves only real Git tags, so annotated and lightweight tags
+both deploy the commit the tag points to. Keep `--ref` for explicit branch, SHA,
+or rollback deploys.
+
 The script:
 
 - runs local syntax checks unless skipped
-- archives the chosen git ref
+- archives the chosen git tag or ref
 - uploads it to the server for remote deploys, or deploys directly in local mode
 - creates a new release under `/opt/townsquare/releases`
 - runs `npm ci --omit=dev`

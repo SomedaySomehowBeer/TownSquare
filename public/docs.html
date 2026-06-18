@@ -244,7 +244,10 @@ docker run --rm -p 8787:8787 -e HOST=0.0.0.0 townsquare</code></pre>
                 On a custom socket path like <code>/townsquare/live</code>, pass it
                 explicitly with <code>socketPath</code>. The repo ships a deploy helper at
                 <code>scripts/deploy.sh</code> (copy <code>.env.deploy.example</code> to
-                <code>.env.deploy.local</code> first), and a health endpoint at
+                <code>.env.deploy.local</code> first). By default it deploys the local
+                <code>production</code> tag. Use <code>--tag &lt;git-tag&gt;</code> for another
+                tag, and use <code>--ref</code> only when deploying an explicit branch or
+                commit. The server also exposes a health endpoint at
                 <code>/healthz</code> that simply returns <code>ok</code>.
               </p>
               <p class="docs-note">
