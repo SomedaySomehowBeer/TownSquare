@@ -319,6 +319,11 @@ export function wireKeyboard(ctx) {
     if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "h") {
       triggerHighFive(ctx);
     }
+    if (!event.repeat && !event.metaKey && !event.ctrlKey && !event.altKey && event.key.toLowerCase() === "t") {
+      // The keystroke would otherwise land in the input we're about to focus.
+      event.preventDefault();
+      ctx.self.avatar.openComposer?.();
+    }
   };
 
   ctx.onKeyUp = (event) => {

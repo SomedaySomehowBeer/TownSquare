@@ -39,6 +39,7 @@ import { normalizeDisplayName, normalizeReadingLabel } from "./utils.mjs";
  * @property {HTMLFormElement} [composer]
  * @property {HTMLInputElement} [input]
  * @property {HTMLButtonElement} [send]
+ * @property {() => void} [openComposer] Open the composer and focus the chat input.
  * @property {ReturnType<typeof setTimeout> | null} [jumpTimer]
  * @property {ReturnType<typeof setTimeout> | null} [raisedHandTimer]
  * @property {ReturnType<typeof setTimeout> | null} [highFiveTimer]
@@ -138,7 +139,7 @@ export function renderShell(container) {
 
   const instructions = document.createElement("p");
   instructions.textContent =
-    "Move with the arrow keys or tap where you want to walk. Press J to jump and H to show a high-five; on touch, use the action buttons. Tap your nameplate to chat, and tap a character to see their recent messages.";
+    "Move with the arrow keys or tap where you want to walk. Press J to jump and H to show a high-five; on touch, use the action buttons. Press T or tap your nameplate to chat, and tap a character to see their recent messages.";
 
   const link = document.createElement("a");
   link.href = TOWNSQUARE_URL;
@@ -514,6 +515,7 @@ export function createAvatar({ isSelf, profile = {}, colors = [], onProfileChang
   };
 
   plate.addEventListener("click", openComposer);
+  selfAvatar.openComposer = openComposer;
 
   input.addEventListener("input", () => {
     setSendReady(selfAvatar, input.value.trim().length > 0);
