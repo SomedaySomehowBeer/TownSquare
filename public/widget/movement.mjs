@@ -38,17 +38,55 @@ export function resetPropSettle(ctx) {
 }
 
 /**
+ * @param {import("../shared/scene-props.mjs").SceneProp[]} sceneProps
+ * @param {number} x
+ * @returns {import("../shared/scene-props.mjs").SceneProp | undefined}
+ */
+function findSettleProp(sceneProps, x) {
+  return sceneProps
+    .filter((candidate) => candidate.pose && candidate.zoneRadius > 0)
+    .find((candidate) => Math.abs(x - candidate.x) < candidate.zoneRadius);
+}
+
+/**
+ * @param {import("../shared/scene-props.mjs").SceneProp} prop
+ * @param {number} requestedX
+ * @returns {number}
+ */
+function findNearestSeatX(prop, requestedX) {
+  const seats = Array.isArray(prop.seats) && prop.seats.length > 0 ? prop.seats : [0];
+  return seats
+    .map((offset) => prop.x + offset)
+    .reduce((best, seatX) => (
+      Math.abs(seatX - requestedX) < Math.abs(best - requestedX) ? seatX : best
+    ));
+}
+
+/**
+ * @param {WidgetContext} ctx
+ * @param {import("../shared/scene-props.mjs").SceneProp} prop
+ */
+function applyLocalPropSettle(ctx, prop) {
+  const { self } = ctx;
+  self.settleRequested = true;
+  self.targetX = null;
+  self.x = findNearestSeatX(prop, self.x);
+  self.pose = prop.pose;
+  self.propId = prop.id;
+  renderAvatar(self.avatar, self.x);
+  updatePose(self.avatar, self.pose);
+  updatePropEffects(self.avatar, self.x, self.propId, ctx.sceneProps);
+}
+
+/**
  * @param {WidgetContext} ctx
  * @param {number} now
  */
 export function maybeRequestPropSettle(ctx, now) {
   const { self, socket } = ctx;
   if (self.pose) return;
-  if (socket.readyState !== WebSocket.OPEN) return;
 
-  const prop = ctx.sceneProps
-    .filter((candidate) => candidate.pose && candidate.zoneRadius > 0)
-    .find((candidate) => Math.abs(self.x - candidate.x) < candidate.zoneRadius);
+  const prop = findSettleProp(ctx.sceneProps, self.x);
   if (!prop) {
     resetPropSettle(ctx);
     return;
@@ -63,6 +101,13 @@ export function maybeRequestPropSettle(ctx, now) {
   if (self.settleRequested || now - self.propZoneEnteredAt < PROP_SETTLE_MS) {
     return;
   }
+
+  if (ctx.options.preview === true) {
+    applyLocalPropSettle(ctx, prop);
+    return;
+  }
+
+  if (socket.readyState !== WebSocket.OPEN) return;
 
   self.settleRequested = true;
   socket.send(JSON.stringify({ type: "settle", propId: prop.id }));
@@ -233,7 +278,7 @@ export function tick(ctx, now) {
 
   layoutBubbleColumns(
     ctx.stage,
-    ctx.options.solo === true ? [ctx.self] : [ctx.self, ...ctx.peers.values()],
+    ctx.options.preview === true || ctx.options.solo === true ? [ctx.self] : [ctx.self, ...ctx.peers.values()],
     ctx.self.x,
     layoutConfigFor(undefined, ctx.expanded),
   );

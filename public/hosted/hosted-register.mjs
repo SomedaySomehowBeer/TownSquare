@@ -12,7 +12,7 @@ import {
   renderStyleOverrideFields,
   sanitizeSceneConfig,
 } from "../shared/site-config.mjs";
-import { mountTownSquare } from "../townsquare.mjs";
+import { createCustomizationPreview } from "./hosted-preview.mjs";
 
 const registerView = document.getElementById("register-view");
 const successView = document.getElementById("success-view");
@@ -28,46 +28,22 @@ const previewRoot = document.getElementById("townsquare-root");
 const scenePositionFields = document.getElementById("scene-position-fields");
 const styleOverrideFields = document.getElementById("style-override-fields");
 
-let previewHandle = null;
-let previewMode = "light";
 const previewModeButtons = document.querySelectorAll("[data-preview-mode]");
+
+const preview = createCustomizationPreview({
+  root: previewRoot,
+  readingLabel: "Registration preview",
+  readConfig: (mode) => ({
+    scene: readSceneConfigFromForm(form),
+    style: readStyleConfigFromForm(form)[mode],
+  }),
+});
+preview.bindThemeToggle(previewModeButtons);
 
 function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(form)) {
   const next = sanitizeSceneConfig(sceneConfig);
   renderScenePositionFields(scenePositionFields, next);
   applySceneConfigToForm(form, next);
-}
-
-function mountPreview({ remount = false } = {}) {
-  if (!(previewRoot instanceof HTMLElement)) return;
-  const scene = readSceneConfigFromForm(form);
-  const palette = readStyleConfigFromForm(form)[previewMode];
-  if (previewHandle && !remount) {
-    previewHandle.updateConfig({ scene, style: palette });
-    return;
-  }
-  previewHandle?.destroy();
-  previewHandle = mountTownSquare(previewRoot, {
-    serverOrigin: window.location.origin,
-    scene,
-    style: palette,
-    theme: previewMode,
-    solo: true,
-    readingLabel: "Registration preview",
-    readingUrl: window.location.href,
-  });
-}
-
-for (const button of previewModeButtons) {
-  button.addEventListener("click", () => {
-    previewMode = button.dataset.previewMode === "dark" ? "dark" : "light";
-    for (const other of previewModeButtons) {
-      const active = other === button;
-      other.classList.toggle("is-active", active);
-      other.setAttribute("aria-pressed", active ? "true" : "false");
-    }
-    mountPreview({ remount: true });
-  });
 }
 
 function showSuccess(body) {
@@ -77,8 +53,7 @@ function showSuccess(body) {
   styleSnippetEl.value = body.styleSnippet;
   adminLink.href = body.adminUrl;
 
-  previewHandle?.destroy();
-  previewHandle = null;
+  preview.destroy();
   registerView.hidden = true;
   successView.hidden = false;
   window.scrollTo({ top: 0 });
@@ -88,7 +63,7 @@ form.addEventListener("input", (event) => {
   if (isSceneCountInputName(event.target?.name || "")) {
     syncScenePositionInputs(readSceneConfigFromForm(form));
   }
-  mountPreview();
+  preview.mount();
 });
 
 form.addEventListener("submit", async (event) => {
@@ -133,4 +108,4 @@ bindStyleColorFields(form);
 bindSceneCountProse(form);
 applyConfigToForm(form);
 syncScenePositionInputs();
-mountPreview();
+preview.mount();

@@ -19,7 +19,7 @@ import {
   sanitizeSceneConfig,
   sanitizeSiteStyle,
 } from "../shared/site-config.mjs";
-import { mountTownSquare } from "../townsquare.mjs";
+import { createCustomizationPreview } from "./hosted-preview.mjs";
 
 const loginView = document.getElementById("login-view");
 const adminView = document.getElementById("admin-view");
@@ -56,24 +56,20 @@ const REFRESH_INTERVAL_MS = 5000;
 let currentSite = null;
 let siteKey = "";
 let adminToken = "";
-let previewHandle = null;
-let mountedPreviewKey = "";
-let previewMode = "light";
 let customizationBusy = false;
 let customizationSavedMessage = "";
 
+const preview = createCustomizationPreview({
+  root: previewRoot,
+  readingLabel: () => (currentSite ? `${currentSite.name} preview` : "Admin preview"),
+  readConfig: (mode) => {
+    const customization = currentSite ? readCustomizationFromForm() : getCurrentCustomization();
+    return { scene: customization.sceneConfig, style: customization.styleConfig[mode] };
+  },
+});
+
 const previewModeButtons = document.querySelectorAll("[data-preview-mode]");
-for (const button of previewModeButtons) {
-  button.addEventListener("click", () => {
-    previewMode = button.dataset.previewMode === "dark" ? "dark" : "light";
-    for (const other of previewModeButtons) {
-      const active = other === button;
-      other.classList.toggle("is-active", active);
-      other.setAttribute("aria-pressed", active ? "true" : "false");
-    }
-    mountPreview();
-  });
-}
+preview.bindThemeToggle(previewModeButtons);
 
 const setLoginStatus = createStatusSetter(loginStatusEl, { toggleHidden: true });
 const setStatus = createStatusSetter(statusEl);
@@ -110,29 +106,18 @@ function storeCredentials() {
   sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ siteKey, adminToken }));
 }
 
-function destroyPreview() {
-  previewHandle?.destroy();
-  previewHandle = null;
-  mountedPreviewKey = "";
-}
-
-function previewMountKey() {
-  const customization = currentSite ? readCustomizationFromForm() : getCurrentCustomization();
-  return `${serializeCustomization(customization)}:${previewMode}`;
-}
-
 function clearCredentials() {
   siteKey = "";
   adminToken = "";
   currentSite = null;
   customizationSavedMessage = "";
-  destroyPreview();
+  preview.destroy();
   sessionStorage.removeItem(STORAGE_KEY);
 }
 
 function showLogin(message = "", isError = false) {
   autoRefresh.stop();
-  destroyPreview();
+  preview.destroy();
   adminView.hidden = true;
   loginView.hidden = false;
   setLoginStatus(message, isError);
@@ -202,25 +187,6 @@ function updateCustomizationStatus() {
   setCustomizationStatus("");
 }
 
-function mountPreview() {
-  if (!(previewRoot instanceof HTMLElement)) return;
-  const key = previewMountKey();
-  if (previewHandle && key === mountedPreviewKey) return;
-
-  const customization = currentSite ? readCustomizationFromForm() : getCurrentCustomization();
-  destroyPreview();
-  mountedPreviewKey = key;
-  previewHandle = mountTownSquare(previewRoot, {
-    serverOrigin: window.location.origin,
-    scene: customization.sceneConfig,
-    style: customization.styleConfig[previewMode],
-    theme: previewMode,
-    solo: true,
-    readingLabel: currentSite ? `${currentSite.name} preview` : "Admin preview",
-    readingUrl: window.location.href,
-  });
-}
-
 function syncCustomizationForm({ force = false } = {}) {
   if (!currentSite || !(customizationForm instanceof HTMLFormElement)) return;
   if (force || !customizationIsDirty()) {
@@ -230,7 +196,9 @@ function syncCustomizationForm({ force = false } = {}) {
   }
   updateCustomizationButtons();
   updateCustomizationStatus();
-  mountPreview();
+  if (force || !preview.mounted) {
+    preview.mount({ remount: force });
+  }
 }
 
 function render(data) {
@@ -384,7 +352,7 @@ customizationForm.addEventListener("input", (event) => {
   }
   updateCustomizationButtons();
   updateCustomizationStatus();
-  mountPreview();
+  preview.mount();
 });
 
 customizationForm.addEventListener("submit", async (event) => {

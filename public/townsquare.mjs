@@ -61,8 +61,8 @@ import {
  * @property {string} [readingLabel] Explicit page label. Defaults to the page heading, then document title.
  * @property {string} [readingUrl] Explicit page URL. Defaults to the current browser URL.
  * @property {"auto" | "light" | "dark" | "host"} [theme="auto"] Widget palette. `auto` follows `prefers-color-scheme`; `host` follows common host-page dark mode signals.
- * @property {boolean} [preview=false] Static registration-style preview: fixed spawn position, no live socket, and in-place scene/style updates via the mount handle.
- * @property {boolean} [solo=false] Live socket, but hide other visitors. Useful for registration/admin previews on shared default scenes.
+ * @property {boolean} [preview=false] Static customization preview: fixed spawn, local prop settle, no socket, in-place scene/style updates via the mount handle.
+ * @property {boolean} [solo=false] Live socket, but hide other visitors on the client.
  */
 
 /**
