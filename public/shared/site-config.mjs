@@ -340,7 +340,14 @@ function sanitizeConnectionUrl(value) {
   }
 }
 
-function hostnameLabel(url) {
+/**
+ * The bare hostname of a URL (with a leading `www.` stripped), or the original
+ * string if it does not parse. Used for default labels and the modal subtitle.
+ *
+ * @param {string} url
+ * @returns {string}
+ */
+export function hostnameLabel(url) {
   try {
     return new URL(url).hostname.replace(/^www\./, "");
   } catch {

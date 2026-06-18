@@ -7,7 +7,7 @@
  */
 
 import { MAX_X, MIN_X } from "./constants.mjs";
-import { connectionsBySide } from "../shared/site-config.mjs";
+import { CONNECTION_SIDES, connectionsBySide, hostnameLabel } from "../shared/site-config.mjs";
 
 /**
  * @typedef {import("./context.mjs").WidgetContext} WidgetContext
@@ -41,7 +41,7 @@ export function setupConnections(ctx) {
   ctx.connectionsModal = null;
   ctx.nearSide = null;
 
-  for (const side of /** @type {const} */ (["left", "right"])) {
+  for (const side of CONNECTION_SIDES) {
     const connections = ctx.connectionsBySide[side];
     if (connections.length === 0) continue;
     ctx.signposts[side] = renderSignpost(ctx, side, connections);
@@ -98,7 +98,7 @@ export function updateConnectionProximity(ctx) {
   if (side === ctx.nearSide) return;
   ctx.nearSide = side;
 
-  for (const key of /** @type {const} */ (["left", "right"])) {
+  for (const key of CONNECTION_SIDES) {
     ctx.signposts[key]?.classList.toggle("townsquare-signpost--near", key === side);
   }
 }
@@ -182,7 +182,7 @@ export function openConnectionsModal(ctx, side) {
 
     const host = document.createElement("span");
     host.className = "townsquare-connections__item-host";
-    host.textContent = hostnameOf(connection.url);
+    host.textContent = hostnameLabel(connection.url);
 
     const go = document.createElement("span");
     go.className = "townsquare-connections__item-go";
@@ -211,7 +211,8 @@ export function openConnectionsModal(ctx, side) {
   window.addEventListener("keydown", onKeyDown, true);
 
   ctx.app.appendChild(overlay);
-  ctx.connectionsModal = { overlay, onKeyDown };
+  // Return focus to the signpost on close (matters when opened via the keyboard).
+  ctx.connectionsModal = { overlay, onKeyDown, trigger: ctx.signposts?.[side] || null };
   close.focus();
 }
 
@@ -224,6 +225,7 @@ export function closeConnectionsModal(ctx) {
   window.removeEventListener("keydown", modal.onKeyDown, true);
   modal.overlay.remove();
   ctx.connectionsModal = null;
+  if (modal.trigger?.isConnected) modal.trigger.focus();
 }
 
 /**
@@ -238,12 +240,4 @@ export function teardownConnections(ctx) {
   ctx.signposts = null;
   ctx.connectionsBySide = null;
   ctx.nearSide = null;
-}
-
-function hostnameOf(url) {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
 }
