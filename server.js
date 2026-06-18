@@ -1477,7 +1477,13 @@ function loadSites() {
 function saveSites() {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   const sites = Array.from(sitesByKey.values());
-  fs.writeFileSync(SITES_FILE, `${JSON.stringify({ sites }, null, 2)}\n`);
+  // Atomic write: serialize to a temp file in the same directory, then rename
+  // over SITES_FILE. rename(2) is atomic on the same filesystem, so a crash or
+  // disk-full mid-write leaves the previous valid sites.json intact (it holds
+  // every site's adminTokenHash, and there is no admin-link recovery).
+  const tmpFile = `${SITES_FILE}.tmp`;
+  fs.writeFileSync(tmpFile, `${JSON.stringify({ sites }, null, 2)}\n`);
+  fs.renameSync(tmpFile, SITES_FILE);
 }
 
 function touchSite(site) {
