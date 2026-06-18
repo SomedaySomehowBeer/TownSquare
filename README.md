@@ -221,6 +221,7 @@ DEPLOY_PORT=8788
 Useful flags:
 
 ```bash
+scripts/deploy.sh --promote-main
 scripts/deploy.sh --local
 scripts/deploy.sh --skip-checks
 scripts/deploy.sh --tag staging
@@ -228,10 +229,11 @@ scripts/deploy.sh --ref origin/main
 scripts/deploy.sh --env-file ./ops/my-deploy.env
 ```
 
-By default, the script deploys the local `production` tag. Use `--tag` for
-another tag. It resolves only real Git tags, so annotated and lightweight tags
-both deploy the commit the tag points to. Keep `--ref` for explicit branch, SHA,
-or rollback deploys.
+By default, the script deploys the local `production` tag. Use `--promote-main`
+to fetch `origin/main`, move the deploy tag to that commit, and deploy it. Use
+`--tag` for another tag. It resolves only real Git tags, so annotated and
+lightweight tags both deploy the commit the tag points to. Keep `--ref` for
+explicit branch, SHA, or rollback deploys without retagging.
 
 The script:
 
