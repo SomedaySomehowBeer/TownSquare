@@ -1,7 +1,7 @@
-import { DEFAULT_LAYOUT_CONFIG, layoutBubbleColumns, layoutConfigFor } from "./widget/bubble-layout.mjs";
-import { sayMessage } from "./widget/chat.mjs";
-import { createExpandController } from "./widget/expand.mjs";
-import { clamp } from "./widget/math.mjs";
+import { DEFAULT_LAYOUT_CONFIG, layoutBubbleColumns, layoutConfigFor } from "../widget/bubble-layout.mjs";
+import { sayMessage } from "../widget/chat.mjs";
+import { createExpandController } from "../widget/expand.mjs";
+import { clamp } from "../widget/math.mjs";
 import {
   createAvatar,
   renderAvatar,
@@ -12,9 +12,11 @@ import {
   setWalking,
   updatePose,
   updatePropEffects,
-} from "./widget/dom.mjs";
-import { INTERACTIVE_PROPS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, randomSpawnX } from "./widget/constants.mjs";
-import { bindCopy } from "./ui-common.mjs";
+} from "../widget/dom.mjs";
+import { MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, randomSpawnX } from "../widget/constants.mjs";
+import { findSettleProp } from "../shared/scene-prop-geometry.mjs";
+import { PROPS } from "../shared/scene-props.mjs";
+import { bindCopy } from "../lib/ui-common.mjs";
 
 const DEFAULT_CHARACTER_COUNT = 12;
 const MAX_CHARACTER_COUNT = 60;
@@ -170,10 +172,6 @@ function resetSelfSettle(self) {
   self.settlePropId = null;
 }
 
-function findSettleProp(x) {
-  return INTERACTIVE_PROPS.find((prop) => Math.abs(x - prop.x) < prop.zoneRadius);
-}
-
 function stepSelf(self, now, dt) {
   const direction = Number(self.movingRight) - Number(self.movingLeft);
 
@@ -185,16 +183,16 @@ function stepSelf(self, now, dt) {
     self.x = clamp(self.x + direction * MOVEMENT_SPEED * dt, MIN_X, MAX_X);
     renderAvatar(self.avatar, self.x);
     setFacing(self.avatar, direction < 0);
-    updatePropEffects(self.avatar, self.x, self.propId);
+    updatePropEffects(self.avatar, self.x, self.propId, PROPS);
     setWalking(self.avatar, true);
     return;
   }
 
   setWalking(self.avatar, false);
-  updatePropEffects(self.avatar, self.x, self.propId);
+  updatePropEffects(self.avatar, self.x, self.propId, PROPS);
   if (self.pose) return;
 
-  const prop = findSettleProp(self.x);
+  const prop = findSettleProp(PROPS, self.x);
   if (!prop) {
     resetSelfSettle(self);
     return;
@@ -213,7 +211,7 @@ function stepSelf(self, now, dt) {
   self.propId = prop.id;
   renderAvatar(self.avatar, self.x);
   updatePose(self.avatar, self.pose);
-  updatePropEffects(self.avatar, self.x, self.propId);
+  updatePropEffects(self.avatar, self.x, self.propId, PROPS);
 }
 
 function mountDevScene(count, walking) {
@@ -222,7 +220,7 @@ function mountDevScene(count, walking) {
   const { app, stage, status, helpButton, helpPanel, expandButton } = renderShell(root);
   const unwireHelpPanel = wireHelpPanel(helpButton, helpPanel);
 
-  /** @type {import("./widget/dom.mjs").AvatarView[]} */
+  /** @type {import("../widget/dom.mjs").AvatarView[]} */
   let sceneAvatars = [];
 
   const expandController = createExpandController({
@@ -232,7 +230,7 @@ function mountDevScene(count, walking) {
   });
   const onExpandClick = () => expandController.setExpanded(!expandController.isExpanded());
 
-  renderProps(stage);
+  renderProps(stage, PROPS);
   status.textContent = `You plus ${count} simulated ${count === 1 ? "character" : "characters"}`;
 
   const random = seededRandom(count * 9973);

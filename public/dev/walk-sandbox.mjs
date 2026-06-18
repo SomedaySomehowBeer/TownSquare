@@ -5,7 +5,7 @@
  * widget.css) on a full-size avatar via the Web Animations API, so the gait
  * is tuned in one place and this page just replays it.
  */
-import { figureMarkup } from "./widget/figure.mjs";
+import { figureMarkup } from "../widget/figure.mjs";
 
 const FRAME_STEP = 2;
 

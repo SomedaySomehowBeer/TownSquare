@@ -20,19 +20,18 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 ## Repo shape
 
 - `server.js` — Node server for static assets, health checks, and WebSocket presence
-- `public/townsquare.mjs` — reusable embeddable widget mount API
+- `public/townsquare.mjs` — reusable embeddable widget mount API (public embed URL `/townsquare.mjs`)
 - `public/widget/` — widget implementation modules (DOM, chat, presence, protocol, movement)
+- `public/shared/` — protocol/scene/style definitions shared with the server (`shared-constants`, `scene-props`, `scene-prop-geometry`, `bird-perches`, `site-config`)
 - `public/widget.css` — embeddable widget styling (scoped to `#townsquare-root`)
 - `public/page.css` — full-page chrome for TownSquare host pages only
 - `public/tokens.css` — shared design tokens (imported by widget.css and page.css)
+- `public/lib/` — generic browser helpers shared across pages (e.g. `ui-common.mjs`)
 - `public/demo.mjs` — local demo bootstrap
 - `public/index.html` — demo host page for local development
-- `public/register.html` — no-account hosted site registration page
-- `public/admin.html` — token-protected hosted site admin page
-- `public/service-admin.html` — service-level registered site management page
+- `public/hosted/` — hosted registration/admin pages and scripts, served at `/register`, `/admin`, `/service-admin`
 - `public/map.html` — public map of verified, enabled TownSquares, served at `/map`
-- `public/dev.html` — local simulation page for configurable walking/talking characters
-- `public/walk-sandbox.html` — local walk-cycle inspection sandbox
+- `public/dev/` — local dev tooling: `dev.html` (simulation, `/dev`) and `walk-sandbox.html` (`/walk-sandbox`)
 - `scripts/smoke-test.js` — automated websocket smoke test
 - `spec.md` — product truth
 - `roadmap.md` — product-facing sequencing
@@ -100,13 +99,13 @@ http://127.0.0.1:8787/healthz
 For local scene stress testing with one controllable local user plus simulated visitors, use:
 
 ```text
-http://127.0.0.1:8787/dev.html?characters=24
+http://127.0.0.1:8787/dev?characters=24
 ```
 
 For frame-by-frame walk-cycle review, use:
 
 ```text
-http://127.0.0.1:8787/walk-sandbox.html
+http://127.0.0.1:8787/walk-sandbox
 ```
 
 ## Embed the widget into another site
@@ -122,7 +121,8 @@ A site can embed the widget by loading the CSS plus the module from the TownSqua
 
   mountTownSquare(document.getElementById("townsquare-root"), {
     serverOrigin: "https://your-townsquare-host",
-    socketPath: "/live"
+    socketPath: "/live",
+    theme: "host"
   });
 </script>
 ```
@@ -132,6 +132,13 @@ Notes:
 - `serverOrigin` is the realtime/backend origin the widget should connect to.
 - `socketPath` defaults to `/live`; set it explicitly when your reverse proxy exposes TownSquare on a different websocket path such as `/townsquare/live`.
 - `siteKey` is only needed when using one hosted TownSquare server for multiple registered sites.
+- `theme: "host"` syncs with common host-page dark mode signals such as
+  `html.dark`, `body.dark`, `data-theme`, `data-bs-theme`, and `data-color-mode`.
+  Omit it to use `auto`, which follows `prefers-color-scheme`.
+- To restyle the square, set the palette tokens (`--scene`, `--page`, `--surface`,
+  `--ink`, `--you`, `--tree-trunk`, `--tree-canopy`, `--other`, `--ground`) on
+  `#townsquare-root` in your own stylesheet. The widget writes no inline palette
+  styles, so your CSS wins. See [Customization](#customization).
 - The host page owns placement and surrounding layout.
 - TownSquare owns the scene, movement, chat, and realtime transport inside the mount root.
 
@@ -163,6 +170,7 @@ The admin page can:
 
 - show install/seen status
 - show active visitors
+- customize the scene (bench/tree/lamp/bird counts and placement) and colors, with a live preview (see [Customization](#customization))
 - mark an active visitor as the verified site owner (and unmark them)
 - kick or block active visitors
 - disable chat
@@ -188,6 +196,31 @@ project stays accountless, a new device or cleared browser storage means marking
 once more (one click). You can mark more than one browser if you want the badge on
 several devices. Marked browser ids are stored per site under `ownerBrowserIds` in
 `.data/sites.json`.
+
+### Customization
+
+Every square ships with a default hosted style — the palette baked into
+`public/tokens.css` (light and dark), which `DEFAULT_SITE_STYLE` in
+`public/shared/site-config.mjs` mirrors. No setup is needed to look good.
+
+The admin and registration pages expose two kinds of customization, each with a
+live preview:
+
+- **Scene** — bench/tree/lamp/bird counts and per-prop placement. Saved server-side
+  per site in `sceneConfig` and pushed to live embeds by `siteKey`, so changes take
+  effect immediately without re-pasting anything (`refreshSiteScenes` in `server.js`).
+- **Colors** — a palette per mode (light/dark) saved in `styleConfig`. Because hosted
+  embeds never write palette tokens inline, colors are delivered as a small scoped CSS
+  block (`buildSiteCss`) the owner copies into their own stylesheet. The admin/register
+  pages generate this **Customization CSS** block from the swatch choices. Re-copy it
+  after changing colors.
+
+The CSS sets these tokens, scoped to `#townsquare-root` for light, explicit dark, and
+`prefers-color-scheme` dark: `--scene` (background), `--page` (ground), `--surface`
+(buttons/tags), `--ink` (text/line work), `--you` (accent), `--tree-trunk`,
+`--tree-canopy`, `--other`, and `--ground`. Advanced owners can edit that block or
+write their own rules on the same tokens — the widget writes no inline palette styles
+for hosted embeds, so host CSS always wins.
 
 Registered sites are stored in `.data/sites.json` by default.
 Set `DATA_DIR` if the registry should live somewhere else.
@@ -219,16 +252,25 @@ DEPLOY_PORT=8788
 Useful flags:
 
 ```bash
+scripts/deploy.sh --promote-main
 scripts/deploy.sh --local
 scripts/deploy.sh --skip-checks
+scripts/deploy.sh --tag staging
 scripts/deploy.sh --ref origin/main
 scripts/deploy.sh --env-file ./ops/my-deploy.env
 ```
 
+By default, the script deploys the local `production` tag. Use `--promote-main`
+to fetch `origin/main`, move the deploy tag to that commit, deploy it, and push
+the tag to `origin` after a successful deploy. Use
+`--tag` for another tag. It resolves only real Git tags, so annotated and
+lightweight tags both deploy the commit the tag points to. Keep `--ref` for
+explicit branch, SHA, or rollback deploys without retagging.
+
 The script:
 
 - runs local syntax checks unless skipped
-- archives the chosen git ref
+- archives the chosen git tag or ref
 - uploads it to the server for remote deploys, or deploys directly in local mode
 - creates a new release under `/opt/townsquare/releases`
 - runs `npm ci --omit=dev`

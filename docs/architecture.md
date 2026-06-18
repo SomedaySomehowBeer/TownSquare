@@ -40,15 +40,20 @@ That separation is now reflected directly in the repo:
   (`presence`, `protocol`), input/motion (`movement`), ambient `birds`,
   host-page reading tags (`page-watch`), the fullscreen `expand` controller,
   the shared mount `context` typedef, and small `constants`/`math`/`utils`.
-- `public/shared-constants.mjs` + `public/scene-props.mjs` +
-  `public/bird-perches.mjs` = protocol/scene definitions loaded by both the
-  browser widget and the CommonJS server (keep them browser/Node-agnostic).
+- `public/shared/` (`shared-constants`, `scene-props`, `scene-prop-geometry`,
+  `bird-perches`, `site-config`) = protocol/scene/style definitions loaded by both
+  the browser widget and the CommonJS server (keep them browser/Node-agnostic).
+  `site-config` holds the scene/style defaults and `buildSiteCss` for per-site
+  customization.
 - `public/demo.mjs` + `public/index.html` = demo shell
-- `public/register.html` + `public/admin.html` + `public/service-admin.html` =
-  hosted setup/admin shells, sharing `public/hosted-common.mjs` and
-  `public/ui-common.mjs`
-- `public/dev.html` + `public/dev-scene.mjs` + `public/walk-sandbox.*` = dev tooling
-- `server.js` = static + realtime service
+- `public/hosted/` = hosted setup/admin shells (register/admin/service-admin
+  HTML + scripts) sharing `public/hosted/hosted-common.mjs` and `public/lib/`.
+- `public/dev/` = dev tooling (`dev.html` + `dev-scene.mjs`, `walk-sandbox.*`)
+- `public/lib/` = generic browser helpers shared across pages (`ui-common.mjs`)
+- `server.js` = static + realtime service. Public embed URLs (`/townsquare.mjs`,
+  `/widget.css`) are a stable contract; clean routes (`/admin`, `/dev`, …) are
+  aliased to their files in `resolvePublicFile`, so files can move without
+  changing URLs.
 
 ## Why this boundary matters
 

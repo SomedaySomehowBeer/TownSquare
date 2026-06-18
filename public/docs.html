@@ -23,6 +23,7 @@
               <a href="#start">Get started</a>
               <a href="#manage">Manage your square</a>
               <a href="#owner">Mark the site owner</a>
+              <a href="#customize">Customize the look</a>
 
               <p class="docs-nav__group">For developers</p>
               <a href="#self-host">Self-hosting</a>
@@ -97,6 +98,7 @@
               <ul>
                 <li>see whether your site is connected, and who's around right now</li>
                 <li>copy the embed snippet again any time</li>
+                <li>customize the colors and scene to match your site (see <a href="#customize">Customize the look</a>)</li>
                 <li>mark yourself as the verified site owner to get a badge (see below)</li>
                 <li>keep things friendly by removing a visitor, turning off chat, or pausing the square</li>
                 <li>clear recent in-memory chat messages</li>
@@ -130,6 +132,69 @@
                 browser can't claim it. Because TownSquare stays accountless, a new device or
                 cleared browser storage means marking owner once more — one click. You can
                 mark more than one browser if you want the badge on several devices.
+              </p>
+            </section>
+
+            <section class="docs-section" id="customize" aria-labelledby="customize-h">
+              <h2 id="customize-h">Customize the look</h2>
+              <p>
+                Out of the box your square uses TownSquare's default look — a warm,
+                neutral palette that already follows light and dark mode. You don't have
+                to change anything. When you want it to feel more like your site, your
+                <a href="/admin">admin page</a> has a customization panel with a live
+                preview.
+              </p>
+
+              <h3 id="customize-scene">Scene</h3>
+              <p>
+                Choose how many benches, trees, lamps, and birds appear, and where they
+                sit. Scene changes are saved on the TownSquare server and tied to your
+                site key, so they take effect live — anyone in your square sees the new
+                layout right away, and you never touch the snippet on your site.
+              </p>
+
+              <h3 id="customize-colors">Colors</h3>
+              <p>
+                Pick a color for each part of the scene — background, ground, buttons and
+                tags, ink, accent, and the tree trunk and leaves — and tune light and dark
+                separately. As you edit, the admin page builds a ready-made
+                <strong>Customization CSS</strong> block from your choices. Copy it into
+                your site's stylesheet once, and your square wears your colors.
+              </p>
+              <p class="docs-note">
+                Colors travel as that small CSS block on your own page, not through the
+                snippet. If you change colors later, copy the updated block again. Scene
+                props (the benches, trees, and so on) are the part that updates live.
+              </p>
+
+              <h3 id="customize-css">Bring your own CSS (advanced)</h3>
+              <p>
+                Hosted styling is the easy path, not a lock-in. If you want more control
+                than the swatches give you, edit the Customization CSS — or write your own
+                — targeting the same visual tokens on <code>#townsquare-root</code>. They
+                apply to both light and dark:
+              </p>
+              <table class="docs-table">
+                <thead>
+                  <tr><th>Token</th><th>Controls</th></tr>
+                </thead>
+                <tbody>
+                  <tr><td><code>--scene</code></td><td>Background</td></tr>
+                  <tr><td><code>--page</code></td><td>Ground</td></tr>
+                  <tr><td><code>--surface</code></td><td>Buttons and tags</td></tr>
+                  <tr><td><code>--ink</code></td><td>Text and line work</td></tr>
+                  <tr><td><code>--you</code></td><td>Accent (your own character)</td></tr>
+                  <tr><td><code>--tree-trunk</code></td><td>Tree trunks</td></tr>
+                  <tr><td><code>--tree-canopy</code></td><td>Tree leaves</td></tr>
+                  <tr><td><code>--other</code></td><td>Other line work</td></tr>
+                  <tr><td><code>--ground</code></td><td>Ground line</td></tr>
+                </tbody>
+              </table>
+              <p class="docs-note">
+                Your stylesheet always wins. Hosted embeds never write these tokens
+                inline, so any rule you set on <code>#townsquare-root</code> overrides the
+                default look — technical owners get full control while everyone else stays
+                on the simple path.
               </p>
             </section>
 
@@ -205,7 +270,8 @@ docker run --rm -p 8787:8787 -e HOST=0.0.0.0 townsquare</code></pre>
 
   mountTownSquare(document.getElementById("townsquare-root"), {
     serverOrigin: "https://your-townsquare-host",
-    socketPath: "/live"
+    socketPath: "/live",
+    theme: "host"
   });
 &lt;/script&gt;</code></pre>
               <p>
@@ -220,12 +286,20 @@ docker run --rm -p 8787:8787 -e HOST=0.0.0.0 townsquare</code></pre>
                   <tr><td><code>serverOrigin</code></td><td>The TownSquare origin to load assets from and connect to.</td></tr>
                   <tr><td><code>socketPath</code></td><td>WebSocket path on that origin (defaults to <code>/live</code>).</td></tr>
                   <tr><td><code>siteKey</code></td><td>Only needed when one hosted server runs several registered sites.</td></tr>
+                  <tr><td><code>theme</code></td><td>Use <code>"host"</code> to follow common host-page dark mode signals. Defaults to <code>"auto"</code>.</td></tr>
                 </tbody>
               </table>
               <p class="docs-note">
-                Per-site scene and color customization is turned off for now, so the square
-                uses a single default look. The registration snippet above is the standard
-                way to embed a hosted site.
+                The registration snippet above is the standard way to embed a hosted site.
+                It keeps TownSquare in sync with common host-page dark mode signals
+                such as <code>html.dark</code>, <code>data-theme</code>, and
+                <code>data-color-mode</code>.
+              </p>
+              <p>
+                To restyle a self-hosted square, set the palette tokens on
+                <code>#townsquare-root</code> in your own stylesheet — see
+                <a href="#customize">Customize the look</a> for the full list. The widget
+                writes no inline palette styles, so your CSS always wins.
               </p>
             </section>
 
@@ -241,7 +315,10 @@ docker run --rm -p 8787:8787 -e HOST=0.0.0.0 townsquare</code></pre>
                 On a custom socket path like <code>/townsquare/live</code>, pass it
                 explicitly with <code>socketPath</code>. The repo ships a deploy helper at
                 <code>scripts/deploy.sh</code> (copy <code>.env.deploy.example</code> to
-                <code>.env.deploy.local</code> first), and a health endpoint at
+                <code>.env.deploy.local</code> first). By default it deploys the local
+                <code>production</code> tag. Use <code>--tag &lt;git-tag&gt;</code> for another
+                tag, and use <code>--ref</code> only when deploying an explicit branch or
+                commit. The server also exposes a health endpoint at
                 <code>/healthz</code> that simply returns <code>ok</code>.
               </p>
               <p class="docs-note">
