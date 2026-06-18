@@ -1,12 +1,6 @@
 import { bindCopy } from "../lib/ui-common.mjs";
-import {
-  createAutoRefresh,
-  createCredentialStore,
-  createStatusSetter,
-  escapeHtml,
-  formatTime,
-  postJson,
-} from "./hosted-common.mjs";
+import { createStatusSetter, escapeHtml, formatTime } from "./hosted-common.mjs";
+import { createAdminSession } from "./hosted-admin-session.mjs";
 import {
   applyConfigToForm,
   applySceneConfigToForm,
@@ -46,23 +40,15 @@ const copyStyleButton = document.getElementById("copy-style");
 const chatDisabledInput = document.getElementById("chat-disabled");
 const clearMessagesButton = document.getElementById("clear-messages");
 const disableSiteButton = document.getElementById("disable-site");
-const chatThread = document.getElementById("chat-thread");
 const visitorList = document.getElementById("visitor-list");
 
 renderStyleOverrideFields(styleOverrideFields);
 bindStyleColorFields(customizationForm);
 bindSceneCountProse(customizationForm);
 
-const STORAGE_KEY = "townsquare-admin-session";
-const REFRESH_INTERVAL_MS = 5000;
 const AUTO_SAVE_DELAY_MS = 1500;
 
-const credentialStore = createCredentialStore(STORAGE_KEY);
-
 let currentSite = null;
-let siteKey = "";
-let adminToken = "";
-let rememberMe = false;
 let customizationBusy = false;
 let customizationSavedMessage = "";
 let autoSaveTimer = null;
@@ -80,64 +66,32 @@ const preview = createCustomizationPreview({
 const previewModeButtons = document.querySelectorAll("[data-preview-mode]");
 preview.bindThemeToggle(previewModeButtons);
 
-const setLoginStatus = createStatusSetter(loginStatusEl, { toggleHidden: true });
 const setStatus = createStatusSetter(statusEl);
 const setCustomizationStatus = createStatusSetter(customizationStatusEl, { toggleHidden: true });
-const autoRefresh = createAutoRefresh(() => loadSite({ silent: true }), REFRESH_INTERVAL_MS);
 
-function readStoredCredentials() {
-  const stored = credentialStore.read();
-  const value = stored?.value;
-  if (value && typeof value.adminToken === "string") {
-    rememberMe = stored.remembered;
-    return { siteKey: value.siteKey || "", adminToken: value.adminToken };
-  }
-  return { siteKey: "", adminToken: "" };
-}
-
-function readCredentials() {
-  const queryParams = new URLSearchParams(window.location.search);
-  const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ""));
-  const urlSiteKey = queryParams.get("siteKey") || hashParams.get("siteKey") || "";
-  const urlAdminToken = hashParams.get("adminToken") || queryParams.get("adminToken") || "";
-
-  if (urlSiteKey || urlAdminToken) {
-    window.history.replaceState({}, document.title, "/admin");
-    return { siteKey: urlSiteKey, adminToken: urlAdminToken };
-  }
-
-  return readStoredCredentials();
-}
-
-function storeCredentials() {
-  credentialStore.save({ siteKey, adminToken }, rememberMe);
-}
-
-function clearCredentials() {
-  clearAutoSaveTimer();
-  siteKey = "";
-  adminToken = "";
-  currentSite = null;
-  customizationSavedMessage = "";
-  customizationTouched = false;
-  preview.destroy();
-  credentialStore.clear();
-}
-
-function showLogin(message = "", isError = false) {
-  autoRefresh.stop();
-  preview.destroy();
-  adminView.hidden = true;
-  loginView.hidden = false;
-  setLoginStatus(message, isError);
-  loginTokenEl.focus();
-}
-
-function showAdmin() {
-  loginView.hidden = true;
-  adminView.hidden = false;
-  autoRefresh.start();
-}
+const session = createAdminSession({
+  redirectPath: "/admin",
+  elements: {
+    loginView,
+    adminView,
+    loginForm,
+    loginToken: loginTokenEl,
+    rememberMe: rememberMeEl,
+    loginSubmit: loginSubmitButton,
+    loginStatus: loginStatusEl,
+    signOut: signOutButton,
+  },
+  onRender: render,
+  onError: (message) => setStatus(message, true),
+  onBeforeShowLogin: () => preview.destroy(),
+  onClear: () => {
+    clearAutoSaveTimer();
+    currentSite = null;
+    customizationSavedMessage = "";
+    customizationTouched = false;
+    preview.destroy();
+  },
+});
 
 function syncScenePositionInputs(sceneConfig = readSceneConfigFromForm(customizationForm)) {
   const next = sanitizeSceneConfig(sceneConfig);
@@ -222,7 +176,7 @@ async function saveCustomization({ auto = false } = {}) {
   updateCustomizationButtons();
   updateCustomizationStatus();
 
-  const ok = await action("updateCustomization", readCustomizationFromForm());
+  const ok = await session.action("updateCustomization", readCustomizationFromForm());
 
   customizationBusy = false;
   if (ok) {
@@ -277,8 +231,6 @@ function render(data) {
   disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
   syncCustomizationForm();
 
-  renderThread(scene.visitors);
-
   visitorList.replaceChildren();
   if (scene.visitors.length === 0) {
     const empty = document.createElement("p");
@@ -304,17 +256,17 @@ function render(data) {
     const owner = document.createElement("button");
     owner.type = "button";
     owner.textContent = visitor.isOwner ? "Owner ✓" : "Make owner";
-    owner.addEventListener("click", () => action("setOwnerVisitor", { visitorId: visitor.id, owner: !visitor.isOwner }));
+    owner.addEventListener("click", () => session.action("setOwnerVisitor", { visitorId: visitor.id, owner: !visitor.isOwner }));
 
     const kick = document.createElement("button");
     kick.type = "button";
     kick.textContent = "Kick";
-    kick.addEventListener("click", () => action("kickVisitor", { visitorId: visitor.id }));
+    kick.addEventListener("click", () => session.action("kickVisitor", { visitorId: visitor.id }));
 
     const block = document.createElement("button");
     block.type = "button";
     block.textContent = "Block";
-    block.addEventListener("click", () => action("blockVisitor", { visitorId: visitor.id }));
+    block.addEventListener("click", () => session.action("blockVisitor", { visitorId: visitor.id }));
 
     row.append(owner, kick, block);
     visitorList.appendChild(row);
@@ -328,144 +280,6 @@ function render(data) {
     setStatus("Waiting for the snippet to load from your site. Updates automatically.");
   }
 }
-
-function formatClock(at) {
-  if (!at) return "";
-  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
-
-/**
- * Flatten every visitor's recent messages into one chronological feed so the
- * admin reads the site chat as a single thread and can act on whoever is
- * speaking. Visitors and their messages both arrive newest-last from the
- * server; we sort by timestamp to interleave authors.
- */
-function renderThread(visitors) {
-  const entries = [];
-  for (const visitor of visitors) {
-    const visitorName = String(visitor.displayName || "").trim();
-    const label = visitorName || `Visitor ${visitor.id}`;
-    for (const message of visitor.messages || []) {
-      entries.push({ visitor, label, text: message.text, at: message.at });
-    }
-  }
-  entries.sort((a, b) => a.at - b.at);
-
-  chatThread.replaceChildren();
-
-  if (entries.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "hosted-note";
-    empty.textContent = "No messages yet.";
-    chatThread.appendChild(empty);
-    return;
-  }
-
-  for (const entry of entries) {
-    const row = document.createElement("article");
-    row.className = "chat-message";
-
-    const head = document.createElement("div");
-    head.className = "chat-message-head";
-
-    const author = document.createElement("span");
-    author.className = "chat-author";
-    author.style.setProperty("--author-color", entry.visitor.color || "currentColor");
-    author.textContent = entry.label;
-
-    const time = document.createElement("time");
-    time.className = "chat-time";
-    time.textContent = formatClock(entry.at);
-
-    const kick = document.createElement("button");
-    kick.type = "button";
-    kick.className = "chat-mod-button";
-    kick.textContent = "Kick";
-    kick.addEventListener("click", () => action("kickVisitor", { visitorId: entry.visitor.id }));
-
-    const block = document.createElement("button");
-    block.type = "button";
-    block.className = "chat-mod-button";
-    block.textContent = "Ban";
-    block.addEventListener("click", () => action("blockVisitor", { visitorId: entry.visitor.id }));
-
-    head.append(author, time, kick, block);
-
-    const body = document.createElement("p");
-    body.className = "chat-text";
-    body.textContent = entry.text;
-
-    row.append(head, body);
-    chatThread.appendChild(row);
-  }
-}
-
-async function loadSite({ silent = false } = {}) {
-  if (!adminToken) {
-    showLogin();
-    return;
-  }
-
-  if (!siteKey) {
-    const login = await postJson("/api/admin/login", { adminToken });
-    if (!login.ok) {
-      clearCredentials();
-      showLogin(login.body.error || "Could not open admin with that token.", true);
-      return;
-    }
-    siteKey = login.body.site.siteKey;
-  }
-
-  const result = await postJson("/api/admin/site", { siteKey, adminToken });
-  if (!result.ok) {
-    if (result.status === 403) {
-      clearCredentials();
-      showLogin("That admin token no longer works.", true);
-      return;
-    }
-    if (!silent) {
-      setStatus(result.body.error || "Could not load this site.", true);
-    }
-    return;
-  }
-
-  storeCredentials();
-  showAdmin();
-  render(result.body);
-}
-
-async function action(name, data = {}) {
-  const result = await postJson("/api/admin/action", { siteKey, adminToken, action: name, ...data });
-  if (!result.ok) {
-    setStatus(result.body.error || "Action failed.", true);
-    return false;
-  }
-
-  await loadSite();
-  return true;
-}
-
-loginForm.addEventListener("submit", async (event) => {
-  event.preventDefault();
-  loginSubmitButton.disabled = true;
-  setLoginStatus("Checking token...");
-
-  adminToken = loginTokenEl.value.trim();
-  rememberMe = rememberMeEl.checked;
-  siteKey = "";
-  await loadSite();
-
-  loginSubmitButton.disabled = false;
-  if (!adminView.hidden) {
-    loginForm.reset();
-    setLoginStatus("");
-  }
-});
-
-signOutButton.addEventListener("click", () => {
-  clearCredentials();
-  showLogin("Signed out. Your token was forgotten on this device.");
-});
 
 bindCopy(copyButton, { text: () => snippetEl.value, source: snippetEl });
 bindCopy(copyStyleButton, { text: () => styleSnippetEl.value, source: styleSnippetEl });
@@ -493,17 +307,8 @@ resetCustomizationButton.addEventListener("click", () => {
   syncCustomizationForm({ force: true });
 });
 
-chatDisabledInput.addEventListener("change", () => action("setChatDisabled", { disabled: chatDisabledInput.checked }));
-clearMessagesButton.addEventListener("click", () => action("clearMessages"));
-disableSiteButton.addEventListener("click", () => action("disableSite", { disabled: !currentSite.disabled }));
+chatDisabledInput.addEventListener("change", () => session.action("setChatDisabled", { disabled: chatDisabledInput.checked }));
+clearMessagesButton.addEventListener("click", () => session.action("clearMessages"));
+disableSiteButton.addEventListener("click", () => session.action("disableSite", { disabled: !currentSite.disabled }));
 
-const credentials = readCredentials();
-siteKey = credentials.siteKey;
-adminToken = credentials.adminToken;
-rememberMeEl.checked = rememberMe;
-
-if (adminToken) {
-  loadSite();
-} else {
-  showLogin();
-}
+session.start();

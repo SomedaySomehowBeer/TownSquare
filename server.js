@@ -530,6 +530,7 @@ function resolvePublicFile(requestUrl, hostHeader) {
     ["/", "/index.html"],
     ["/register", "/hosted/register.html"],
     ["/admin", "/hosted/admin.html"],
+    ["/admin/chat", "/hosted/chat.html"],
     ["/service-admin", "/hosted/service-admin.html"],
     ["/docs", "/docs.html"],
     ["/changelog", "/changelog.html"],
