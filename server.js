@@ -136,6 +136,8 @@ let sanitizeSiteStyle = (style) => (style && (style.light || style.dark) ? style
 let buildSceneProps = () => [];
 let buildBirdPerches = () => [];
 let buildSiteCss = () => "";
+/** @type {(prop: import("./public/shared/site-config.mjs").SceneProp, x: number) => boolean} */
+let isWithinPropSettleZone = () => false;
 
 const MIME_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -1385,7 +1387,7 @@ function rebuildSceneProps(scene, site) {
   for (const identity of scene.identities.values()) {
     if (!identity.pose || !identity.propId) continue;
     const prop = propsById.get(identity.propId);
-    if (prop?.pose && Math.abs(identity.x - prop.x) <= prop.zoneRadius) continue;
+    if (prop?.pose && isWithinPropSettleZone(prop, identity.x)) continue;
     clearPose(identity);
     if (identity.joined) emitIdentityState(identity);
   }
@@ -1836,7 +1838,7 @@ function handleSettle(client, message) {
   if (!prop?.pose) return;
 
   const identity = client.identity;
-  if (Math.abs(identity.x - prop.x) > prop.zoneRadius) return;
+  if (!isWithinPropSettleZone(prop, identity.x)) return;
 
   const seatX = findAvailableSeatX(client.scene, prop, identity.x, identity.id);
   if (seatX === null) return;
@@ -2028,10 +2030,11 @@ async function startServer() {
 }
 
 async function loadSharedModules() {
-  const [siteConfig, scenePropsModule, birdPerchesModule] = await Promise.all([
+  const [siteConfig, scenePropsModule, birdPerchesModule, geometry] = await Promise.all([
     import("./public/shared/site-config.mjs"),
     import("./public/shared/scene-props.mjs"),
     import("./public/shared/bird-perches.mjs"),
+    import("./public/shared/scene-prop-geometry.mjs"),
   ]);
 
   DEFAULT_SITE_SCENE_CONFIG = siteConfig.DEFAULT_SCENE_CONFIG;
@@ -2041,6 +2044,7 @@ async function loadSharedModules() {
   buildSceneProps = siteConfig.buildSceneProps;
   buildBirdPerches = siteConfig.buildBirdPerches;
   buildSiteCss = siteConfig.buildSiteCss;
+  isWithinPropSettleZone = geometry.isWithinPropSettleZone;
 
   PROPS_BY_ID = new Map(scenePropsModule.PROPS.map((prop) => [prop.id, prop]));
   BIRD_PERCHES = birdPerchesModule.BIRD_PERCHES;

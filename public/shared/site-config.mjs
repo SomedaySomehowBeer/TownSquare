@@ -151,13 +151,30 @@ const TREE_SVG = `
   </svg>
 `;
 
+/** Stage width the pixel art sizes below were authored against. */
+export const REFERENCE_STAGE_WIDTH = 743;
+
+/** @type {Readonly<Record<string, { width: number, height: number }>>} */
+const PROP_PX = Object.freeze({
+  bench: { width: 52, height: 18 },
+  lamp: { width: 20, height: 56 },
+  tree: { width: 56, height: 76 },
+});
+
+/**
+ * @param {number} pxWidth
+ * @returns {number}
+ */
+function propWidthFraction(pxWidth) {
+  return Number((pxWidth / REFERENCE_STAGE_WIDTH).toFixed(4));
+}
+
 /**
  * @typedef {Object} SceneProp
  * @property {string} id
  * @property {number} x
- * @property {number} zoneRadius
- * @property {number} width
- * @property {number} height
+ * @property {number} width Normalized stage width (0–1); settle zone is width / 2.
+ * @property {number} height Render height in px (art aspect ratio).
  * @property {string} [pose]
  * @property {Array<number>} [seats]
  * @property {boolean} [faceAway]
@@ -227,13 +244,13 @@ function uniqueId(kind, index) {
 }
 
 function createBench(index, x) {
+  const { width, height } = PROP_PX.bench;
   return {
     id: uniqueId("bench", index),
     kind: "bench",
     x,
-    zoneRadius: 0.035,
-    width: 52,
-    height: 18,
+    width: propWidthFraction(width),
+    height,
     pose: "sitting",
     seats: [-0.01, 0.01],
     svg: BENCH_SVG,
@@ -241,26 +258,26 @@ function createBench(index, x) {
 }
 
 function createLamp(index, x) {
+  const { width, height } = PROP_PX.lamp;
   return {
     id: uniqueId("lamp", index),
     kind: "lamp",
     x,
-    zoneRadius: 0,
-    width: 20,
-    height: 56,
+    width: propWidthFraction(width),
+    height,
     lightRadius: 0.045,
     svg: LAMP_SVG,
   };
 }
 
 function createTree(index, x) {
+  const { width, height } = PROP_PX.tree;
   return {
     id: uniqueId("tree", index),
     kind: "tree",
     x,
-    zoneRadius: 0.015,
-    width: 56,
-    height: 76,
+    width: propWidthFraction(width),
+    height,
     pose: "resting",
     seats: [-0.008, 0.008],
     faceAway: true,

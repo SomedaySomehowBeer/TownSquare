@@ -4,6 +4,7 @@
 
 import { layoutBubbleColumns, layoutConfigFor } from "./bubble-layout.mjs";
 import { HIGH_FIVE_DISTANCE, JUMP_MS, MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, SEND_INTERVAL_MS } from "./constants.mjs";
+import { findSettleProp } from "../shared/scene-prop-geometry.mjs";
 import { clamp } from "./math.mjs";
 import {
   playHighFive,
@@ -35,17 +36,6 @@ export function resetPropSettle(ctx) {
   ctx.self.propZoneEnteredAt = 0;
   ctx.self.settlePropId = null;
   ctx.self.settleRequested = false;
-}
-
-/**
- * @param {import("../shared/scene-props.mjs").SceneProp[]} sceneProps
- * @param {number} x
- * @returns {import("../shared/scene-props.mjs").SceneProp | undefined}
- */
-function findSettleProp(sceneProps, x) {
-  return sceneProps
-    .filter((candidate) => candidate.pose && candidate.zoneRadius > 0)
-    .find((candidate) => Math.abs(x - candidate.x) < candidate.zoneRadius);
 }
 
 /**

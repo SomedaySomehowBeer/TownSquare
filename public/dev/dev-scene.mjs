@@ -14,6 +14,7 @@ import {
   updatePropEffects,
 } from "../widget/dom.mjs";
 import { MAX_X, MIN_X, MOVEMENT_SPEED, PROP_SETTLE_MS, randomSpawnX } from "../widget/constants.mjs";
+import { findSettleProp } from "../shared/scene-prop-geometry.mjs";
 import { PROPS } from "../shared/scene-props.mjs";
 import { bindCopy } from "../lib/ui-common.mjs";
 
@@ -171,12 +172,6 @@ function resetSelfSettle(self) {
   self.settlePropId = null;
 }
 
-function findSettleProp(x) {
-  return PROPS
-    .filter((prop) => prop.pose && prop.zoneRadius > 0)
-    .find((prop) => Math.abs(x - prop.x) < prop.zoneRadius);
-}
-
 function stepSelf(self, now, dt) {
   const direction = Number(self.movingRight) - Number(self.movingLeft);
 
@@ -197,7 +192,7 @@ function stepSelf(self, now, dt) {
   updatePropEffects(self.avatar, self.x, self.propId, PROPS);
   if (self.pose) return;
 
-  const prop = findSettleProp(self.x);
+  const prop = findSettleProp(PROPS, self.x);
   if (!prop) {
     resetSelfSettle(self);
     return;
