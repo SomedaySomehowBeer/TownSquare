@@ -21,6 +21,12 @@ export function renderChatThread(container, visitors, { onKick, onBlock }) {
   }
   entries.sort((a, b) => a.at - b.at);
 
+  const fingerprint = entries.map((entry) => `${entry.visitor.id}:${entry.at}:${entry.text}`).join("\n");
+  if (container.dataset.chatFingerprint === fingerprint) return;
+  container.dataset.chatFingerprint = fingerprint;
+
+  const stickToBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 48;
+
   container.replaceChildren();
 
   if (entries.length === 0) {
@@ -67,6 +73,10 @@ export function renderChatThread(container, visitors, { onKick, onBlock }) {
 
     row.append(head, body);
     container.appendChild(row);
+  }
+
+  if (stickToBottom || entries.length === 1) {
+    container.scrollTop = container.scrollHeight;
   }
 }
 

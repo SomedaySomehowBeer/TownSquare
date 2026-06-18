@@ -22,6 +22,8 @@ const chatDisabledInput = document.getElementById("chat-disabled");
 const clearMessagesButton = document.getElementById("clear-messages");
 const chatThread = document.getElementById("chat-thread");
 
+const CHAT_REFRESH_INTERVAL_MS = 2000;
+
 const setStatus = createStatusSetter(statusEl);
 
 function render(data) {
@@ -47,6 +49,7 @@ function render(data) {
 
 const session = createAdminSession({
   redirectPath: "/admin/chat",
+  refreshIntervalMs: CHAT_REFRESH_INTERVAL_MS,
   elements: {
     loginView,
     adminView,

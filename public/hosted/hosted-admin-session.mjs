@@ -40,6 +40,7 @@ export function createAdminSession({
   let siteKey = "";
   let adminToken = "";
   let rememberMe = false;
+  let loadSeq = 0;
 
   function readStoredCredentials() {
     const stored = credentialStore.read();
@@ -92,6 +93,8 @@ export function createAdminSession({
   }
 
   async function loadSite({ silent = false } = {}) {
+    const seq = ++loadSeq;
+
     if (!adminToken) {
       showLogin();
       return;
@@ -99,6 +102,7 @@ export function createAdminSession({
 
     if (!siteKey) {
       const login = await postJson("/api/admin/login", { adminToken });
+      if (seq !== loadSeq) return;
       if (!login.ok) {
         clearCredentials();
         showLogin(login.body.error || "Could not open admin with that token.", true);
@@ -108,6 +112,7 @@ export function createAdminSession({
     }
 
     const result = await postJson("/api/admin/site", { siteKey, adminToken });
+    if (seq !== loadSeq) return;
     if (!result.ok) {
       if (result.status === 403) {
         clearCredentials();

@@ -67,25 +67,58 @@ export function createStatusSetter(el, { toggleHidden = false } = {}) {
 }
 
 /**
- * Poll `callback` on an interval, pausing while the tab is hidden.
+ * Poll `callback` on an interval, pausing while the tab is hidden. Each tick
+ * waits for the prior callback to finish so overlapping polls cannot race.
  *
- * @param {() => void} callback
+ * @param {() => void | Promise<void>} callback
  * @param {number} intervalMs
  * @returns {{ start: () => void, stop: () => void }}
  */
 export function createAutoRefresh(callback, intervalMs) {
   let timer = null;
+  let active = false;
+  let inFlight = false;
+  let visibilityListener = null;
+
+  async function tick() {
+    if (!active || document.hidden || inFlight) return;
+    inFlight = true;
+    try {
+      await callback();
+    } finally {
+      inFlight = false;
+    }
+  }
+
+  function scheduleNext() {
+    if (!active) return;
+    timer = setTimeout(async () => {
+      await tick();
+      scheduleNext();
+    }, intervalMs);
+  }
+
   return {
     start() {
-      if (timer) return;
-      timer = setInterval(() => {
-        if (!document.hidden) callback();
-      }, intervalMs);
+      if (active) return;
+      active = true;
+      void tick();
+      scheduleNext();
+      visibilityListener = () => {
+        if (active && !document.hidden) void tick();
+      };
+      document.addEventListener("visibilitychange", visibilityListener);
     },
     stop() {
-      if (!timer) return;
-      clearInterval(timer);
-      timer = null;
+      active = false;
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (visibilityListener) {
+        document.removeEventListener("visibilitychange", visibilityListener);
+        visibilityListener = null;
+      }
     },
   };
 }
