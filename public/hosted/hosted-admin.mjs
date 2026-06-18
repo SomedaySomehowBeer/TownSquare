@@ -15,6 +15,7 @@ const copyButton = document.getElementById("copy-snippet");
 const chatDisabledInput = document.getElementById("chat-disabled");
 const clearMessagesButton = document.getElementById("clear-messages");
 const disableSiteButton = document.getElementById("disable-site");
+const chatThread = document.getElementById("chat-thread");
 const visitorList = document.getElementById("visitor-list");
 
 const STORAGE_KEY = "townsquare-admin-session";
@@ -100,6 +101,8 @@ function render(data) {
   chatDisabledInput.checked = currentSite.chatDisabled;
   disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
 
+  renderThread(scene.visitors);
+
   visitorList.replaceChildren();
   if (scene.visitors.length === 0) {
     const empty = document.createElement("p");
@@ -147,6 +150,77 @@ function render(data) {
     setStatus("Installed and active. Updates automatically.");
   } else {
     setStatus("Waiting for the snippet to load from your site. Updates automatically.");
+  }
+}
+
+function formatClock(at) {
+  if (!at) return "";
+  return new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+/**
+ * Flatten every visitor's recent messages into one chronological feed so the
+ * admin reads the site chat as a single thread and can act on whoever is
+ * speaking. Visitors and their messages both arrive newest-last from the
+ * server; we sort by timestamp to interleave authors.
+ */
+function renderThread(visitors) {
+  const entries = [];
+  for (const visitor of visitors) {
+    const visitorName = String(visitor.displayName || "").trim();
+    const label = visitorName || `Visitor ${visitor.id}`;
+    for (const message of visitor.messages || []) {
+      entries.push({ visitor, label, text: message.text, at: message.at });
+    }
+  }
+  entries.sort((a, b) => a.at - b.at);
+
+  chatThread.replaceChildren();
+
+  if (entries.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "hosted-note";
+    empty.textContent = "No messages yet.";
+    chatThread.appendChild(empty);
+    return;
+  }
+
+  for (const entry of entries) {
+    const row = document.createElement("article");
+    row.className = "chat-message";
+
+    const head = document.createElement("div");
+    head.className = "chat-message-head";
+
+    const author = document.createElement("span");
+    author.className = "chat-author";
+    author.style.setProperty("--author-color", entry.visitor.color || "currentColor");
+    author.textContent = entry.label;
+
+    const time = document.createElement("time");
+    time.className = "chat-time";
+    time.textContent = formatClock(entry.at);
+
+    const kick = document.createElement("button");
+    kick.type = "button";
+    kick.className = "chat-mod-button";
+    kick.textContent = "Kick";
+    kick.addEventListener("click", () => action("kickVisitor", { visitorId: entry.visitor.id }));
+
+    const block = document.createElement("button");
+    block.type = "button";
+    block.className = "chat-mod-button";
+    block.textContent = "Ban";
+    block.addEventListener("click", () => action("blockVisitor", { visitorId: entry.visitor.id }));
+
+    head.append(author, time, kick, block);
+
+    const body = document.createElement("p");
+    body.className = "chat-text";
+    body.textContent = entry.text;
+
+    row.append(head, body);
+    chatThread.appendChild(row);
   }
 }
 
