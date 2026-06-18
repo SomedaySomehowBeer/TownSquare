@@ -175,9 +175,16 @@ export function submitChat(ctx) {
   if (!input) return;
 
   const text = input.value.trim();
-  if (!text || ctx.socket.readyState !== WebSocket.OPEN) return;
+  if (!text) return;
 
-  ctx.socket.send(JSON.stringify({ type: "say", text }));
+  // Local-only modes (preview/dev simulate) have no server to echo the line
+  // back, so they show it directly. Live modes still need an open socket.
+  const localOnly = ctx.options.preview === true || ctx.options.simulate === true;
+  if (!localOnly && ctx.socket.readyState !== WebSocket.OPEN) return;
+
+  if (ctx.socket.readyState === WebSocket.OPEN) {
+    ctx.socket.send(JSON.stringify({ type: "say", text }));
+  }
   sayMessage(ctx.self.avatar, { text, at: Date.now() });
   input.value = "";
 }

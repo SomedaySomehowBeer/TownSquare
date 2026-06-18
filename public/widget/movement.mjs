@@ -92,7 +92,7 @@ export function maybeRequestPropSettle(ctx, now) {
     return;
   }
 
-  if (ctx.options.preview === true) {
+  if (ctx.options.preview === true || ctx.options.simulate === true) {
     applyLocalPropSettle(ctx, prop);
     return;
   }
@@ -270,7 +270,7 @@ export function tick(ctx, now) {
     ctx.stage,
     ctx.options.preview === true || ctx.options.solo === true ? [ctx.self] : [ctx.self, ...ctx.peers.values()],
     ctx.self.x,
-    layoutConfigFor(undefined, ctx.expanded),
+    layoutConfigFor(ctx.options.layout, ctx.expanded),
   );
 
   ctx.frameHandle = requestAnimationFrame((nextNow) => tick(ctx, nextNow));
