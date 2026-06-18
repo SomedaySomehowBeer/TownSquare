@@ -40,9 +40,11 @@ That separation is now reflected directly in the repo:
   (`presence`, `protocol`), input/motion (`movement`), ambient `birds`,
   host-page reading tags (`page-watch`), the fullscreen `expand` controller,
   the shared mount `context` typedef, and small `constants`/`math`/`utils`.
-- `public/shared/` (`shared-constants`, `scene-props`, `bird-perches`) =
-  protocol/scene definitions loaded by both the browser widget and the CommonJS
-  server (keep them browser/Node-agnostic).
+- `public/shared/` (`shared-constants`, `scene-props`, `scene-prop-geometry`,
+  `bird-perches`, `site-config`) = protocol/scene/style definitions loaded by both
+  the browser widget and the CommonJS server (keep them browser/Node-agnostic).
+  `site-config` holds the scene/style defaults and `buildSiteCss` for per-site
+  customization.
 - `public/demo.mjs` + `public/index.html` = demo shell
 - `public/hosted/` = hosted setup/admin shells (register/admin/service-admin
   HTML + scripts) sharing `public/hosted/hosted-common.mjs` and `public/lib/`.

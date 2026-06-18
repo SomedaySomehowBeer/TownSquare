@@ -18,7 +18,8 @@ widget/   shared/   hosted/   dev/   lib/
 - `widget/` — implementation split by concern (DOM/scene, chat bubbles,
   presence, protocol, movement, birds, page-watch, the `expand` controller,
   plus `constants`/`math`/`utils`). Start in `townsquare.mjs` and follow imports.
-- `shared/` — `shared-constants.mjs`, `scene-props.mjs`, `bird-perches.mjs`.
+- `shared/` — `shared-constants.mjs`, `scene-props.mjs`, `scene-prop-geometry.mjs`,
+  `bird-perches.mjs`, `site-config.mjs` (scene/style config + customization CSS).
 - `demo.mjs` + `index.html` — the live demo that mounts the widget.
 - `widget.css` / `tokens.css` / `page.css` — see Styles below.
 
@@ -40,10 +41,12 @@ pages and dev tooling.
 
 ## Shared with the server — `shared/`
 
-`shared-constants.mjs`, `scene-props.mjs`, and `bird-perches.mjs` are imported
-by **both** the browser widget and the CommonJS server (the server `import()`s
-them at startup). Keep them free of browser- or Node-only APIs so both sides of
-the protocol stay in lockstep.
+`shared-constants.mjs`, `scene-props.mjs`, `scene-prop-geometry.mjs`,
+`bird-perches.mjs`, and `site-config.mjs` are imported by **both** the browser
+widget and the CommonJS server (the server `import()`s them at startup). Keep them
+free of browser- or Node-only APIs so both sides of the protocol stay in lockstep.
+`site-config.mjs` holds the scene/style defaults, sanitizers, and `buildSiteCss`
+(the per-site Customization CSS the admin/register pages hand owners to paste).
 
 ## URLs vs. files
 
