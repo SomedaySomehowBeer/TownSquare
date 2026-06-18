@@ -30,6 +30,7 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 - `public/register.html` — no-account hosted site registration page
 - `public/admin.html` — token-protected hosted site admin page
 - `public/service-admin.html` — service-level registered site management page
+- `public/map.html` — public map of verified, enabled TownSquares, served at `/map`
 - `public/dev.html` — local simulation page for configurable walking/talking characters
 - `public/walk-sandbox.html` — local walk-cycle inspection sandbox
 - `scripts/smoke-test.js` — automated websocket smoke test
