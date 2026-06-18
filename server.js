@@ -1410,6 +1410,8 @@ function createSiteRecord({ name, origin, email, sceneConfig, styleConfig }) {
       chatDisabled: false,
       verifiedAt: null,
       lastSeenAt: null,
+      messageCount: 0,
+      lastMessageAt: null,
       createdAt: now,
       updatedAt: now,
       blockedBrowserIds: [],
@@ -1435,6 +1437,12 @@ function loadSites() {
       }
       if (!Array.isArray(site.ownerBrowserIds)) {
         site.ownerBrowserIds = [];
+      }
+      if (typeof site.messageCount !== "number") {
+        site.messageCount = 0;
+      }
+      if (site.lastMessageAt === undefined) {
+        site.lastMessageAt = null;
       }
       return [site.siteKey, site];
     }));
@@ -1475,6 +1483,8 @@ function publicSite(site) {
     chatDisabled: site.chatDisabled,
     verifiedAt: site.verifiedAt,
     lastSeenAt: site.lastSeenAt,
+    messageCount: site.messageCount || 0,
+    lastMessageAt: site.lastMessageAt || null,
     createdAt: site.createdAt,
     blockedCount: site.blockedBrowserIds.length,
   };
@@ -1865,6 +1875,15 @@ function handleSay(client, message) {
   client.identity.messages.push({ text, at: now });
   client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
   touchIdentityActivity(client.identity, now);
+
+  if (client.site) {
+    const lastSavedMessageAt = client.site.lastMessageAt || 0;
+    client.site.messageCount = (client.site.messageCount || 0) + 1;
+    client.site.lastMessageAt = now;
+    if (now - lastSavedMessageAt > LAST_SEEN_SAVE_INTERVAL_MS) {
+      saveSites();
+    }
+  }
 
   void sendTelegramChatNotification(client.site, client.identity, text, now);
 

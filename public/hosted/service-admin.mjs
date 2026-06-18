@@ -79,6 +79,8 @@ function renderSites(sites) {
         <div><dt>Chat</dt><dd>${site.chatDisabled ? "Disabled" : "Enabled"}</dd></div>
         <div><dt>Verified</dt><dd>${formatTime(site.verifiedAt)}</dd></div>
         <div><dt>Last seen</dt><dd>${formatTime(site.lastSeenAt)}</dd></div>
+        <div><dt>Messages</dt><dd>${site.messageCount ?? 0}</dd></div>
+        <div><dt>Last message</dt><dd>${formatTime(site.lastMessageAt)}</dd></div>
         <div><dt>Active</dt><dd>${site.activeVisitors}</dd></div>
         <div><dt>Blocked</dt><dd>${site.blockedCount}</dd></div>
       </dl>
