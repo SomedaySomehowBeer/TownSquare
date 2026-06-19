@@ -6,6 +6,20 @@ const SITE_LAYOUT = {
   separationPasses: 140,
 };
 
+const CITY_TIERS = [
+  { maxMessages: 10, name: "Village", radius: 18 },
+  { maxMessages: 50, name: "Small City", radius: 22 },
+  { maxMessages: 100, name: "City", radius: 26 },
+  { maxMessages: 500, name: "Large City", radius: 32 },
+  { maxMessages: 1_000, name: "Metropolis", radius: 40 },
+  { maxMessages: Infinity, name: "Megacity", radius: 50 },
+];
+
+export function cityTier(messageCount) {
+  const count = Math.max(0, Number(messageCount) || 0);
+  return CITY_TIERS.find((tier) => count <= tier.maxMessages);
+}
+
 function hashString(value) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {
@@ -51,10 +65,12 @@ function initialPosition(site, ageRank, width, height) {
 }
 
 function collisionPush(siteA, siteB, posA, posB) {
-  const rx = Math.max(32, Math.max(76, siteA.name.length * 8.2) * 0.52)
-    + Math.max(32, Math.max(76, siteB.name.length * 8.2) * 0.52)
+  const radiusA = cityTier(siteA.messageCount).radius;
+  const radiusB = cityTier(siteB.messageCount).radius;
+  const rx = Math.max(radiusA, Math.max(76, siteA.name.length * 8.2) * 0.52)
+    + Math.max(radiusB, Math.max(76, siteB.name.length * 8.2) * 0.52)
     + SITE_LAYOUT.collisionPadding;
-  const ry = 116 + SITE_LAYOUT.collisionPadding;
+  const ry = radiusA + radiusB + 64 + SITE_LAYOUT.collisionPadding;
   let dx = posB.x - posA.x;
   let dy = posB.y - posA.y;
   if (Math.abs(dx) < 0.001 && Math.abs(dy) < 0.001) {

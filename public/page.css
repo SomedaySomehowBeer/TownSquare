@@ -2302,17 +2302,11 @@ body {
   outline: none;
 }
 
-.map-node__halo {
-  fill: var(--surface);
-  stroke: var(--hair-2);
-  stroke-width: 2;
-  opacity: 0.9;
-}
-
 .map-node__dot {
   fill: var(--you);
   stroke: var(--ink);
   stroke-width: 2;
+  transition: stroke-width 120ms ease;
 }
 
 .map-node__label {
@@ -2326,15 +2320,10 @@ body {
   pointer-events: none;
 }
 
-.map-node:hover .map-node__halo,
-.map-node:focus-visible .map-node__halo,
-.map-node.is-selected .map-node__halo {
-  fill: var(--you-tint);
-  stroke: var(--you);
-}
-
+.map-node:hover .map-node__dot,
+.map-node:focus-visible .map-node__dot,
 .map-node.is-selected .map-node__dot {
-  fill: var(--ink);
+  stroke-width: 5;
 }
 
 .map-toolbar,

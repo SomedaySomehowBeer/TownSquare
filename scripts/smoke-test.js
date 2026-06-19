@@ -323,6 +323,10 @@ async function assertServiceAdminCanEditMap() {
 
   const publicBefore = await fetch(`${HTTP_ORIGIN}/api/map`).then((response) => response.json());
   assert(publicBefore.world?.width === 1800, "public map did not include the world");
+  assert(
+    publicBefore.sites.every((site) => Number.isFinite(site.messageCount)),
+    "public map sites did not include total message counts",
+  );
   assert(Array.isArray(publicBefore.world?.props), "public map world did not include props");
   assert(Array.isArray(publicBefore.world?.water), "public map world did not include water strokes");
 

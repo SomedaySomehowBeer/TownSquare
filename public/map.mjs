@@ -1,4 +1,4 @@
-import { layoutMapSites } from "./map-layout.mjs";
+import { cityTier, layoutMapSites } from "./map-layout.mjs";
 import { renderSceneryLayer } from "./map-scenery.mjs";
 import { MAP_WORLD_HEIGHT, MAP_WORLD_WIDTH, validateMapWorld } from "./shared/map-world.mjs";
 
@@ -311,19 +311,19 @@ function buildMap() {
 
 function renderSiteNode(site) {
   const { x, y } = positionsBySiteKey.get(site.siteKey) || { x: worldWidth / 2, y: worldHeight / 2 };
+  const tier = cityTier(site.messageCount);
   const group = createSvgElement("g", {
     class: `map-node${site.siteKey === selectedSiteKey ? " is-selected" : ""}`,
     transform: `translate(${x} ${y})`,
     tabindex: "0",
     role: "button",
     "data-site-key": site.siteKey,
-    "aria-label": `${site.name}, ${originLabel(site.origin)}`,
+    "aria-label": `${site.name}, ${tier.name}, ${originLabel(site.origin)}`,
   });
 
   group.append(
-    createSvgElement("circle", { class: "map-node__halo", r: 26 }),
-    createSvgElement("circle", { class: "map-node__dot", r: 10 }),
-    textElement(site.name, 0, 36, "map-node__label"),
+    createSvgElement("circle", { class: "map-node__dot", r: tier.radius }),
+    textElement(site.name, 0, tier.radius + 10, "map-node__label"),
   );
 
   group.addEventListener("click", (event) => {

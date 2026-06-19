@@ -885,6 +885,7 @@ function publicMapSite(site) {
     origin: site.origin,
     verifiedAt: site.verifiedAt,
     lastSeenAt: site.lastSeenAt,
+    messageCount: site.messageCount || 0,
     connections: getConnections(site),
   };
 }
