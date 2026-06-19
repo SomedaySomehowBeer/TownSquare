@@ -1,8 +1,9 @@
 import { createSvgElement } from "./lib/ui-common.mjs";
+import { buildMapEdges } from "./map-connections.mjs";
 import { activityLevel, cityTier, layoutMapSites } from "./map-layout.mjs";
+import { createCityMarker, renderMapEdge } from "./map-render.mjs";
 import { renderSceneryLayer } from "./map-scenery.mjs";
 import { MAP_WORLD_HEIGHT, MAP_WORLD_WIDTH, validateMapWorld } from "./shared/map-world.mjs";
-import { normalizeAbsoluteOrigin } from "./shared/url.mjs";
 
 const MIN_ZOOM = 0.55;
 const MAX_ZOOM = 2.8;
@@ -45,7 +46,6 @@ let worldHeight = MAP_WORLD_HEIGHT;
 let mapWorld = { width: MAP_WORLD_WIDTH, height: MAP_WORLD_HEIGHT, props: [], water: [] };
 let sites = [];
 let siteByKey = new Map();
-let siteKeyByOrigin = new Map();
 let positionsBySiteKey = new Map();
 let mapEdges = [];
 let selectedSiteKey = "";
@@ -62,12 +62,6 @@ let view = {
   y: 0,
   zoom: 1,
 };
-
-function textElement(text, x, y, className) {
-  const el = createSvgElement("text", { x, y, class: className });
-  el.textContent = text;
-  return el;
-}
 
 function structuralSnapshot(nextSites, nextWorld) {
   return JSON.stringify({
@@ -108,93 +102,11 @@ function renderActivity(site, tier) {
   return group;
 }
 
-function siteLinksTo(fromKey, toKey) {
-  const fromSite = siteByKey.get(fromKey);
-  const toSite = siteByKey.get(toKey);
-  if (!fromSite || !toSite) return false;
-
-  const targetOrigin = normalizeAbsoluteOrigin(toSite.origin);
-  if (!targetOrigin) return false;
-
-  return (fromSite.connections || []).some(
-    (connection) => normalizeAbsoluteOrigin(connection.url) === targetOrigin,
-  );
-}
-
 function indexSites(nextSites) {
   sites = nextSites;
-  siteByKey = new Map();
-  siteKeyByOrigin = new Map();
+  siteByKey = new Map(nextSites.map((site) => [site.siteKey, site]));
   positionsBySiteKey = layoutMapSites(nextSites, worldWidth, worldHeight);
-  mapEdges = [];
-
-  for (const site of sites) {
-    siteByKey.set(site.siteKey, site);
-    const origin = normalizeAbsoluteOrigin(site.origin);
-    if (origin && !siteKeyByOrigin.has(origin)) siteKeyByOrigin.set(origin, site.siteKey);
-  }
-
-  const seen = new Set();
-  for (const site of sites) {
-    const fromKey = site.siteKey;
-    for (const connection of site.connections || []) {
-      const targetOrigin = normalizeAbsoluteOrigin(connection.url);
-      if (!targetOrigin) continue;
-
-      const toKey = siteKeyByOrigin.get(targetOrigin);
-      if (!toKey || toKey === fromKey) continue;
-
-      const edgeKey = [fromKey, toKey].sort().join("|");
-      if (seen.has(edgeKey)) continue;
-      seen.add(edgeKey);
-      mapEdges.push({
-        fromKey,
-        toKey,
-        label: connection.label,
-        bidirectional: siteLinksTo(fromKey, toKey) && siteLinksTo(toKey, fromKey),
-      });
-    }
-  }
-}
-
-function edgeEndpoints(from, to, inset = 28) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const len = Math.hypot(dx, dy) || 1;
-  const ux = dx / len;
-  const uy = dy / len;
-  return {
-    from: { x: from.x + ux * inset, y: from.y + uy * inset },
-    to: { x: to.x - ux * inset, y: to.y - uy * inset },
-  };
-}
-
-function edgePath(from, to) {
-  const endpoints = edgeEndpoints(from, to);
-  const dx = endpoints.to.x - endpoints.from.x;
-  const dy = endpoints.to.y - endpoints.from.y;
-  const mx = (endpoints.from.x + endpoints.to.x) / 2;
-  const my = (endpoints.from.y + endpoints.to.y) / 2;
-  const len = Math.hypot(dx, dy) || 1;
-  const bend = Math.min(140, len * 0.22);
-  const cx = mx - (dy / len) * bend;
-  const cy = my + (dx / len) * bend;
-  return `M ${endpoints.from.x} ${endpoints.from.y} Q ${cx} ${cy} ${endpoints.to.x} ${endpoints.to.y}`;
-}
-
-function renderMapEdge(edge) {
-  const from = positionsBySiteKey.get(edge.fromKey);
-  const to = positionsBySiteKey.get(edge.toKey);
-  if (!from || !to) return null;
-
-  const active = selectedSiteKey && (edge.fromKey === selectedSiteKey || edge.toKey === selectedSiteKey);
-  const roadKind = edge.bidirectional ? "asphalt" : "dirt";
-  return createSvgElement("path", {
-    class: `map-link map-link--${roadKind}${active ? " is-active" : ""}`,
-    d: edgePath(from, to),
-    "data-from-key": edge.fromKey,
-    "data-to-key": edge.toKey,
-  });
+  mapEdges = buildMapEdges(nextSites);
 }
 
 function buildMap() {
@@ -221,7 +133,7 @@ function buildMap() {
   statusEl.textContent = `${sites.length} verified TownSquare${sites.length === 1 ? "" : "s"} on the map${mapEdges.length ? `, ${edgeLabel} between them` : ""}.`;
 
   for (const edge of mapEdges) {
-    const path = renderMapEdge(edge);
+    const path = renderMapEdge(edge, positionsBySiteKey, selectedSiteKey);
     if (path) edgeLayer.appendChild(path);
   }
 
@@ -232,7 +144,7 @@ function buildMap() {
 
 function renderSiteNode(site) {
   const { x, y } = positionsBySiteKey.get(site.siteKey) || { x: worldWidth / 2, y: worldHeight / 2 };
-  const tier = cityTier(site.messageCount);
+  const marker = createCityMarker(site);
   const group = createSvgElement("g", {
     class: `map-node${site.siteKey === selectedSiteKey ? " is-selected" : ""}`,
     transform: `translate(${x} ${y})`,
@@ -243,9 +155,9 @@ function renderSiteNode(site) {
   });
 
   group.append(
-    createSvgElement("circle", { class: "map-node__dot", r: tier.radius }),
-    renderActivity(site, tier),
-    textElement(site.name, 0, tier.radius + 10, "map-node__label"),
+    marker.dot,
+    renderActivity(site, marker.tier),
+    marker.label,
   );
 
   group.addEventListener("click", (event) => {

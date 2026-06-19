@@ -1630,6 +1630,7 @@ body {
 }
 
 .map-editor__svg .map-scenery,
+.map-editor__svg .map-edges,
 .map-editor__towns {
   pointer-events: none;
 }

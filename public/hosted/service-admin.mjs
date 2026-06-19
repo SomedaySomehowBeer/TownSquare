@@ -1,5 +1,7 @@
 import { bindCopy, createSvgElement } from "../lib/ui-common.mjs";
+import { buildMapEdges } from "../map-connections.mjs";
 import { layoutMapSites } from "../map-layout.mjs";
+import { createCityMarker, renderMapEdge } from "../map-render.mjs";
 import { renderSceneryLayer } from "../map-scenery.mjs";
 import {
   cloneMapWorld,
@@ -142,17 +144,19 @@ function renderMapEditor() {
 
   const visibleSites = allSites.filter((site) => site.verifiedAt && !site.disabled);
   const positions = layoutMapSites(visibleSites, draftMapWorld.width, draftMapWorld.height);
+  const edges = createSvgElement("g", { class: "map-edges", "aria-hidden": "true" });
+  for (const edge of buildMapEdges(visibleSites)) {
+    const path = renderMapEdge(edge, positions);
+    if (path) edges.appendChild(path);
+  }
+  svg.appendChild(edges);
+
   const towns = createSvgElement("g", { class: "map-editor__towns", "aria-hidden": "true" });
   for (const site of visibleSites) {
     const position = positions.get(site.siteKey);
+    const marker = createCityMarker(site);
     const town = createSvgElement("g", { transform: `translate(${position.x} ${position.y})` });
-    const label = createSvgElement("text", { x: 0, y: 36, class: "map-node__label" });
-    label.textContent = site.name;
-    town.append(
-      createSvgElement("circle", { class: "map-node__halo", r: 26 }),
-      createSvgElement("circle", { class: "map-node__dot", r: 10 }),
-      label,
-    );
+    town.append(marker.dot, marker.label);
     towns.appendChild(town);
   }
   svg.appendChild(towns);
