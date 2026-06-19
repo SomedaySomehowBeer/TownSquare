@@ -1505,19 +1505,14 @@
 
 .townsquare-avatar__owner-role[hidden] { display: none; }
 
-.townsquare-avatar--owner:has(.townsquare-avatar__owner-crown:hover) .townsquare-avatar__owner-role,
-.townsquare-avatar--owner:has(.townsquare-avatar__owner-crown:focus-visible) .townsquare-avatar__owner-role {
+.townsquare-avatar--owner.townsquare-avatar--peer:has(.townsquare-avatar__owner-crown:hover) .townsquare-avatar__owner-role,
+.townsquare-avatar--owner.townsquare-avatar--peer:has(.townsquare-avatar__owner-crown:focus-visible) .townsquare-avatar__owner-role {
   display: block;
 }
 
-.townsquare-avatar--owner:has(.townsquare-avatar__owner-crown:hover) .townsquare-avatar__reading,
-.townsquare-avatar--owner:has(.townsquare-avatar__owner-crown:focus-visible) .townsquare-avatar__reading {
+.townsquare-avatar--owner.townsquare-avatar--peer:has(.townsquare-avatar__owner-crown:hover) .townsquare-avatar__reading,
+.townsquare-avatar--owner.townsquare-avatar--peer:has(.townsquare-avatar__owner-crown:focus-visible) .townsquare-avatar__reading {
   display: none !important;
-}
-
-.townsquare-avatar--owner.townsquare-avatar--self:has(.townsquare-avatar__owner-crown:hover) .townsquare-avatar__plate-hint,
-.townsquare-avatar--owner.townsquare-avatar--self:has(.townsquare-avatar__owner-crown:focus-visible) .townsquare-avatar__plate-hint {
-  display: none;
 }
 
 .townsquare-avatar--owner .townsquare-avatar__peer-label,
