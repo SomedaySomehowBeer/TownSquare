@@ -2348,8 +2348,7 @@ body {
 }
 
 .map-toolbar,
-.map-status,
-.map-detail {
+.map-status {
   position: absolute;
   z-index: 1;
 }
@@ -2398,16 +2397,20 @@ body {
 }
 
 .map-detail {
-  right: 16px;
-  bottom: 16px;
   width: min(330px, calc(100% - 32px));
+  margin: auto;
   padding: 18px;
   border: 1px solid var(--hair-2);
   border-radius: var(--r-sm);
-  background: color-mix(in oklab, var(--surface) 94%, transparent);
+  background: var(--surface);
+  color: var(--ink);
   box-shadow: var(--tray-shadow);
-  max-height: calc(100% - 92px);
+  max-height: calc(100dvh - 32px);
   overflow-y: auto;
+}
+
+.map-detail::backdrop {
+  background: color-mix(in oklab, var(--ink) 38%, transparent);
 }
 
 .map-detail__close {
@@ -2432,87 +2435,18 @@ body {
   text-decoration: none;
 }
 
-.map-detail dl {
-  display: grid;
-  gap: 8px;
-  margin: 16px 0;
-}
-
-.map-detail dl div {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 8px;
-  border-top: 1px solid var(--hair);
-}
-
-.map-detail dt {
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  font-weight: 700;
-}
-
-.map-detail dd {
-  margin: 0;
-  color: var(--ink);
-  font-size: 0.88rem;
-  font-weight: 650;
-  text-align: right;
-}
-
 .map-detail__visit {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 100%;
+  margin-top: 18px;
   min-height: 40px;
   border-radius: 9px;
   background: var(--ink);
   color: var(--surface);
   font-weight: 700;
   text-decoration: none;
-}
-
-.map-detail__connections {
-  margin-bottom: 14px;
-}
-
-.map-detail__connections .eyebrow {
-  margin: 0 0 8px;
-}
-
-.map-detail__connection-list {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.map-detail__connection {
-  display: block;
-  width: 100%;
-  padding: 8px 10px;
-  border: 1px solid var(--hair-2);
-  border-radius: 8px;
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  font-size: 0.88rem;
-  font-weight: 650;
-  text-align: left;
-  text-decoration: none;
-  cursor: pointer;
-}
-
-.map-detail__connection:hover,
-.map-detail__connection:focus-visible {
-  background: var(--surface-2);
-  outline: none;
-}
-
-.map-detail__connection--external {
-  color: var(--you-deep);
 }
 
 @media (max-width: 900px) {
@@ -2656,9 +2590,5 @@ body {
     bottom: 10px;
     max-width: calc(100% - 20px);
   }
-  .map-detail {
-    right: 10px;
-    bottom: 56px;
-    width: calc(100% - 20px);
-  }
+  .map-detail { width: calc(100% - 20px); }
 }

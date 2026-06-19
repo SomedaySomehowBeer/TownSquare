@@ -34,22 +34,15 @@
         <div id="map-status" class="map-status" role="status">Loading verified TownSquares...</div>
         <div id="townsquare-map" class="map-canvas" tabindex="0" aria-label="Pan and zoom map"></div>
 
-        <aside id="map-detail" class="map-detail" aria-live="polite" hidden>
-          <button type="button" class="map-detail__close" aria-label="Close selected TownSquare">×</button>
-          <p class="eyebrow">Selected TownSquare</p>
-          <h2></h2>
-          <a class="map-detail__origin" target="_blank" rel="noopener noreferrer"></a>
-          <dl>
-            <div><dt>Verified</dt><dd data-map-verified></dd></div>
-            <div><dt>Last seen</dt><dd data-map-seen></dd></div>
-          </dl>
-          <div class="map-detail__connections" data-map-connections hidden>
-            <p class="eyebrow">Connected towns</p>
-            <ul class="map-detail__connection-list"></ul>
-          </div>
-          <a class="map-detail__visit" target="_blank" rel="noopener noreferrer">Visit TownSquare</a>
-        </aside>
       </section>
+
+      <dialog id="map-detail" class="map-detail" aria-labelledby="map-detail-title">
+        <button type="button" class="map-detail__close" aria-label="Close site details">×</button>
+        <p class="eyebrow">Site</p>
+        <h2 id="map-detail-title"></h2>
+        <a class="map-detail__origin" target="_blank" rel="noopener noreferrer"></a>
+        <a class="map-detail__visit" target="_blank" rel="noopener noreferrer">Visit site</a>
+      </dialog>
     </main>
 
     <script type="module" src="/map.mjs"></script>

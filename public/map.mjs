@@ -21,28 +21,20 @@ const root = document.getElementById("townsquare-map");
 const statusEl = document.getElementById("map-status");
 const detail = document.getElementById("map-detail");
 
-if (!(root instanceof HTMLElement) || !(statusEl instanceof HTMLElement) || !(detail instanceof HTMLElement)) {
+if (!(root instanceof HTMLElement) || !(statusEl instanceof HTMLElement) || !(detail instanceof HTMLDialogElement)) {
   throw new Error("Map page elements not found");
 }
 
 const detailTitle = detail.querySelector("h2");
 const detailOrigin = detail.querySelector(".map-detail__origin");
 const detailVisit = detail.querySelector(".map-detail__visit");
-const detailVerified = detail.querySelector("[data-map-verified]");
-const detailSeen = detail.querySelector("[data-map-seen]");
 const detailClose = detail.querySelector(".map-detail__close");
-const detailConnections = detail.querySelector("[data-map-connections]");
-const detailConnectionList = detail.querySelector(".map-detail__connection-list");
 
 if (
   !(detailTitle instanceof HTMLElement)
   || !(detailOrigin instanceof HTMLAnchorElement)
   || !(detailVisit instanceof HTMLAnchorElement)
-  || !(detailVerified instanceof HTMLElement)
-  || !(detailSeen instanceof HTMLElement)
   || !(detailClose instanceof HTMLButtonElement)
-  || !(detailConnections instanceof HTMLElement)
-  || !(detailConnectionList instanceof HTMLUListElement)
 ) {
   throw new Error("Map detail elements not found");
 }
@@ -57,7 +49,11 @@ let positionsBySiteKey = new Map();
 let mapEdges = [];
 let selectedSiteKey = "";
 let svg = null;
+const PAN_THRESHOLD_PX = 4;
+
 let isDragging = false;
+let panPointerId = null;
+let panStart = null;
 let lastPointer = null;
 let view = {
   x: 0,
@@ -77,17 +73,6 @@ function textElement(text, x, y, className) {
   const el = createSvgElement("text", { x, y, class: className });
   el.textContent = text;
   return el;
-}
-
-function formatTime(value) {
-  if (!value) return "Not seen yet";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Unknown";
-  return new Intl.DateTimeFormat(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(date);
 }
 
 function normalizeOrigin(value) {
@@ -225,89 +210,6 @@ function renderMapEdge(edge) {
   });
 }
 
-function siteConnections(siteKey) {
-  const site = siteByKey.get(siteKey);
-  if (!site) return [];
-
-  const items = [];
-  const seen = new Set();
-
-  for (const connection of site.connections || []) {
-    const targetOrigin = normalizeOrigin(connection.url);
-    const targetKey = targetOrigin ? siteKeyByOrigin.get(targetOrigin) : null;
-    const key = targetKey || connection.url;
-    if (seen.has(key)) continue;
-    seen.add(key);
-
-    const targetSite = targetKey ? siteByKey.get(targetKey) : null;
-    items.push({
-      label: connection.label || (targetSite?.name ?? originLabel(connection.url)),
-      url: connection.url,
-      siteKey: targetKey,
-      onMap: Boolean(targetSite),
-      side: connection.side,
-    });
-  }
-
-  for (const other of sites) {
-    if (other.siteKey === siteKey) continue;
-    for (const connection of other.connections || []) {
-      const targetOrigin = normalizeOrigin(connection.url);
-      if (targetOrigin !== normalizeOrigin(site.origin)) continue;
-
-      const key = `in:${other.siteKey}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-
-      items.push({
-        label: other.name,
-        url: other.origin,
-        siteKey: other.siteKey,
-        onMap: true,
-        inbound: true,
-      });
-    }
-  }
-
-  return items;
-}
-
-function renderDetailConnections(siteKey) {
-  const connections = siteConnections(siteKey);
-  detailConnectionList.replaceChildren();
-
-  if (connections.length === 0) {
-    detailConnections.hidden = true;
-    return;
-  }
-
-  detailConnections.hidden = false;
-  for (const connection of connections) {
-    const item = document.createElement("li");
-
-    if (connection.onMap && connection.siteKey) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "map-detail__connection";
-      button.textContent = connection.inbound
-        ? `${connection.label} (links here)`
-        : connection.label;
-      button.addEventListener("click", () => selectSite(connection.siteKey));
-      item.appendChild(button);
-    } else {
-      const link = document.createElement("a");
-      link.className = "map-detail__connection map-detail__connection--external";
-      link.href = connection.url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.textContent = connection.label;
-      item.appendChild(link);
-    }
-
-    detailConnectionList.appendChild(item);
-  }
-}
-
 function buildMap() {
   svg = createSvgElement("svg", {
     class: "map-svg",
@@ -417,34 +319,72 @@ function selectSite(siteKey) {
   if (!site) return;
 
   renderSelectedState();
-  detail.hidden = false;
   detailTitle.textContent = site.name;
-  detailOrigin.textContent = originLabel(site.origin);
+  detailOrigin.textContent = site.origin;
   detailOrigin.href = site.origin;
   detailVisit.href = site.origin;
-  detailVerified.textContent = formatTime(site.verifiedAt);
-  detailSeen.textContent = formatTime(site.lastSeenAt);
-  renderDetailConnections(siteKey);
+  if (!detail.open) detail.showModal();
 }
 
 function closeDetail() {
+  if (detail.open) {
+    detail.close();
+    return;
+  }
   selectedSiteKey = "";
   renderSelectedState();
-  detail.hidden = true;
-  detailConnections.hidden = true;
-  detailConnectionList.replaceChildren();
+}
+
+function containerAspect() {
+  const width = root.clientWidth || 1;
+  const height = root.clientHeight || 1;
+  return width / height;
+}
+
+function visibleSizeAtZoom(zoom) {
+  const aspect = containerAspect();
+  let width = worldWidth / zoom;
+  let height = worldHeight / zoom;
+  if (width / height > aspect) {
+    height = width / aspect;
+  } else {
+    width = height * aspect;
+  }
+  return {
+    width: Math.min(width, worldWidth),
+    height: Math.min(height, worldHeight),
+  };
+}
+
+function visibleSize() {
+  return visibleSizeAtZoom(view.zoom);
 }
 
 function applyView() {
   if (!svg) return;
-  svg.setAttribute("viewBox", `${view.x} ${view.y} ${worldWidth / view.zoom} ${worldHeight / view.zoom}`);
+  const { width, height } = visibleSize();
+  svg.setAttribute("viewBox", `${view.x} ${view.y} ${width} ${height}`);
 }
 
 function clampView() {
-  const visibleWidth = worldWidth / view.zoom;
-  const visibleHeight = worldHeight / view.zoom;
-  view.x = Math.max(0, Math.min(worldWidth - visibleWidth, view.x));
-  view.y = Math.max(0, Math.min(worldHeight - visibleHeight, view.y));
+  const { width: visibleWidth, height: visibleHeight } = visibleSize();
+  view.x = Math.max(0, Math.min(Math.max(0, worldWidth - visibleWidth), view.x));
+  view.y = Math.max(0, Math.min(Math.max(0, worldHeight - visibleHeight), view.y));
+}
+
+function zoomToFitBox(targetWidth, targetHeight) {
+  let low = MIN_ZOOM;
+  let high = MAX_ZOOM;
+  for (let step = 0; step < 48; step += 1) {
+    const mid = (low + high) / 2;
+    const { width, height } = visibleSizeAtZoom(mid);
+    if (width >= targetWidth && height >= targetHeight) {
+      low = mid;
+    } else {
+      high = mid;
+    }
+  }
+  return low;
 }
 
 function wheelZoomMultiplier(deltaY, deltaMode) {
@@ -458,23 +398,30 @@ function wheelZoomMultiplier(deltaY, deltaMode) {
 
 function zoomAt(multiplier, clientX = root.clientWidth / 2, clientY = root.clientHeight / 2) {
   const bounds = root.getBoundingClientRect();
-  const beforeWidth = worldWidth / view.zoom;
-  const beforeHeight = worldHeight / view.zoom;
-  const beforeX = view.x + ((clientX - bounds.left) / bounds.width) * beforeWidth;
-  const beforeY = view.y + ((clientY - bounds.top) / bounds.height) * beforeHeight;
-  const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, view.zoom * multiplier));
-  const afterWidth = worldWidth / nextZoom;
-  const afterHeight = worldHeight / nextZoom;
+  const before = visibleSize();
+  const beforeX = view.x + ((clientX - bounds.left) / bounds.width) * before.width;
+  const beforeY = view.y + ((clientY - bounds.top) / bounds.height) * before.height;
+  view.zoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, view.zoom * multiplier));
+  const after = visibleSize();
 
-  view.x = beforeX - ((clientX - bounds.left) / bounds.width) * afterWidth;
-  view.y = beforeY - ((clientY - bounds.top) / bounds.height) * afterHeight;
-  view.zoom = nextZoom;
+  view.x = beforeX - ((clientX - bounds.left) / bounds.width) * after.width;
+  view.y = beforeY - ((clientY - bounds.top) / bounds.height) * after.height;
   clampView();
   applyView();
 }
 
-const CONTENT_PADDING = 120;
-const VIEW_MARGIN = 1.65;
+// World units of empty space between the outermost cities and the viewport edge on reset.
+const RESET_MARGIN = 5;
+
+function siteFootprint(site) {
+  const tier = cityTier(site.messageCount);
+  const halfW = Math.max(tier.radius, Math.max(76, site.name.length * 8.2) * 0.52);
+  return {
+    above: tier.radius + 8,
+    below: tier.radius + 28,
+    halfW,
+  };
+}
 
 function siteContentBounds() {
   let minX = Infinity;
@@ -482,77 +429,106 @@ function siteContentBounds() {
   let maxX = -Infinity;
   let maxY = -Infinity;
 
-  for (const { x, y } of positionsBySiteKey.values()) {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x);
-    maxY = Math.max(maxY, y);
+  for (const site of sites) {
+    const position = positionsBySiteKey.get(site.siteKey);
+    if (!position) continue;
+    const { above, below, halfW } = siteFootprint(site);
+    minX = Math.min(minX, position.x - halfW);
+    minY = Math.min(minY, position.y - above);
+    maxX = Math.max(maxX, position.x + halfW);
+    maxY = Math.max(maxY, position.y + below);
   }
 
   if (!Number.isFinite(minX)) {
+    const inset = RESET_MARGIN * 2;
     return {
-      minX: CONTENT_PADDING,
-      minY: CONTENT_PADDING,
-      maxX: worldWidth - CONTENT_PADDING,
-      maxY: worldHeight - CONTENT_PADDING,
+      minX: inset,
+      minY: inset,
+      maxX: worldWidth - inset,
+      maxY: worldHeight - inset,
     };
   }
 
-  return {
-    minX: Math.max(0, minX - CONTENT_PADDING),
-    minY: Math.max(0, minY - CONTENT_PADDING),
-    maxX: Math.min(worldWidth, maxX + CONTENT_PADDING),
-    maxY: Math.min(worldHeight, maxY + CONTENT_PADDING),
-  };
+  return { minX, minY, maxX, maxY };
 }
 
 function resetView() {
   const bounds = siteContentBounds();
-  const contentWidth = Math.max(1, bounds.maxX - bounds.minX);
-  const contentHeight = Math.max(1, bounds.maxY - bounds.minY);
+  const margin = RESET_MARGIN;
   const centerX = (bounds.minX + bounds.maxX) / 2;
   const centerY = (bounds.minY + bounds.maxY) / 2;
-  const zoom = Math.max(
-    MIN_ZOOM,
-    Math.min(
-      MAX_ZOOM,
-      Math.min(worldWidth / (contentWidth * VIEW_MARGIN), worldHeight / (contentHeight * VIEW_MARGIN)),
-    ),
-  );
-  const visibleWidth = worldWidth / zoom;
-  const visibleHeight = worldHeight / zoom;
+  let targetWidth = Math.max(1, (bounds.maxX - bounds.minX) + margin * 2);
+  let targetHeight = Math.max(1, (bounds.maxY - bounds.minY) + margin * 2);
+  const aspect = containerAspect();
 
+  if (targetWidth / targetHeight > aspect) {
+    targetHeight = targetWidth / aspect;
+  } else {
+    targetWidth = targetHeight * aspect;
+  }
+
+  const zoom = zoomToFitBox(targetWidth, targetHeight);
+  const { width: fittedWidth, height: fittedHeight } = visibleSizeAtZoom(zoom);
   view = {
-    x: centerX - visibleWidth / 2,
-    y: centerY - visibleHeight / 2,
+    x: centerX - fittedWidth / 2,
+    y: centerY - fittedHeight / 2,
     zoom,
   };
   clampView();
   applyView();
 }
 
+function isPanTarget(target) {
+  if (!(target instanceof Element)) return false;
+  return !target.closest(".map-node, .map-toolbar, .map-detail");
+}
+
+function endPan() {
+  isDragging = false;
+  panPointerId = null;
+  panStart = null;
+  lastPointer = null;
+  root.classList.remove("is-panning");
+}
+
 function wireControls() {
   root.addEventListener("pointerdown", (event) => {
-    isDragging = true;
+    if (event.button !== 0 || !isPanTarget(event.target)) return;
+
+    panPointerId = event.pointerId;
+    panStart = { x: event.clientX, y: event.clientY };
     lastPointer = { x: event.clientX, y: event.clientY };
     root.setPointerCapture(event.pointerId);
-    root.classList.add("is-panning");
   });
 
   root.addEventListener("pointermove", (event) => {
-    if (!isDragging || !lastPointer) return;
+    if (panPointerId !== event.pointerId || !lastPointer || !panStart) return;
+
+    if (!isDragging) {
+      const dx = event.clientX - panStart.x;
+      const dy = event.clientY - panStart.y;
+      if (Math.hypot(dx, dy) < PAN_THRESHOLD_PX) return;
+      isDragging = true;
+      root.classList.add("is-panning");
+    }
+
     const bounds = root.getBoundingClientRect();
-    view.x -= ((event.clientX - lastPointer.x) / bounds.width) * (worldWidth / view.zoom);
-    view.y -= ((event.clientY - lastPointer.y) / bounds.height) * (worldHeight / view.zoom);
+    const { width: visibleWidth, height: visibleHeight } = visibleSize();
+    view.x -= ((event.clientX - lastPointer.x) / bounds.width) * visibleWidth;
+    view.y -= ((event.clientY - lastPointer.y) / bounds.height) * visibleHeight;
     lastPointer = { x: event.clientX, y: event.clientY };
     clampView();
     applyView();
   });
 
-  root.addEventListener("pointerup", () => {
-    isDragging = false;
-    lastPointer = null;
-    root.classList.remove("is-panning");
+  root.addEventListener("pointerup", (event) => {
+    if (panPointerId !== event.pointerId) return;
+    endPan();
+  });
+
+  root.addEventListener("pointercancel", (event) => {
+    if (panPointerId !== event.pointerId) return;
+    endPan();
   });
 
   root.addEventListener("wheel", (event) => {
@@ -601,7 +577,9 @@ async function loadMap() {
   }
 
   buildMap();
-  resetView();
+  requestAnimationFrame(() => {
+    resetView();
+  });
 }
 
 wireControls();
