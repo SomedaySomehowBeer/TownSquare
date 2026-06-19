@@ -5,6 +5,8 @@ import { MAP_WORLD_HEIGHT, MAP_WORLD_WIDTH, validateMapWorld } from "./shared/ma
 const MIN_ZOOM = 0.55;
 const MAX_ZOOM = 2.8;
 const ZOOM_STEP = 1.22;
+const WHEEL_ZOOM_SCALE = 0.0014;
+const MAX_WHEEL_ZOOM_STEP = 0.07;
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 const root = document.getElementById("townsquare-map");
@@ -390,6 +392,15 @@ function clampView() {
   view.y = Math.max(0, Math.min(worldHeight - visibleHeight, view.y));
 }
 
+function wheelZoomMultiplier(deltaY, deltaMode) {
+  let pixels = deltaY;
+  if (deltaMode === WheelEvent.DOM_DELTA_LINE) pixels *= 16;
+  else if (deltaMode === WheelEvent.DOM_DELTA_PAGE) pixels *= root.clientHeight;
+
+  const raw = Math.pow(ZOOM_STEP, -pixels * WHEEL_ZOOM_SCALE);
+  return Math.max(1 - MAX_WHEEL_ZOOM_STEP, Math.min(1 + MAX_WHEEL_ZOOM_STEP, raw));
+}
+
 function zoomAt(multiplier, clientX = root.clientWidth / 2, clientY = root.clientHeight / 2) {
   const bounds = root.getBoundingClientRect();
   const beforeWidth = worldWidth / view.zoom;
@@ -491,7 +502,9 @@ function wireControls() {
 
   root.addEventListener("wheel", (event) => {
     event.preventDefault();
-    zoomAt(event.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP, event.clientX, event.clientY);
+    const multiplier = wheelZoomMultiplier(event.deltaY, event.deltaMode);
+    if (Math.abs(multiplier - 1) < 0.0005) return;
+    zoomAt(multiplier, event.clientX, event.clientY);
   }, { passive: false });
 
   root.addEventListener("click", (event) => {
