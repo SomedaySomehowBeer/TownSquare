@@ -1,31 +1,27 @@
 /*
  * TownSquare full-page chrome.
  *
- * Loaded only on TownSquare server pages (admin, map, dev tools). Not part of
- * the embed snippet — external sites should load widget.css only.
+ * Loaded only on TownSquare server pages (admin, map, dev tools). The shared
+ * public foundation is independent from the embeddable widget.
  */
-@import url("./tokens.css");
-
-:root {
-  color-scheme: light;
-}
-
-* { box-sizing: border-box; }
+@import url("./design/tokens.css");
+@import url("./design/base.css");
+@import url("./design/components.css");
 
 body {
   margin: 0;
   min-height: 100vh;
-  font-family: var(--font);
-  background: linear-gradient(180deg, var(--bg), color-mix(in oklab, var(--bg) 92%, black 8%));
+  font-family: var(--font-body);
+  background: radial-gradient(120% 80% at 50% -10%, #fdf8ee 0%, var(--cream) 46%, #f6edda 100%);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
 }
 
 .eyebrow {
   margin: 0 0 8px;
-  color: var(--muted);
-  font-size: 0.84rem;
-  letter-spacing: 0.08em;
+  color: #a96f40;
+  font: 500 0.78rem var(--font-mono);
+  letter-spacing: 0.07em;
   text-transform: uppercase;
 }
 
@@ -536,7 +532,7 @@ body {
 .hosted-panel {
   padding: 26px;
   border: 1px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--r-card);
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -945,7 +941,7 @@ body {
   width: 100%;
   border: 1px solid var(--hair-2);
   border-radius: 10px;
-  background: #fff;
+  background: var(--surface);
   color: var(--ink);
   font: 500 1rem var(--font);
 }
@@ -1035,11 +1031,11 @@ body {
 .service-row-menu-panel button {
   min-height: 40px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--r-control);
   padding: 0 14px;
-  background: var(--ink);
-  color: var(--surface);
-  font: 700 0.92rem var(--font);
+  background: var(--accent);
+  color: var(--cream);
+  font: 600 0.92rem var(--font-display);
   text-decoration: none;
   cursor: pointer;
 }
@@ -1058,7 +1054,7 @@ body {
   display: inline-flex;
   align-items: center;
   flex: none;
-  background: var(--surface-2);
+  background: var(--cream-deep);
   color: var(--ink);
   box-shadow: inset 0 0 0 1px var(--hair-2);
 }
@@ -1673,7 +1669,6 @@ body {
   color: #a8431f;
 }
 
-
 .service-supporter-star {
   color: #f0c020;
   font-weight: 700;
@@ -1770,7 +1765,8 @@ body {
 
 .map-header h1 {
   margin: 0;
-  font-size: clamp(1.5rem, 3.5vw, 2.4rem);
+  font-size: clamp(1.7rem, 3.5vw, 2.7rem);
+  letter-spacing: -0.02em;
   line-height: 1;
 }
 
@@ -1800,7 +1796,7 @@ body {
   min-height: 520px;
   overflow: hidden;
   border: 1px solid var(--hair-2);
-  border-radius: 16px;
+  border-radius: var(--r-card);
   background:
     radial-gradient(circle at 18% 12%, rgba(200, 100, 31, 0.08), transparent 26%),
     linear-gradient(180deg, var(--page), var(--scene-edge));
@@ -1942,11 +1938,10 @@ body {
   stroke: var(--surface);
   stroke-width: 5;
   stroke-linejoin: round;
-  font: 600 17px var(--font);
+  font: 600 17px var(--font-body);
   text-anchor: middle;
   pointer-events: none;
 }
-
 
 .map-node__supporter-star {
   fill: #f0c020;
@@ -2067,10 +2062,10 @@ body {
   width: 100%;
   margin-top: 18px;
   min-height: 40px;
-  border-radius: 9px;
-  background: var(--ink);
-  color: var(--surface);
-  font-weight: 700;
+  border-radius: var(--r-control);
+  background: var(--accent);
+  color: var(--cream);
+  font: 600 1rem var(--font-display);
   text-decoration: none;
 }
 

@@ -9,7 +9,7 @@ See `../docs/architecture.md` for the system boundary; this file is just a map.
 ## Layout
 
 ```
-townsquare.mjs   widget.css   tokens.css   page.css
+townsquare.mjs   widget.css   tokens.css   page.css   design/
 widget/   shared/   hosted/   dev/   lib/
 ```
 
@@ -20,7 +20,7 @@ widget/   shared/   hosted/   dev/   lib/
   plus `constants`/`math`/`utils`). Start in `townsquare.mjs` and follow imports.
 - `shared/` — `shared-constants.mjs`, `scene-props.mjs`, `scene-prop-geometry.mjs`,
   `bird-perches.mjs`, `site-config.mjs`, `map-world.mjs`, and `url.mjs` (shared validation/config).
-- `widget.css` / `tokens.css` / `page.css` — see Styles below.
+- `widget.css` / `tokens.css` / `page.css` / `design/` — see Styles below.
 
 ## Hosted pages — `hosted/`
 
@@ -57,9 +57,10 @@ can move freely as long as references are updated.
 
 ## Styles
 
-- `tokens.css` — design tokens (palette, type scale).
+- `tokens.css` — widget tokens (palette, type scale), scoped by the widget stylesheet.
 - `widget.css` — the widget/scene (served at the frozen `/widget.css`).
-- `page.css` — host and dashboard pages.
+- `design/` — canonical tokens, base rules, and shared components for TownSquare-owned public pages.
+- `page.css` — feature-specific host and dashboard page layout.
 
 ## Checks
 

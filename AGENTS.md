@@ -18,3 +18,5 @@
 ## Documentation and plans
 - If docs were touched, make sure you update them with latest changes. You can run some quick ripgreps with md files to confirm if needed.
 - For docs: Be concise and durable - point to source code for specifics rather than hardcoding values that will get out of sync
+- Read `docs/design-system.md` before changing public-facing styles. Keep the embeddable widget independent.
+- After changing `public/design/` or the design doc, use the local `scripts/admin/sync-design.js` helper to sync and check the sibling landing repository when that ignored admin utility is available.

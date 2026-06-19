@@ -24,8 +24,9 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 - `public/widget/` — widget implementation modules (DOM, chat, presence, protocol, movement)
 - `public/shared/` — protocol, scene, style, and map definitions shared with the server
 - `public/widget.css` — embeddable widget styling (scoped to `#townsquare-root`)
-- `public/page.css` — full-page chrome for TownSquare host pages only
-- `public/tokens.css` — shared design tokens (imported by widget.css and page.css)
+- `public/page.css` — feature-specific layout for TownSquare host pages
+- `public/design/` — canonical public-page tokens, base styles, and shared chrome
+- `public/tokens.css` — independent widget tokens (imported by widget.css)
 - `public/lib/` — generic browser helpers shared across pages (e.g. `ui-common.mjs`)
 - `public/hosted/` — hosted registration/admin pages and scripts, served at `/register`, `/admin`, `/service-admin`
 - `public/map.html` — public map of verified, enabled TownSquares, served at `/map`
@@ -34,10 +35,15 @@ Self-hosted should not mean forever disconnected: a self-hosted TownSquare may a
 - `spec.md` — product truth
 - `roadmap.md` — product-facing sequencing
 - `docs/architecture.md` — current boundaries and future hosted shape
+- `docs/design-system.md` — visual contract for TownSquare-owned public pages
 
 The landing page, user documentation, and changelog live in the private
 `TownSquare_landingpage` repository. Set `LANDING_ORIGIN` to redirect those
 routes when this server is reached directly.
+
+Public design foundations are canonical in `public/design/` and copied into the
+landing repository with the ignored local helper at `scripts/admin/sync-design.js`.
+The helper can also check for drift and does not copy or modify widget styles.
 
 ## Requirements
 
