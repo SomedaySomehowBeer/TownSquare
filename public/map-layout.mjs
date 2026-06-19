@@ -20,6 +20,16 @@ export function cityTier(messageCount) {
   return CITY_TIERS.find((tier) => count <= tier.maxMessages);
 }
 
+export function activityLevel(activeVisitors) {
+  const count = Math.max(0, Number(activeVisitors) || 0);
+  if (count === 0) return 0;
+  if (count === 1) return 1;
+  if (count <= 5) return 2;
+  if (count <= 20) return 3;
+  if (count <= 100) return 4;
+  return 5;
+}
+
 function hashString(value) {
   let hash = 2166136261;
   for (let index = 0; index < value.length; index += 1) {

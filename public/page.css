@@ -2309,6 +2309,21 @@ body {
   transition: stroke-width 120ms ease;
 }
 
+.map-node__activity {
+  pointer-events: none;
+}
+
+.map-node__activity-dot {
+  fill: color-mix(in oklab, #fff1b8 88%, var(--surface) 12%);
+  filter: drop-shadow(0 0 3px rgba(255, 237, 164, 0.9));
+  animation: map-activity-pulse 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes map-activity-pulse {
+  from { opacity: 0.48; }
+  to { opacity: 1; }
+}
+
 .map-node__label {
   fill: var(--ink);
   paint-order: stroke;
@@ -2324,6 +2339,12 @@ body {
 .map-node:focus-visible .map-node__dot,
 .map-node.is-selected .map-node__dot {
   stroke-width: 5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-node__activity-dot {
+    animation: none;
+  }
 }
 
 .map-toolbar,

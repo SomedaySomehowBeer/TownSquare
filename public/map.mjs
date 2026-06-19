@@ -1,4 +1,4 @@
-import { cityTier, layoutMapSites } from "./map-layout.mjs";
+import { activityLevel, cityTier, layoutMapSites } from "./map-layout.mjs";
 import { renderSceneryLayer } from "./map-scenery.mjs";
 import { MAP_WORLD_HEIGHT, MAP_WORLD_WIDTH, validateMapWorld } from "./shared/map-world.mjs";
 
@@ -7,7 +7,15 @@ const MAX_ZOOM = 2.8;
 const ZOOM_STEP = 1.22;
 const WHEEL_ZOOM_SCALE = 0.0014;
 const MAX_WHEEL_ZOOM_STEP = 0.07;
+const ACTIVITY_REFRESH_MS = 10_000;
 const SVG_NS = "http://www.w3.org/2000/svg";
+const ACTIVITY_DOT_POSITIONS = [
+  [0, 0],
+  [-0.32, -0.2],
+  [0.32, 0.22],
+  [-0.2, 0.36],
+  [0.22, -0.38],
+];
 
 const root = document.getElementById("townsquare-map");
 const statusEl = document.getElementById("map-status");
@@ -102,6 +110,30 @@ function originLabel(origin) {
   } catch {
     return origin;
   }
+}
+
+function siteAriaLabel(site) {
+  const visitors = Math.max(0, Number(site.activeVisitors) || 0);
+  return `${site.name}, ${cityTier(site.messageCount).name}, ${visitors} active visitor${visitors === 1 ? "" : "s"}, ${originLabel(site.origin)}`;
+}
+
+function renderActivity(site, tier) {
+  const level = activityLevel(site.activeVisitors);
+  const group = createSvgElement("g", { class: "map-node__activity", "aria-hidden": "true" });
+  const radius = Math.max(2.5, tier.radius * 0.09);
+
+  for (let index = 0; index < level; index += 1) {
+    const [x, y] = ACTIVITY_DOT_POSITIONS[index];
+    group.appendChild(createSvgElement("circle", {
+      class: "map-node__activity-dot",
+      cx: x * tier.radius,
+      cy: y * tier.radius,
+      r: radius,
+      style: `animation-delay: -${index * 0.37}s`,
+    }));
+  }
+
+  return group;
 }
 
 function siteLinksTo(fromKey, toKey) {
@@ -318,11 +350,12 @@ function renderSiteNode(site) {
     tabindex: "0",
     role: "button",
     "data-site-key": site.siteKey,
-    "aria-label": `${site.name}, ${tier.name}, ${originLabel(site.origin)}`,
+    "aria-label": siteAriaLabel(site),
   });
 
   group.append(
     createSvgElement("circle", { class: "map-node__dot", r: tier.radius }),
+    renderActivity(site, tier),
     textElement(site.name, 0, tier.radius + 10, "map-node__label"),
   );
 
@@ -337,6 +370,28 @@ function renderSiteNode(site) {
   });
 
   return group;
+}
+
+async function refreshActivity() {
+  if (document.hidden) return;
+
+  try {
+    const response = await fetch("/api/map");
+    const body = await response.json();
+    if (!response.ok || !Array.isArray(body.sites)) return;
+
+    for (const nextSite of body.sites) {
+      const site = siteByKey.get(nextSite.siteKey);
+      const node = root.querySelector(`[data-site-key="${CSS.escape(nextSite.siteKey)}"]`);
+      if (!site || !(node instanceof SVGGElement)) continue;
+
+      site.activeVisitors = nextSite.activeVisitors;
+      node.setAttribute("aria-label", siteAriaLabel(site));
+      node.querySelector(".map-node__activity")?.replaceWith(renderActivity(site, cityTier(site.messageCount)));
+    }
+  } catch {
+    // Keep the last known activity state when a refresh fails.
+  }
 }
 
 function renderSelectedState() {
@@ -551,3 +606,4 @@ async function loadMap() {
 
 wireControls();
 loadMap();
+window.setInterval(refreshActivity, ACTIVITY_REFRESH_MS);

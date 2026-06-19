@@ -879,6 +879,7 @@ function handleRegisterSite(req, res) {
 }
 
 function publicMapSite(site) {
+  const scene = scenes.get(site.siteKey);
   return {
     siteKey: site.siteKey,
     name: site.name,
@@ -886,6 +887,7 @@ function publicMapSite(site) {
     verifiedAt: site.verifiedAt,
     lastSeenAt: site.lastSeenAt,
     messageCount: site.messageCount || 0,
+    activeVisitors: scene ? getSceneStats(scene).activeVisitors : 0,
     connections: getConnections(site),
   };
 }

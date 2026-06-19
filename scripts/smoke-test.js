@@ -327,6 +327,10 @@ async function assertServiceAdminCanEditMap() {
     publicBefore.sites.every((site) => Number.isFinite(site.messageCount)),
     "public map sites did not include total message counts",
   );
+  assert(
+    publicBefore.sites.every((site) => Number.isFinite(site.activeVisitors)),
+    "public map sites did not include active visitor counts",
+  );
   assert(Array.isArray(publicBefore.world?.props), "public map world did not include props");
   assert(Array.isArray(publicBefore.world?.water), "public map world did not include water strokes");
 
