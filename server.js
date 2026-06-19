@@ -1252,24 +1252,44 @@ function send(ws, message) {
   ws.send(JSON.stringify(message));
 }
 
-function snapshotIdentity(identity) {
-  const snapshot = {
+function serializeIdentity(identity, options = {}) {
+  const {
+    reading = false,
+    owner = false,
+    messages = false,
+    clientCount = false,
+    badge = false,
+  } = options;
+  const serialized = {
     id: identity.id,
     x: identity.x,
     pose: identity.pose,
     propId: identity.propId,
     displayName: identity.displayName,
     color: identity.color,
-    readingLabel: identity.readingLabel,
-    readingUrl: identity.readingUrl,
-    readingActive: identity.readingActive,
-    isOwner: identity.isOwner,
-    messages: identity.messages,
   };
-  if (identity.isOwner) {
-    snapshot.badgeColor = identity.badgeColor;
+  if (clientCount) {
+    serialized.clientCount = identity.clients.size;
   }
-  return snapshot;
+  if (reading) {
+    serialized.readingLabel = identity.readingLabel;
+    serialized.readingUrl = identity.readingUrl;
+    serialized.readingActive = identity.readingActive;
+  }
+  if (owner) {
+    serialized.isOwner = identity.isOwner;
+  }
+  if (badge && identity.isOwner) {
+    serialized.badgeColor = identity.badgeColor;
+  }
+  if (messages) {
+    serialized.messages = identity.messages;
+  }
+  return serialized;
+}
+
+function snapshotIdentity(identity) {
+  return serializeIdentity(identity, { reading: true, owner: true, messages: true, badge: true });
 }
 
 function getIdentityReadingActive(identity) {
@@ -1352,23 +1372,27 @@ function broadcast(scene, message, options = {}) {
   }
 }
 
-function emitIdentityState(identity, options = {}) {
-  const { scene } = identity;
-  const { exceptConnectionId = null } = options;
-  const message = {
-    type: "move",
+function broadcastReading(scene, identity, options = {}) {
+  const {
+    exceptConnectionId = null,
+    readingLabel = identity.readingLabel,
+    readingUrl = identity.readingUrl,
+    readingActive = identity.readingActive,
+  } = options;
+  broadcast(scene, {
+    type: "reading",
     id: identity.id,
-    x: identity.x,
-    pose: identity.pose,
-    propId: identity.propId,
-    displayName: identity.displayName,
-    color: identity.color,
-    readingLabel: identity.readingLabel,
-    readingUrl: identity.readingUrl,
-    readingActive: identity.readingActive,
-  };
+    readingLabel,
+    readingUrl,
+    readingActive,
+  }, { exceptConnectionId });
+}
 
-  broadcast(scene, message, { exceptConnectionId });
+function emitIdentityState(identity, options = {}) {
+  broadcast(identity.scene, {
+    type: "move",
+    ...serializeIdentity(identity, { reading: true }),
+  }, { exceptConnectionId: options.exceptConnectionId ?? null });
 }
 
 function createEphemeralIdentity(scene, fallbackX, connectionId) {
@@ -1705,17 +1729,7 @@ function getScene(sceneKey, site = null) {
 function getSceneStats(scene) {
   const visitors = Array.from(scene.identities.values())
     .filter((identity) => identity.joined)
-    .map((identity) => ({
-      id: identity.id,
-      x: identity.x,
-      pose: identity.pose,
-      propId: identity.propId,
-      displayName: identity.displayName,
-      color: identity.color,
-      clientCount: identity.clients.size,
-      isOwner: identity.isOwner,
-      messages: identity.messages,
-    }));
+    .map((identity) => serializeIdentity(identity, { owner: true, messages: true, clientCount: true }));
 
   return { activeVisitors: visitors.length, visitors };
 }
@@ -1915,21 +1929,14 @@ function handleInit(client, message) {
     .filter((peer) => peer.joined && peer.id !== identity.id)
     .map(snapshotIdentity);
 
+  const self = serializeIdentity(identity, { reading: true, owner: true, messages: true, badge: true });
+  const { id, ...selfFields } = self;
+
   send(client.ws, {
     type: "hello",
-    id: identity.id,
+    id,
     browserSecret: identity.browserSecret,
-    x: identity.x,
-    pose: identity.pose,
-    propId: identity.propId,
-    displayName: identity.displayName,
-    color: identity.color,
-    readingLabel: identity.readingLabel,
-    readingUrl: identity.readingUrl,
-    readingActive: identity.readingActive,
-    isOwner: identity.isOwner,
-    ...(identity.isOwner ? { badgeColor: identity.badgeColor } : {}),
-    messages: identity.messages,
+    ...selfFields,
     peers,
     birds: snapshotBirds(scene),
   });
@@ -1940,13 +1947,7 @@ function handleInit(client, message) {
       || identity.readingUrl !== previousReadingUrl
       || identity.readingActive !== previousReadingActive
     ) {
-      broadcast(scene, {
-        type: "reading",
-        id: identity.id,
-        readingLabel: identity.readingLabel,
-        readingUrl: identity.readingUrl,
-        readingActive: identity.readingActive,
-      }, { exceptConnectionId: client.connectionId });
+      broadcastReading(scene, identity, { exceptConnectionId: client.connectionId });
     }
     // Reconnect during the grace window: the owner gets applyOwnerProfile above
     // but we skip the join broadcast, so refresh peers with the claimed look.
@@ -2076,13 +2077,7 @@ function handleReading(client, message) {
     && client.identity.readingActive === previousReadingActive
   ) return;
 
-  broadcast(client.scene, {
-    type: "reading",
-    id: client.identity.id,
-    readingLabel,
-    readingUrl,
-    readingActive: client.identity.readingActive,
-  });
+  broadcastReading(client.scene, client.identity, { readingLabel, readingUrl });
 }
 
 function handleSceneConfig(client, message) {
@@ -2190,13 +2185,7 @@ function handleClientClose(client) {
 
   if (identity.clients.size > 0) {
     if (refreshIdentityReadingActive(identity)) {
-      broadcast(identity.scene, {
-        type: "reading",
-        id: identity.id,
-        readingLabel: identity.readingLabel,
-        readingUrl: identity.readingUrl,
-        readingActive: identity.readingActive,
-      });
+      broadcastReading(identity.scene, identity);
     }
     syncIdentityAwayState(identity);
     return;
