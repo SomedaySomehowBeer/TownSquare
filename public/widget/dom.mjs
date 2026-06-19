@@ -110,7 +110,17 @@ const PENCIL_ICON = `
   </svg>
 `;
 
+const GLOBE_ICON = `
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"
+    stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <circle cx="12" cy="12" r="10"></circle>
+    <path d="M2 12h20"></path>
+    <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+  </svg>
+`;
+
 const TOWNSQUARE_URL = "https://townsquare.cauenapier.com/";
+const MAP_URL = "https://townsquare.cauenapier.com/map";
 
 /**
  * Mount the widget shell into the host root.
@@ -140,6 +150,15 @@ export function renderShell(container) {
   expandButton.setAttribute("aria-label", "Expand widget");
   expandButton.setAttribute("aria-pressed", "false");
   expandButton.title = "Expand";
+
+  const mapButton = document.createElement("a");
+  mapButton.className = "townsquare__control";
+  mapButton.href = MAP_URL;
+  mapButton.target = "_blank";
+  mapButton.rel = "noopener noreferrer";
+  mapButton.innerHTML = GLOBE_ICON;
+  mapButton.setAttribute("aria-label", "Open TownSquare map");
+  mapButton.title = "TownSquare map";
 
   const helpButton = document.createElement("button");
   helpButton.className = "townsquare__control townsquare__help-button";
@@ -173,7 +192,7 @@ export function renderShell(container) {
 
   helpPanel.append(helpTitle, description, instructions, link);
 
-  controls.append(quietButton, expandButton, helpButton, helpPanel);
+  controls.append(quietButton, expandButton, mapButton, helpButton, helpPanel);
 
   const actions = document.createElement("div");
   actions.className = "townsquare__actions";

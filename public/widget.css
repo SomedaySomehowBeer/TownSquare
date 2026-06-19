@@ -86,6 +86,10 @@
   height: 16px;
 }
 
+a.townsquare__control {
+  text-decoration: none;
+}
+
 .townsquare__actions {
   position: absolute;
   z-index: 2147483001;
