@@ -10,7 +10,7 @@ loadEnvFile();
  * Tiny demo server for the first playable TownSquare slice.
  *
  * Responsibilities:
- * - serve the demo page and widget assets from ./public
+ * - serve widget, hosted admin, map, and development assets from ./public
  * - keep a short-lived in-memory list of connected visitors
  * - treat multiple tabs from the same browser as one visitor identity
  * - arbitrate interactive props so seat ownership stays consistent
@@ -36,7 +36,11 @@ const PLAUSIBLE_API_PATH = process.env.PLAUSIBLE_API_PATH === undefined
   ? "/api/event"
   : String(process.env.PLAUSIBLE_API_PATH).trim();
 const PLAUSIBLE_HTML_PAGES = new Set([
+  "/map.html",
+  "/hosted/admin.html",
+  "/hosted/chat.html",
   "/hosted/register.html",
+  "/hosted/service-admin.html",
 ]);
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
