@@ -37,6 +37,7 @@ const PLAUSIBLE_API_PATH = process.env.PLAUSIBLE_API_PATH === undefined
   : String(process.env.PLAUSIBLE_API_PATH).trim();
 const PUBLIC_DIR = path.join(__dirname, "public");
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
+const DEV_TOOLS_ENABLED = envFlag("ENABLE_DEV_TOOLS");
 const SITES_FILE = path.join(DATA_DIR, "sites.json");
 const MAP_WORLD_FILE = path.join(DATA_DIR, "map-world.json");
 const DEFAULT_MAP_WORLD_FILE = path.join(PUBLIC_DIR, "default-map-world.json");
@@ -94,6 +95,11 @@ let CHARACTER_COLORS = new Set();
 let OWNER_BADGE_COLORS = new Set();
 /** @type {() => number} */
 let randomSpawnX;
+
+function envFlag(name) {
+  const value = String(process.env[name] || "").trim().toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
 
 function loadEnvFile(filePath = path.join(__dirname, ".env")) {
   try {
@@ -585,6 +591,9 @@ async function forwardPlausibleEvent(req, res, body) {
 
 function resolvePublicFile(requestUrl, hostHeader) {
   const url = new URL(requestUrl, `http://${hostHeader}`);
+  if (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname)) {
+    return null;
+  }
   const aliases = new Map([
     ["/register", "/hosted/register.html"],
     ["/admin", "/hosted/admin.html"],
@@ -603,6 +612,12 @@ function resolvePublicFile(requestUrl, hostHeader) {
   }
 
   return filePath;
+}
+
+function isDevToolsRequest(pathname) {
+  return pathname === "/dev"
+    || pathname === "/walk-sandbox"
+    || pathname.startsWith("/dev/");
 }
 
 function readJsonBody(req, res, callback, maxBytes = 4096) {
@@ -1834,6 +1849,12 @@ const server = http.createServer((req, res) => {
   }
 
   const url = new URL(req.url || "/", `http://${req.headers.host || `${HOST}:${PORT}`}`);
+
+  if (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname)) {
+    res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
+    res.end(req.method === "HEAD" ? undefined : "not found");
+    return;
+  }
 
   if (["GET", "HEAD"].includes(req.method) && ["/", "/docs", "/changelog"].includes(url.pathname)) {
     if (LANDING_ORIGIN) {

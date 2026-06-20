@@ -1,11 +1,10 @@
 /**
- * Dev scene: the real TownSquare widget driven by simulated peers.
+ * Dev scene: the real TownSquare widget plus optional simulated peers.
  *
- * The page mounts `mountTownSquare` in `simulate` mode, so the "you" figure and
- * the whole runtime — movement, tap-to-walk, jump/high-five, quiet, chat, prop
- * settle, birds, layout — are exactly the production code. The only thing this
- * file owns is the crowd: simulated visitors that wander and chatter, fed
- * through the same peer API the socket uses, plus the reading-tuning panel.
+ * By default the page mounts the production widget with a live socket so other
+ * browsers can join the same scene. Simulated visitors wander and chatter on
+ * top of that crowd, fed through the same peer API the socket uses. Pass
+ * `?offline=1` to run without a socket (local stress testing only).
  */
 
 import { mountTownSquare } from "../townsquare.mjs";
@@ -14,7 +13,7 @@ import { sayMessage } from "../widget/chat.mjs";
 import { CHARACTER_COLORS, MAX_X, MIN_X, randomSpawnX } from "../widget/constants.mjs";
 import { setWalking } from "../widget/dom.mjs";
 import { clamp } from "../widget/math.mjs";
-import { applyPeerState, removePeer } from "../widget/presence.mjs";
+import { applyPeerState, removePeer, setStatusMessage, updateStatus } from "../widget/presence.mjs";
 import { syncBirdsFromHello } from "../widget/birds.mjs";
 import { bindCopy } from "../lib/ui-common.mjs";
 
@@ -77,6 +76,11 @@ function writeCount(count) {
   window.history.replaceState(null, "", url);
 }
 
+function readOffline() {
+  const params = new URLSearchParams(window.location.search);
+  return params.has("offline") || params.get("simulate") === "1";
+}
+
 function seededRandom(seed) {
   let state = seed >>> 0;
   return () => {
@@ -91,13 +95,18 @@ function seededRandom(seed) {
  *
  * @param {import("../widget/context.mjs").WidgetContext} ctx
  */
-function createSimulation(ctx) {
+function createSimulation(ctx, offline) {
   /** @type {Array<{ id: string, x: number, direction: number, speed: number, nextTurnAt: number, nextSayAt: number }>} */
   let actors = [];
   let walking = true;
   let random = seededRandom(1);
   let frame = null;
   let lastFrameAt = performance.now();
+  let simCount = 0;
+
+  function countLivePeers() {
+    return [...ctx.peers.keys()].filter((id) => !String(id).startsWith("sim-")).length;
+  }
 
   function clearActors() {
     for (const actor of actors) removePeer(ctx, actor.id);
@@ -105,8 +114,31 @@ function createSimulation(ctx) {
   }
 
   function setSceneStatus(count) {
-    ctx.statusRowEl.hidden = false;
-    ctx.statusEl.textContent = `You plus ${count} simulated ${count === 1 ? "character" : "characters"}`;
+    simCount = count;
+    if (offline) {
+      setStatusMessage(ctx, `You plus ${count} simulated ${count === 1 ? "character" : "characters"}`);
+      return;
+    }
+
+    if (!ctx.self.id) {
+      setStatusMessage(ctx, "Connecting…");
+      return;
+    }
+
+    const liveCount = countLivePeers();
+    if (count === 0 && liveCount === 0) {
+      updateStatus(ctx);
+      return;
+    }
+
+    const parts = [];
+    if (liveCount > 0) {
+      parts.push(`${liveCount} live ${liveCount === 1 ? "visitor" : "visitors"}`);
+    }
+    if (count > 0) {
+      parts.push(`${count} simulated ${count === 1 ? "character" : "characters"}`);
+    }
+    setStatusMessage(ctx, parts.join(", "));
   }
 
   function setCount(count) {
@@ -167,6 +199,7 @@ function createSimulation(ctx) {
     const dt = Math.min(0.05, (now - lastFrameAt) / 1000);
     lastFrameAt = now;
     for (const actor of actors) stepActor(actor, now, dt);
+    if (!offline) setSceneStatus(simCount);
     frame = requestAnimationFrame(tick);
   };
   frame = requestAnimationFrame(tick);
@@ -198,9 +231,12 @@ function seedBirds(ctx) {
   })));
 }
 
-const { ctx } = mountTownSquare(root, { simulate: true, layout: tuning.layout });
-seedBirds(ctx);
-const simulation = createSimulation(ctx);
+const offline = readOffline();
+const { ctx } = mountTownSquare(root, offline
+  ? { simulate: true, layout: tuning.layout }
+  : { layout: tuning.layout });
+if (offline) seedBirds(ctx);
+const simulation = createSimulation(ctx, offline);
 
 function applyCount(count) {
   countInput.value = String(count);
