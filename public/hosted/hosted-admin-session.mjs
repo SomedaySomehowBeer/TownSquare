@@ -141,6 +141,23 @@ export function createAdminSession({
     return true;
   }
 
+  async function pluginAction(plugin, name, input = {}) {
+    const result = await postJson("/api/admin/action", {
+      siteKey,
+      adminToken,
+      plugin,
+      action: name,
+      input,
+    });
+    if (!result.ok) {
+      onError?.(result.body.error || "Plugin action failed.");
+      return false;
+    }
+
+    await loadSite();
+    return true;
+  }
+
   loginForm.addEventListener("submit", async (event) => {
     event.preventDefault();
     loginSubmit.disabled = true;
@@ -176,5 +193,5 @@ export function createAdminSession({
     }
   }
 
-  return { start, loadSite, action, showLogin, setLoginStatus };
+  return { start, loadSite, action, pluginAction, showLogin, setLoginStatus };
 }

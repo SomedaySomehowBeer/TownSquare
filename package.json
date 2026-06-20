@@ -6,9 +6,10 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && find server plugins public -type f \\( -name '*.js' -o -name '*.mjs' \\) -exec node --check {} \\;",
+    "check": "node --check server.js && find server plugins public scripts -type f \\( -name '*.js' -o -name '*.mjs' \\) -exec node --check {} \\;",
     "test": "node --test server/*.test.js",
-    "smoke": "node scripts/smoke-test.js"
+    "smoke": "node scripts/smoke-test.js",
+    "smoke:plugins": "node scripts/plugin-smoke-test.js"
   },
   "dependencies": {
     "ws": "^8.18.3"

@@ -72,21 +72,18 @@ Plugins add hosted/network features around the core runtime. The core remains
 responsible for presence, movement, chat storage/broadcast, embeds, and
 self-hosting.
 
-Stable decision/event hooks are `onVisitorJoin`, `onMessage`, and
-`onSocketMessage`. Returning `false` from `onMessage` or `onSocketMessage` stops
-that core action; otherwise hooks observe it. Stable payload hooks are
-`extendSiteConfig`, `extendAdminPanel`, `extendMapData`, and
-`extendWidgetConfig`; each returns the next payload. Hooks run synchronously in
-registration order. Async side effects may be started by an event hook, but an
-async result cannot veto an action.
+Stable decision/event hooks surround the realtime core. Plugin-scoped site
+data, authenticated admin actions, namespaced visitor serialization, and
+same-origin admin/widget browser module registries support full-stack hosted
+features without changing the core protocol for self-hosters. The complete
+contract and private-repository example are in `docs/plugins.md`.
 
 Plugins receive small event objects rather than WebSocket, response, scene, or
 registry internals. Socket events never include `browserSecret`. Extension
 payloads are JSON-shaped objects so the widget/runtime protocol does not depend
 on plugin implementation details.
 
-A hosted bootstrap can register private modules before starting the public
-server:
+A hosted bootstrap registers private modules before starting the public server:
 
 ```js
 const { registerPlugin } = require("../TownSquare/server/plugins");

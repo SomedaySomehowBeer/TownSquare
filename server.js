@@ -3,6 +3,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const { ensurePluginData, getPluginData, setPluginData } = require("./server/plugin-data");
 const { plugins } = require("./server/plugins");
 const { registerPublicPlugins } = require("./plugins");
 
@@ -810,14 +811,16 @@ function parseSiteOriginSettings(body, { defaultIncludeMatchingWww = true } = {}
 function buildEmbedSnippet(req, site) {
   const serverOrigin = getPublicOrigin(req);
   const connections = getConnections(site);
+  const pluginModules = plugins.browserModules("widget", pluginContext(site));
   const coreConfig = {
     serverOrigin,
     siteKey: site.siteKey,
     scene: getSceneConfig(site),
     ...(connections.length > 0 ? { connections } : {}),
+    ...(pluginModules.length > 0 ? { pluginModules } : {}),
     theme: "host",
   };
-  const extendedConfig = plugins.extend("extendWidgetConfig", coreConfig, { site: pluginSite(site) });
+  const extendedConfig = plugins.extend("extendWidgetConfig", coreConfig, pluginContext(site));
   const widgetConfig = isPlainObject(extendedConfig) ? extendedConfig : coreConfig;
   const configLines = Object.entries(widgetConfig)
     .filter(([key]) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key))
@@ -1018,8 +1021,14 @@ function sendAdminSite(req, res, site, adminToken) {
     scene: getSceneStats(scene, site),
     owners: getOwners(site, scene),
   };
-  const extendedPanel = plugins.extend("extendAdminPanel", panel, { site: pluginSite(site) });
-  sendJson(res, 200, isPlainObject(extendedPanel) ? extendedPanel : panel);
+  sendJson(res, 200, extendAdminPanel(panel, site));
+}
+
+function extendAdminPanel(panel, site) {
+  const pluginModules = plugins.browserModules("admin", pluginContext(site));
+  const corePanel = pluginModules.length > 0 ? { ...panel, pluginModules } : panel;
+  const extended = plugins.extend("extendAdminPanel", corePanel, pluginContext(site));
+  return isPlainObject(extended) ? extended : corePanel;
 }
 
 function handlePostAdminSite(req, res) {
@@ -1171,14 +1180,7 @@ const ADMIN_ACTIONS = {
       delete site.ownerProfiles[identity.browserId];
     }
     touchSite(site);
-    broadcast(scene, {
-      type: "profile",
-      id: identity.id,
-      displayName: identity.displayName,
-      color: identity.color,
-      badgeColor: identity.badgeColor,
-      isOwner: owner,
-    });
+    broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
   },
   updateOwnerProfile(site, scene, body) {
     // Keyed by the opaque owner handle so the dedicated admin section can edit
@@ -1198,14 +1200,7 @@ const ADMIN_ACTIONS = {
     const identity = scene.identityByBrowser.get(browserId);
     if (identity) {
       applyOwnerProfile(site, identity);
-      broadcast(scene, {
-        type: "profile",
-        id: identity.id,
-        displayName: identity.displayName,
-        color: identity.color,
-        badgeColor: identity.badgeColor,
-        isOwner: true,
-      });
+      broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
     }
   },
   clearMessages(site, scene) {
@@ -1244,20 +1239,65 @@ function handleAdminAction(req, res) {
 
     clearAuthFailures(adminAuthFailuresByIp, ip);
     const action = String(body.action || "");
+    const pluginName = String(body.plugin || "");
+    const scene = getScene(site.siteKey, site);
+
+    if (pluginName) {
+      let changed = false;
+      const hadPluginData = Object.hasOwn(site.plugins, pluginName);
+      const previousPluginData = getPluginData(site, pluginName);
+      const context = (name) => Object.freeze({
+        site: pluginSite(site),
+        data: getPluginData(site, name),
+        owners: getOwners(site, scene),
+        visitors: getSceneStats(scene, site).visitors,
+        setData(value) {
+          setPluginData(site, name, value);
+          changed = true;
+        },
+      });
+      const invoked = plugins.invokeAdminAction(
+        pluginName,
+        action,
+        context,
+        isPlainObject(body.input) ? body.input : {},
+      );
+      if (!invoked.found) {
+        sendJson(res, 400, { error: "Unknown plugin action." });
+        return;
+      }
+      if (invoked.error || invoked.result?.error) {
+        if (changed) {
+          if (hadPluginData) site.plugins[pluginName] = previousPluginData;
+          else delete site.plugins[pluginName];
+        }
+        sendJson(res, 400, { error: invoked.error || invoked.result.error });
+        return;
+      }
+      if (changed) {
+        touchSite(site);
+        for (const identity of scene.identities.values()) {
+          if (!identity.joined) continue;
+          broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
+        }
+      }
+      const panel = { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) };
+      sendJson(res, 200, extendAdminPanel(panel, site));
+      return;
+    }
+
     if (!Object.hasOwn(ADMIN_ACTIONS, action)) {
       sendJson(res, 400, { error: "Unknown action." });
       return;
     }
 
-    const scene = getScene(site.siteKey, site);
     const actionResult = ADMIN_ACTIONS[action](site, scene, body);
     if (actionResult?.error) {
       sendJson(res, 400, actionResult);
       return;
     }
     const panel = { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) };
-    const extendedPanel = plugins.extend("extendAdminPanel", panel, { site: pluginSite(site) });
-    sendJson(res, 200, isPlainObject(extendedPanel) ? extendedPanel : panel);
+    sendJson(res, 200, extendAdminPanel(panel, site));
   });
 }
 
@@ -1445,7 +1485,10 @@ function serializeIdentity(identity, options = {}) {
   if (messages) {
     serialized.messages = identity.messages;
   }
-  return serialized;
+  return plugins.extendVisitor(
+    serialized,
+    pluginContext(identity.scene?.site || null, { visitor: pluginVisitor(identity) }),
+  );
 }
 
 function snapshotIdentity(identity) {
@@ -1717,6 +1760,7 @@ function createScene(key, site = null) {
   const props = getSceneProps(site);
   return {
     key,
+    site,
     props,
     propsById: new Map(props.map((prop) => [prop.id, prop])),
     birdPerches: getSceneBirdPerches(site),
@@ -1795,6 +1839,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       blockedWords: [],
       chatThrottleMs: DEFAULT_CHAT_THROTTLE_MS,
       moderationLog: [],
+      plugins: {},
     },
   };
 }
@@ -1837,6 +1882,9 @@ function loadSites() {
       }
       if (!Array.isArray(site.connections)) {
         site.connections = [];
+      }
+      if (ensurePluginData(site)) {
+        sitesMigratedOnLoad = true;
       }
       const nextAllowedOrigins = getAllowedOrigins(site);
       if (JSON.stringify(nextAllowedOrigins) !== JSON.stringify(site.allowedOrigins || [])) {
@@ -1936,7 +1984,7 @@ function publicSite(site) {
     moderationLog: Array.isArray(site.moderationLog) ? site.moderationLog : [],
     supporter: Boolean(site.supporter),
   };
-  const extendedConfig = plugins.extend("extendSiteConfig", config, { site: pluginSite(site) });
+  const extendedConfig = plugins.extend("extendSiteConfig", config, pluginContext(site));
   return isPlainObject(extendedConfig) ? extendedConfig : config;
 }
 
@@ -1946,22 +1994,36 @@ function pluginSite(site) {
     siteKey: site.siteKey,
     name: site.name,
     origin: site.origin,
+    supporter: Boolean(site.supporter),
   });
 }
 
 function pluginVisitor(identity) {
+  const site = identity.scene?.site || null;
   return Object.freeze({
     id: identity.id,
     browserId: identity.browserId,
     displayName: identity.displayName,
     color: identity.color,
     isOwner: identity.isOwner,
+    ownerHandle: identity.isOwner && site ? ownerHandle(site.siteKey, identity.browserId) : null,
+  });
+}
+
+function pluginContext(site, values = {}) {
+  return (pluginName) => Object.freeze({
+    ...values,
+    site: pluginSite(site),
+    data: getPluginData(site, pluginName),
   });
 }
 
 function getScene(sceneKey, site = null) {
   const existing = scenes.get(sceneKey);
-  if (existing) return existing;
+  if (existing) {
+    if (!existing.site && site) existing.site = site;
+    return existing;
+  }
 
   const scene = createScene(sceneKey, site);
   scenes.set(sceneKey, scene);
@@ -2205,6 +2267,7 @@ function handleInit(client, message) {
     peers,
     birds: snapshotBirds(scene),
     chatThrottleMs: getChatThrottle(site),
+    pluginModules: plugins.browserModules("widget", pluginContext(site)),
   });
 
   if (identity.joined) {
@@ -2218,14 +2281,11 @@ function handleInit(client, message) {
     // Reconnect during the grace window: the owner gets applyOwnerProfile above
     // but we skip the join broadcast, so refresh peers with the claimed look.
     if (identity.isOwner && site) {
-      broadcast(scene, {
-        type: "profile",
-        id: identity.id,
-        displayName: identity.displayName,
-        color: identity.color,
-        badgeColor: identity.badgeColor,
-        isOwner: true,
-      }, { exceptConnectionId: client.connectionId });
+      broadcast(
+        scene,
+        { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) },
+        { exceptConnectionId: client.connectionId },
+      );
     }
     syncIdentityAwayState(identity);
     return;
@@ -2249,8 +2309,7 @@ function handleInit(client, message) {
 
   broadcast(scene, { type: "join", peer: snapshotIdentity(identity) }, { exceptConnectionId: client.connectionId });
   syncIdentityAwayState(identity, joinedAt);
-  plugins.run("onVisitorJoin", Object.freeze({
-    site: pluginSite(site),
+  plugins.run("onVisitorJoin", pluginContext(site, {
     visitor: pluginVisitor(identity),
     joinedAt,
   }));
@@ -2312,12 +2371,7 @@ function handleProfile(client, message) {
   // Owners keep their look across resets: persist their own edits too.
   rememberOwnerProfile(client.site, client.identity);
 
-  broadcast(client.scene, {
-    type: "profile",
-    id: client.identity.id,
-    displayName: client.identity.displayName,
-    color: client.identity.color,
-  });
+  broadcast(client.scene, { type: "profile", ...serializeIdentity(client.identity, { owner: true, badge: true }) });
 }
 
 function handleReading(client, message) {
@@ -2391,8 +2445,7 @@ function handleSay(client, message) {
   if (!text) return;
   client.lastChatAt = now;
 
-  const event = Object.freeze({
-    site: pluginSite(client.site),
+  const event = pluginContext(client.site, {
     visitor: pluginVisitor(client.identity),
     message: Object.freeze({ text, at: now }),
   });
@@ -2447,8 +2500,7 @@ function handleClientMessage(client, raw) {
 
   const pluginMessage = { ...message };
   delete pluginMessage.browserSecret;
-  const accepted = plugins.run("onSocketMessage", Object.freeze({
-    site: pluginSite(client.site),
+  const accepted = plugins.run("onSocketMessage", pluginContext(client.site, {
     visitor: client.identity ? pluginVisitor(client.identity) : null,
     message: Object.freeze(pluginMessage),
   }));

@@ -135,6 +135,7 @@ export function wireSocket(ctx) {
       if (message.type === "hello") {
         self.id = message.id;
         saveBrowserSecret(message.browserSecret);
+        ctx.widgetPlugins?.setModules(message.pluginModules || ctx.options.pluginModules || []);
         if (typeof message.chatThrottleMs === "number") ctx.chatThrottleMs = message.chatThrottleMs;
         applySelfState(ctx, message);
         // Backlog seeds the hover tray only — it never pops a live bubble, so a

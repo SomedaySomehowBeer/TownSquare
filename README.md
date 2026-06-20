@@ -249,7 +249,7 @@ For local runs, copy `.env.example` to `.env` (or create `.env` directly); `serv
 TownSquare has a small in-process plugin registry for trusted feature modules.
 Public modules live in `plugins/`; a hosted bootstrap can register private
 modules through `registerPlugin` before requiring `server.js`. The supported
-hooks and composition contract are documented in `docs/architecture.md`.
+hooks and full-stack composition contract are documented in `docs/plugins.md`.
 There is intentionally no remote install or external-extension system.
 
 ## Deploy updates

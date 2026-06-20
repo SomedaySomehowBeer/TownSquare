@@ -1,14 +1,19 @@
 "use strict";
 
 const HOOKS = new Set([
+  "isEnabled",
   "onVisitorJoin",
   "onMessage",
   "onSocketMessage",
+  "extendVisitor",
   "extendSiteConfig",
   "extendAdminPanel",
   "extendMapData",
   "extendWidgetConfig",
 ]);
+const MODULE_PATH_RE = /^\/[A-Za-z0-9_./-]+\.mjs$/;
+const NAME_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const ACTION_RE = /^[A-Za-z][A-Za-z0-9]*$/;
 
 class PluginManager {
   constructor({ logger = console } = {}) {
@@ -24,11 +29,28 @@ class PluginManager {
 
     const name = String(plugin.name || "").trim();
     if (!name) throw new TypeError("TownSquare plugins must have a name");
+    if (!NAME_RE.test(name)) throw new TypeError(`Invalid TownSquare plugin name: ${name}`);
     if (this.names.has(name)) throw new Error(`TownSquare plugin already registered: ${name}`);
 
     for (const key of Object.keys(plugin)) {
       if (key !== "name" && typeof plugin[key] === "function" && !HOOKS.has(key)) {
         throw new Error(`Unknown TownSquare plugin hook: ${key}`);
+      }
+    }
+
+    for (const key of ["adminModule", "widgetModule"]) {
+      if (plugin[key] !== undefined && !MODULE_PATH_RE.test(String(plugin[key]))) {
+        throw new TypeError(`${key} must be a same-origin .mjs path`);
+      }
+    }
+    if (plugin.adminActions !== undefined) {
+      if (!plugin.adminActions || typeof plugin.adminActions !== "object" || Array.isArray(plugin.adminActions)) {
+        throw new TypeError("adminActions must be an object");
+      }
+      for (const [action, handler] of Object.entries(plugin.adminActions)) {
+        if (!ACTION_RE.test(action) || typeof handler !== "function") {
+          throw new TypeError(`Invalid admin action: ${name}.${action}`);
+        }
       }
     }
 
@@ -43,7 +65,9 @@ class PluginManager {
       const handler = plugin[hook];
       if (typeof handler !== "function") continue;
       try {
-        const result = handler(context);
+        const pluginContext = this.contextFor(plugin, context);
+        if (!this.isEnabled(plugin, pluginContext)) continue;
+        const result = handler(pluginContext);
         if (result === false) return false;
         if (result && typeof result.then === "function") {
           void result.catch((error) => this.report(plugin.name, hook, error));
@@ -64,7 +88,9 @@ class PluginManager {
       const handler = plugin[hook];
       if (typeof handler !== "function") continue;
       try {
-        const next = handler(current, context);
+        const pluginContext = this.contextFor(plugin, context);
+        if (!this.isEnabled(plugin, pluginContext)) continue;
+        const next = handler(current, pluginContext);
         if (next && typeof next.then === "function") {
           throw new TypeError("TownSquare extension hooks must be synchronous");
         }
@@ -75,6 +101,80 @@ class PluginManager {
     }
 
     return current;
+  }
+
+  extendVisitor(visitor, context = {}) {
+    const extensions = {};
+
+    for (const plugin of this.plugins) {
+      if (typeof plugin.extendVisitor !== "function") continue;
+      try {
+        const pluginContext = this.contextFor(plugin, context);
+        if (!this.isEnabled(plugin, pluginContext)) continue;
+        const value = plugin.extendVisitor(visitor, pluginContext);
+        if (value && typeof value.then === "function") {
+          throw new TypeError("TownSquare visitor extensions must be synchronous");
+        }
+        if (value !== undefined) {
+          const json = JSON.stringify(value);
+          if (json !== undefined) extensions[plugin.name] = value;
+        }
+      } catch (error) {
+        this.report(plugin.name, "extendVisitor", error);
+      }
+    }
+
+    return Object.keys(extensions).length > 0
+      ? { ...visitor, plugins: extensions }
+      : visitor;
+  }
+
+  browserModules(kind, context = {}) {
+    const key = kind === "admin" ? "adminModule" : kind === "widget" ? "widgetModule" : "";
+    if (!key) throw new Error(`Unknown TownSquare browser module kind: ${kind}`);
+    const modules = [];
+
+    for (const plugin of this.plugins) {
+      if (!plugin[key]) continue;
+      const pluginContext = this.contextFor(plugin, context);
+      if (!this.isEnabled(plugin, pluginContext)) continue;
+      modules.push({ name: plugin.name, module: plugin[key] });
+    }
+
+    return modules;
+  }
+
+  invokeAdminAction(pluginName, action, context, input) {
+    const plugin = this.plugins.find((candidate) => candidate.name === pluginName);
+    const handler = plugin?.adminActions?.[action];
+    if (!plugin || typeof handler !== "function") return { found: false };
+
+    const pluginContext = this.contextFor(plugin, context);
+    if (!this.isEnabled(plugin, pluginContext)) return { found: false };
+    try {
+      const result = handler(pluginContext, input);
+      if (result && typeof result.then === "function") {
+        throw new TypeError("TownSquare admin actions must be synchronous");
+      }
+      return { found: true, result };
+    } catch (error) {
+      this.report(plugin.name, `adminActions.${action}`, error);
+      return { found: true, error: "Plugin action failed." };
+    }
+  }
+
+  contextFor(plugin, context) {
+    return typeof context === "function" ? context(plugin.name) : context;
+  }
+
+  isEnabled(plugin, context) {
+    if (typeof plugin.isEnabled !== "function") return true;
+    try {
+      return plugin.isEnabled(context) !== false;
+    } catch (error) {
+      this.report(plugin.name, "isEnabled", error);
+      return false;
+    }
   }
 
   assertHook(hook) {

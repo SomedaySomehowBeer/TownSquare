@@ -42,3 +42,59 @@ test("registration rejects duplicate names and unknown hooks", () => {
     /Unknown TownSquare plugin hook/,
   );
 });
+
+test("visitor extensions are namespaced and browser modules respect enablement", () => {
+  const manager = new PluginManager();
+  manager.register({
+    name: "owner-figure",
+    adminModule: "/pro/owner-figure/admin.mjs",
+    widgetModule: "/pro/owner-figure/widget.mjs",
+    isEnabled: ({ site }) => site.supporter,
+    extendVisitor: (_visitor, { data, visitor }) => (visitor.isOwner ? data : undefined),
+  });
+  const context = (site, visitor) => () => ({
+    site,
+    visitor,
+    data: { hat: "top-hat" },
+  });
+
+  assert.deepEqual(
+    manager.extendVisitor(
+      { id: 1, displayName: "Owner" },
+      context({ supporter: true }, { isOwner: true }),
+    ),
+    {
+      id: 1,
+      displayName: "Owner",
+      plugins: { "owner-figure": { hat: "top-hat" } },
+    },
+  );
+  assert.deepEqual(manager.browserModules("admin", context({ supporter: true }, {})), [
+    { name: "owner-figure", module: "/pro/owner-figure/admin.mjs" },
+  ]);
+  assert.deepEqual(manager.browserModules("widget", context({ supporter: false }, {})), []);
+});
+
+test("plugin admin actions receive only their scoped context", () => {
+  const manager = new PluginManager();
+  let saved = null;
+  manager.register({
+    name: "owner-figure",
+    adminActions: {
+      update({ setData }, input) {
+        setData({ hat: input.hat });
+      },
+    },
+  });
+
+  const invoked = manager.invokeAdminAction(
+    "owner-figure",
+    "update",
+    () => ({ setData: (value) => { saved = value; } }),
+    { hat: "top-hat" },
+  );
+
+  assert.equal(invoked.found, true);
+  assert.deepEqual(saved, { hat: "top-hat" });
+  assert.deepEqual(manager.invokeAdminAction("owner-figure", "missing", {}, {}), { found: false });
+});
