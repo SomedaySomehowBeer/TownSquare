@@ -291,7 +291,12 @@ export function mountTownSquare(root, options = {}) {
     app,
     expandButton,
     getAvatars: () => [ctx.self.avatar, ...Array.from(ctx.peers.values(), (peer) => peer.avatar)],
-    onChange: (expanded) => { ctx.expanded = expanded; },
+    onChange: (expanded) => {
+      ctx.expanded = expanded;
+      if (coarsePointer && viewport) {
+        window.requestAnimationFrame(onViewportChange);
+      }
+    },
   });
   const setExpanded = expandController.setExpanded;
 
@@ -338,7 +343,12 @@ export function mountTownSquare(root, options = {}) {
   const viewport = window.visualViewport;
   const onViewportChange = () => {
     const hidden = getKeyboardInset(viewport);
+    const keyboardVisible = hidden >= MOBILE_KEYBOARD_MIN_HEIGHT;
     app.style.setProperty("--ts-keyboard", `${Math.round(hidden)}px`);
+    app.style.setProperty(
+      "--ts-keyboard-scroll-room",
+      keyboardVisible && expandController.isExpanded() ? `${Math.round(hidden)}px` : "0px",
+    );
     revealAppAboveKeyboard(app, viewport, expandController.isExpanded());
   };
   const onAppFocusIn = () => {
