@@ -27,8 +27,11 @@
 }
 
 .townsquare {
+  --ts-stage-height: 180px;
+  /* Space below the stage for the touch toolbar (see .townsquare__toolbar). */
+  --ts-toolbar-reserve: 80px;
   position: relative;
-  min-height: 224px;
+  min-height: calc(var(--ts-stage-height) + var(--ts-toolbar-reserve));
   overflow: hidden;
 }
 
@@ -210,7 +213,7 @@
 
 .townsquare__stage {
   position: relative;
-  height: 180px;
+  height: var(--ts-stage-height);
   border-radius: var(--r) var(--r) 0 0;
   background: transparent;
   /* taps move the character; keep page panning, drop double-tap zoom */
@@ -1749,7 +1752,7 @@
   z-index: 2147483002;
   left: 10px;
   right: 10px;
-  bottom: 10px;
+  bottom: 7px;
   display: none;
   align-items: center;
   gap: 8px;
@@ -1795,7 +1798,7 @@
 
 /* In expanded (fixed) mode the page can't scroll, so ride above the keyboard. */
 .townsquare--expanded .townsquare__toolbar {
-  bottom: calc(10px + var(--ts-keyboard, 0px));
+  bottom: calc(7px + var(--ts-keyboard, 0px));
 }
 
 @media (pointer: coarse) {

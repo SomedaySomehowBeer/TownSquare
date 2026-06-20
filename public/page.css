@@ -290,11 +290,7 @@ body {
 }
 
 .dev-host .townsquare {
-  min-height: 420px;
-}
-
-.dev-host .townsquare__stage {
-  height: 360px;
+  --ts-stage-height: 360px;
 }
 
 .walk-page {
@@ -2266,8 +2262,8 @@ body {
   .dev-controls {
     align-items: end;
   }
-  .dev-host .townsquare__stage {
-    height: 300px;
+  .dev-host .townsquare {
+    --ts-stage-height: 300px;
   }
   .walk-toolbar {
     align-items: stretch;
