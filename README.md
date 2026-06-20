@@ -333,6 +333,7 @@ The smoke test verifies:
 - say
 - leave
 - hosted site isolation and admin token hashing
+- moderation tools (word filter, mute/unmute, slow mode, moderation log)
 - service-admin map validation and persistence
 
 To also verify inactive disconnect, restart the server with a short timeout and rerun smoke:
