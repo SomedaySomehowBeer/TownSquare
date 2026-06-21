@@ -85,6 +85,13 @@ const INACTIVE_CHECK_INTERVAL_MS = Number(process.env.INACTIVE_CHECK_INTERVAL_MS
 const HEARTBEAT_INTERVAL_MS = 30000;
 const BIRD_TICK_INTERVAL_MS = 1000;
 const TELEGRAM_API_TIMEOUT_MS = 5000;
+// Global cap on outbound Telegram notifications per minute, across all sites.
+// Bounds notification floods from distributed abuse. 0 disables the cap.
+const TELEGRAM_MAX_NOTIFICATIONS_PER_MIN = readLimit("TELEGRAM_MAX_NOTIFICATIONS_PER_MIN", 20);
+// Minimum delay between a visitor joining and their first chat message. A human
+// cannot read the widget and type within this window, so faster messages are the
+// scripted enter-say-leave pattern and are dropped. 0 disables the check.
+const MIN_HUMAN_SAY_MS = readLimit("MIN_HUMAN_SAY_MS", 1500);
 const BIRD_FLEE_RADIUS = 0.07;
 const VALID_ACTIONS = new Set(["jump", "raise-hand", "high-five"]);
 const BIRD_SPAWN_MIN_MS = Number(process.env.BIRD_SPAWN_MIN_MS || 12000);
@@ -294,6 +301,7 @@ function createIdentity(id, browserId, x) {
     leaveTimer: null,
     inactiveKick: false,
     lastActivityAt: 0,
+    joinedAt: 0,
     awaySince: null,
     messages: [],
   };
@@ -777,6 +785,23 @@ function buildTelegramMessage(site, identity, text, at) {
     "",
     escapeTelegramMarkdown(text),
   ].join("\n");
+}
+
+let telegramWindowStart = 0;
+let telegramWindowCount = 0;
+
+// Global token bucket: at most TELEGRAM_MAX_NOTIFICATIONS_PER_MIN notifications
+// leave the process per rolling minute, regardless of how many sites or visitors
+// are active. Returns false when the budget for the current window is spent.
+function allowTelegramNotification(now = Date.now()) {
+  if (TELEGRAM_MAX_NOTIFICATIONS_PER_MIN <= 0) return true;
+  if (now - telegramWindowStart >= 60000) {
+    telegramWindowStart = now;
+    telegramWindowCount = 0;
+  }
+  if (telegramWindowCount >= TELEGRAM_MAX_NOTIFICATIONS_PER_MIN) return false;
+  telegramWindowCount += 1;
+  return true;
 }
 
 async function sendTelegramChatNotification(site, identity, text, at) {
@@ -2410,6 +2435,7 @@ function handleInit(client, message) {
   identity.joined = true;
   const joinedAt = Date.now();
   identity.lastActivityAt = joinedAt;
+  identity.joinedAt = joinedAt;
 
   if (site) {
     const now = Date.now();
@@ -2567,6 +2593,10 @@ function handleSay(client, message) {
   const now = Date.now();
   if (now - client.lastChatAt < getChatThrottle(site)) return;
 
+  // Scripted abuse joins and immediately chats. A human cannot read the widget
+  // and type this fast, so drop messages sent within MIN_HUMAN_SAY_MS of joining.
+  if (MIN_HUMAN_SAY_MS > 0 && client.identity.joinedAt && now - client.identity.joinedAt < MIN_HUMAN_SAY_MS) return;
+
   let text = sanitizeMessage(message.text);
   if (site) text = applyWordFilter(text, site.blockedWords);
   if (!text) return;
@@ -2586,7 +2616,9 @@ function handleSay(client, message) {
     }
   }
 
-  void sendTelegramChatNotification(client.site, client.identity, text, now);
+  if (allowTelegramNotification(now)) {
+    void sendTelegramChatNotification(client.site, client.identity, text, now);
+  }
 
   broadcast(
     client.scene,

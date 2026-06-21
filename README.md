@@ -258,6 +258,12 @@ rounds; repetition from one identity does not trigger it. Configure the
 detector and quarantine duration through the `IP_SYNC_ACTION_*` and
 `IP_QUARANTINE_MS` variables in `.env.example`.
 
+Two identity-agnostic controls limit distributed abuse that rotates across many
+IPs and sites. `MIN_HUMAN_SAY_MS` drops chat messages sent within that window of
+joining (the scripted enter-say-leave pattern a human cannot reproduce).
+`TELEGRAM_MAX_NOTIFICATIONS_PER_MIN` caps outbound chat notifications per minute
+across all sites so a notification flood cannot form. Both are in `.env.example`.
+
 For defense before a WebSocket reaches Node, install
 `ops/nginx/townsquare-http-limits.conf` in Nginx's `http` context and include
 `ops/nginx/townsquare-server-limits.conf` in the TownSquare `server` block.
