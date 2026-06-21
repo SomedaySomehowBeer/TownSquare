@@ -61,10 +61,14 @@ const MAX_ORIGIN_LEN = 240;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
 const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
-const IP_MAX_IDENTITIES = readLimit("IP_MAX_IDENTITIES", 8);
+const IP_MAX_IDENTITIES = readLimit("IP_MAX_IDENTITIES", 2);
 const IP_JOIN_LIMIT = readLimit("IP_JOIN_LIMIT", 30);
 const IP_STATE_EVENT_LIMIT = readLimit("IP_STATE_EVENT_LIMIT", 600);
 const IP_CHAT_EVENT_LIMIT = readLimit("IP_CHAT_EVENT_LIMIT", 20);
+const IP_SYNC_ACTION_ROUNDS = readLimit("IP_SYNC_ACTION_ROUNDS", 3);
+const IP_SYNC_ACTION_WINDOW_MS = readLimit("IP_SYNC_ACTION_WINDOW_MS", 10000);
+const IP_SYNC_ACTION_TOLERANCE_MS = readLimit("IP_SYNC_ACTION_TOLERANCE_MS", 250);
+const IP_QUARANTINE_MS = readLimit("IP_QUARANTINE_MS", 10 * 60 * 1000);
 const IP_JOIN_WINDOW_MS = 60 * 1000;
 const IP_EVENT_WINDOW_MS = 10 * 1000;
 const LAST_SEEN_SAVE_INTERVAL_MS = 60000;
@@ -908,17 +912,21 @@ function getRequestIp(req) {
   return proxyIp && !/[\s,]/.test(proxyIp) ? proxyIp.slice(0, 64) : remote;
 }
 
-function consumeIpBudget(client, type, limit, windowMs, now = Date.now()) {
-  if (limit <= 0) return true;
-
-  const key = `${client.scene.key}\0${client.ip}`;
+function getIpActivity(scene, ip, now = Date.now()) {
+  const key = `${scene.key}\0${ip}`;
   let activity = activityByIpAndScene.get(key);
   if (!activity) {
     activity = { lastSeenAt: now, budgets: new Map() };
     activityByIpAndScene.set(key, activity);
   }
-
   activity.lastSeenAt = now;
+  return activity;
+}
+
+function consumeIpBudget(client, type, limit, windowMs, now = Date.now()) {
+  if (limit <= 0) return true;
+
+  const activity = getIpActivity(client.scene, client.ip, now);
   let budget = activity.budgets.get(type);
   if (!budget || now - budget.startedAt >= windowMs) {
     budget = { startedAt: now, count: 0 };
@@ -933,7 +941,9 @@ function consumeIpBudget(client, type, limit, windowMs, now = Date.now()) {
 function pruneIpActivity(now = Date.now()) {
   const cutoff = now - Math.max(IP_JOIN_WINDOW_MS, IP_EVENT_WINDOW_MS) * 2;
   for (const [key, activity] of activityByIpAndScene) {
-    if (activity.lastSeenAt < cutoff) activityByIpAndScene.delete(key);
+    if (activity.lastSeenAt < cutoff && (activity.quarantinedUntil || 0) <= now) {
+      activityByIpAndScene.delete(key);
+    }
   }
 }
 
@@ -944,6 +954,65 @@ function closeRateLimited(client) {
 function allowIpEvent(client, type, limit) {
   if (consumeIpBudget(client, type, limit, IP_EVENT_WINDOW_MS)) return true;
   closeRateLimited(client);
+  return false;
+}
+
+function isIpQuarantined(scene, ip, now = Date.now()) {
+  const activity = activityByIpAndScene.get(`${scene.key}\0${ip}`);
+  return Boolean(activity && activity.quarantinedUntil > now);
+}
+
+function quarantineIp(client, action, rounds, now = Date.now()) {
+  const activity = getIpActivity(client.scene, client.ip, now);
+  activity.quarantinedUntil = now + IP_QUARANTINE_MS;
+  console.warn(JSON.stringify({
+    event: "ip_quarantine",
+    ip: client.ip,
+    scene: client.scene.key,
+    reason: `synchronized ${action}`,
+    rounds,
+    until: new Date(activity.quarantinedUntil).toISOString(),
+  }));
+
+  for (const candidate of client.scene.clients.values()) {
+    if (candidate.ip === client.ip && candidate.ws.readyState === candidate.ws.OPEN) {
+      closeRateLimited(candidate);
+    }
+  }
+}
+
+function allowSynchronizedAction(client, action, now = Date.now()) {
+  if (
+    IP_SYNC_ACTION_ROUNDS <= 0
+    || IP_SYNC_ACTION_WINDOW_MS <= 0
+    || IP_SYNC_ACTION_TOLERANCE_MS <= 0
+    || IP_QUARANTINE_MS <= 0
+  ) return true;
+
+  const activity = getIpActivity(client.scene, client.ip, now);
+  if (activity.quarantinedUntil > now) {
+    closeRateLimited(client);
+    return false;
+  }
+
+  activity.actions ||= new Map();
+  let signal = activity.actions.get(action);
+  if (!signal) {
+    signal = { events: [], rounds: [], lastRoundAt: 0 };
+    activity.actions.set(action, signal);
+  }
+
+  signal.events = signal.events.filter((event) => now - event.at <= IP_SYNC_ACTION_TOLERANCE_MS);
+  const synchronized = signal.events.some((event) => event.identityId !== client.identity.id);
+  signal.events.push({ at: now, identityId: client.identity.id });
+  if (!synchronized || now - signal.lastRoundAt <= IP_SYNC_ACTION_TOLERANCE_MS) return true;
+
+  signal.lastRoundAt = now;
+  signal.rounds = signal.rounds.filter((at) => now - at <= IP_SYNC_ACTION_WINDOW_MS);
+  signal.rounds.push(now);
+  if (signal.rounds.length < IP_SYNC_ACTION_ROUNDS) return true;
+
+  quarantineIp(client, action, signal.rounds.length, now);
   return false;
 }
 
@@ -964,6 +1033,11 @@ function countIpIdentities(scene, ip) {
 }
 
 function allowIdentityInit(client, message) {
+  if (isIpQuarantined(client.scene, client.ip)) {
+    closeRateLimited(client);
+    return false;
+  }
+
   const identity = reusableIdentity(client.scene, message);
   const alreadyCounted = identity && Array.from(identity.clients).some((candidate) => candidate.ip === client.ip);
   if (!alreadyCounted && IP_MAX_IDENTITIES > 0 && countIpIdentities(client.scene, client.ip) >= IP_MAX_IDENTITIES) {
@@ -2388,6 +2462,7 @@ function handleAction(client, message) {
     if (Math.abs(target.x - client.identity.x) > HIGH_FIVE_DISTANCE) return;
   }
   if (!allowIpEvent(client, "state", IP_STATE_EVENT_LIMIT)) return;
+  if (!allowSynchronizedAction(client, message.action, now)) return;
 
   client.lastActionAt = now;
   clearPose(client.identity);
@@ -2645,7 +2720,13 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  const client = createClient(nextConnectionId++, ws, access.scene, access.site, origin || "", getRequestIp(req));
+  const ip = getRequestIp(req);
+  if (isIpQuarantined(access.scene, ip)) {
+    ws.close(1008, "rate limited");
+    return;
+  }
+
+  const client = createClient(nextConnectionId++, ws, access.scene, access.site, origin || "", ip);
   access.scene.clients.set(client.connectionId, client);
   ws.isAlive = true;
 

@@ -252,6 +252,12 @@ per source IP and site. Configure the limits through the `IP_*` variables in
 with code `1008` and reason `rate limited`. `server.js` trusts `X-Real-IP` only
 from a loopback peer, matching the supported local reverse-proxy deployment.
 
+The action quarantine is scoped to one source IP and site. It closes that IP's
+sockets only after multiple identities repeat the same action in synchronized
+rounds; repetition from one identity does not trigger it. Configure the
+detector and quarantine duration through the `IP_SYNC_ACTION_*` and
+`IP_QUARANTINE_MS` variables in `.env.example`.
+
 For defense before a WebSocket reaches Node, install
 `ops/nginx/townsquare-http-limits.conf` in Nginx's `http` context and include
 `ops/nginx/townsquare-server-limits.conf` in the TownSquare `server` block.
@@ -352,6 +358,10 @@ Then run:
 TOWNSQUARE_WS_URL=ws://127.0.0.1:8794/live TOWNSQUARE_HTTP_ORIGIN=http://127.0.0.1:8794 DATA_DIR=/tmp/townsquare-ip-test TEST_IP_LIMITS=1 IP_MAX_IDENTITIES=2 IP_JOIN_LIMIT=2 IP_STATE_EVENT_LIMIT=3 IP_CHAT_EVENT_LIMIT=2 npm run smoke
 ```
 
+`assertIpActionQuarantine` in `scripts/smoke-test.js` documents the low-limit
+environment used to exercise synchronized-action quarantine against a real
+server.
+
 The smoke test verifies:
 
 - hello/initial peer snapshot
@@ -362,7 +372,7 @@ The smoke test verifies:
 - hosted site isolation and admin token hashing
 - moderation tools (word filter, mute/unmute, slow mode, moderation log)
 - service-admin map validation and persistence
-- per-IP identity, join, state-event, and chat limits
+- per-IP identity, join, state-event, chat, and synchronized-action quarantine limits
 
 To also verify inactive disconnect, restart the server with a short timeout and rerun smoke:
 

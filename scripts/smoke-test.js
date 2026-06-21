@@ -28,6 +28,7 @@ function connect({ x, browserId, browserSecret = "", siteKey = "", origin = "", 
   return new Promise((resolve, reject) => {
     const ws = new WebSocket(siteSocketUrl(siteKey), socketOptions(origin, ip));
     const seen = [];
+    let joined = false;
 
     ws.on("open", () => {
       const init = { type: "init", x, browserId, displayName, color };
@@ -42,11 +43,17 @@ function connect({ x, browserId, browserSecret = "", siteKey = "", origin = "", 
       const message = JSON.parse(String(buffer));
       seen.push(message);
       if (message.type === "hello") {
+        joined = true;
         resolve({ ws, seen, id: message.id, hello: message });
       }
     });
 
     ws.on("error", reject);
+    ws.on("close", (code, reason) => {
+      if (!joined) {
+        reject(new Error(`connection ${browserId || "(ephemeral)"} closed before hello (${code}: ${String(reason)})`));
+      }
+    });
   });
 }
 
@@ -805,6 +812,45 @@ async function assertIpLimits() {
   chatObserver.ws.close();
 }
 
+async function assertIpActionQuarantine() {
+  assert(process.env.IP_MAX_IDENTITIES === "2", "IP quarantine smoke test requires IP_MAX_IDENTITIES=2");
+  assert(process.env.IP_SYNC_ACTION_ROUNDS === "2", "IP quarantine smoke test requires IP_SYNC_ACTION_ROUNDS=2");
+
+  const site = await createSite("IP action quarantine");
+  const normal = await connect({
+    siteKey: site.site.siteKey,
+    origin: HTTP_ORIGIN,
+    ip: "192.0.2.50",
+    x: 0.2,
+    browserId: "normal-jumper",
+  });
+  for (let index = 0; index < 3; index += 1) {
+    normal.ws.send(JSON.stringify({ type: "action", action: "jump" }));
+    await delay(600);
+  }
+  assert(normal.ws.readyState === WebSocket.OPEN, "one repetitive visitor should not be quarantined");
+
+  const actionArgs = { siteKey: site.site.siteKey, origin: HTTP_ORIGIN, ip: "192.0.2.51" };
+  const first = await connect({ ...actionArgs, x: 0.4, browserId: "sync-first" });
+  const second = await connect({ ...actionArgs, x: 0.6, browserId: "sync-second" });
+  const firstClose = waitForClose(first.ws);
+  const secondClose = waitForClose(second.ws);
+
+  for (let round = 0; round < 2; round += 1) {
+    first.ws.send(JSON.stringify({ type: "action", action: "jump" }));
+    second.ws.send(JSON.stringify({ type: "action", action: "jump" }));
+    if (round === 0) await delay(600);
+  }
+
+  const closes = await Promise.all([firstClose, secondClose]);
+  closes.forEach(assertRateLimited);
+  assertRateLimited(await connectUntilClose({ ...actionArgs, x: 0.5, browserId: "sync-rejoin" }));
+
+  const otherIp = await connect({ ...actionArgs, ip: "192.0.2.52", x: 0.8, browserId: "quarantine-other-ip" });
+  normal.ws.close();
+  otherIp.ws.close();
+}
+
 async function main() {
   const inactiveMs = Number(process.env.INACTIVE_DISCONNECT_MS || 0);
   if (inactiveMs > 0 && inactiveMs <= 5000) {
@@ -815,6 +861,11 @@ async function main() {
   if (process.env.TEST_IP_LIMITS === "1") {
     await assertIpLimits();
     console.log("IP limit smoke test passed.");
+    return;
+  }
+  if (process.env.TEST_IP_QUARANTINE === "1") {
+    await assertIpActionQuarantine();
+    console.log("IP action quarantine smoke test passed.");
     return;
   }
 
@@ -867,7 +918,7 @@ async function main() {
   const joinBroadcast = first.seen.find((message) => message.type === "join" && message.peer?.id === third.id);
   assert(joinBroadcast && !Object.hasOwn(joinBroadcast.peer, "browserId"), "join broadcast leaked browserId");
 
-  const impersonator = await connect({ x: 0.8, browserId: "browser-a" });
+  const impersonator = await connect({ x: 0.8, browserId: "browser-a", ip: "192.0.2.60" });
   assert(impersonator.id !== first.id, "stolen browserId reused victim visitor id");
   assert(impersonator.hello.displayName !== "Ada Lovelace", "stolen browserId hijacked victim profile");
 
@@ -880,7 +931,7 @@ async function main() {
   );
   assert(typeof birdSpawn.x === "number", "bird spawn did not include x");
 
-  const birdJoiner = await connect({ x: 0.4, browserId: "browser-bird-sync" });
+  const birdJoiner = await connect({ x: 0.4, browserId: "browser-bird-sync", ip: "192.0.2.61" });
   await delay(100);
 
   assert(Array.isArray(birdJoiner.hello.birds), "hello did not include birds snapshot");
@@ -1184,6 +1235,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error(`Smoke test failed: ${error.message}`);
-  process.exitCode = 1;
+  console.error(error.stack || `Smoke test failed: ${error.message}`);
+  process.exit(1);
 });
