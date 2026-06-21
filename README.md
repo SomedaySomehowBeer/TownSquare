@@ -263,6 +263,14 @@ For defense before a WebSocket reaches Node, install
 `ops/nginx/townsquare-server-limits.conf` in the TownSquare `server` block.
 These limits apply only to `/live`; normal pages and assets are not counted.
 
+The Nginx config also enforces a per-scene join rate (keyed on `$arg_siteKey`,
+zone `townsquare_scene_joins`, default 60 r/m burst 20). This caps how fast any
+one scene can accumulate new connections regardless of how many source IPs are
+involved, which is effective against distributed botnets that rotate IPs.
+
+`MAX_CONNECTIONS` (default 25) caps the total concurrent WebSocket clients per
+scene. Set it via environment variable to override.
+
 ## Deploy updates
 
 This repo includes a deployment helper:
