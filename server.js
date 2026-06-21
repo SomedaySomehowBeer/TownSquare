@@ -61,6 +61,12 @@ const MAX_ORIGIN_LEN = 240;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
 const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
+const IP_MAX_IDENTITIES = readLimit("IP_MAX_IDENTITIES", 8);
+const IP_JOIN_LIMIT = readLimit("IP_JOIN_LIMIT", 30);
+const IP_STATE_EVENT_LIMIT = readLimit("IP_STATE_EVENT_LIMIT", 600);
+const IP_CHAT_EVENT_LIMIT = readLimit("IP_CHAT_EVENT_LIMIT", 20);
+const IP_JOIN_WINDOW_MS = 60 * 1000;
+const IP_EVENT_WINDOW_MS = 10 * 1000;
 const LAST_SEEN_SAVE_INTERVAL_MS = 60000;
 const MOVE_THROTTLE_MS = 40;
 const ACTION_THROTTLE_MS = 560;
@@ -103,6 +109,11 @@ let randomSpawnX;
 function envFlag(name) {
   const value = String(process.env[name] || "").trim().toLowerCase();
   return value === "1" || value === "true" || value === "yes";
+}
+
+function readLimit(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : fallback;
 }
 
 function loadEnvFile(filePath = path.join(__dirname, ".env")) {
@@ -228,14 +239,15 @@ const MESSAGE_HANDLERS = {
   typing: handleTyping,
 };
 
-/** @returns {{connectionId:number,ws:any,scene:any,site:any,origin:string,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,typing:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
-function createClient(connectionId, ws, scene, site, origin = "") {
+/** @returns {{connectionId:number,ws:any,scene:any,site:any,origin:string,ip:string,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,typing:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
+function createClient(connectionId, ws, scene, site, origin = "", ip = "unknown") {
   return {
     connectionId,
     ws,
     scene,
     site,
     origin,
+    ip,
     propsById: scene.propsById,
     identity: null,
     joined: false,
@@ -887,9 +899,83 @@ function buildAdminUrl(req, adminToken) {
 const registrationsByIp = new Map();
 const adminAuthFailuresByIp = new Map();
 const serviceAdminAuthFailuresByIp = new Map();
+const activityByIpAndScene = new Map();
 
 function getRequestIp(req) {
-  return req.socket.remoteAddress || "unknown";
+  const remote = req.socket.remoteAddress || "unknown";
+  const fromLoopback = remote === "127.0.0.1" || remote === "::1" || remote === "::ffff:127.0.0.1";
+  const proxyIp = fromLoopback ? String(req.headers["x-real-ip"] || "").trim() : "";
+  return proxyIp && !/[\s,]/.test(proxyIp) ? proxyIp.slice(0, 64) : remote;
+}
+
+function consumeIpBudget(client, type, limit, windowMs, now = Date.now()) {
+  if (limit <= 0) return true;
+
+  const key = `${client.scene.key}\0${client.ip}`;
+  let activity = activityByIpAndScene.get(key);
+  if (!activity) {
+    activity = { lastSeenAt: now, budgets: new Map() };
+    activityByIpAndScene.set(key, activity);
+  }
+
+  activity.lastSeenAt = now;
+  let budget = activity.budgets.get(type);
+  if (!budget || now - budget.startedAt >= windowMs) {
+    budget = { startedAt: now, count: 0 };
+    activity.budgets.set(type, budget);
+  }
+
+  if (budget.count >= limit) return false;
+  budget.count += 1;
+  return true;
+}
+
+function pruneIpActivity(now = Date.now()) {
+  const cutoff = now - Math.max(IP_JOIN_WINDOW_MS, IP_EVENT_WINDOW_MS) * 2;
+  for (const [key, activity] of activityByIpAndScene) {
+    if (activity.lastSeenAt < cutoff) activityByIpAndScene.delete(key);
+  }
+}
+
+function closeRateLimited(client) {
+  client.ws.close(1008, "rate limited");
+}
+
+function allowIpEvent(client, type, limit) {
+  if (consumeIpBudget(client, type, limit, IP_EVENT_WINDOW_MS)) return true;
+  closeRateLimited(client);
+  return false;
+}
+
+function reusableIdentity(scene, message) {
+  const key = sanitizeBrowserId(message.browserId);
+  if (!key) return null;
+  const identity = scene.identityByBrowser.get(key);
+  const secret = sanitizeBrowserSecret(message.browserSecret);
+  return identity && secret && secret === identity.browserSecret ? identity : null;
+}
+
+function countIpIdentities(scene, ip) {
+  const ids = new Set();
+  for (const client of scene.clients.values()) {
+    if (client.joined && client.identity && client.ip === ip) ids.add(client.identity.id);
+  }
+  return ids.size;
+}
+
+function allowIdentityInit(client, message) {
+  const identity = reusableIdentity(client.scene, message);
+  const alreadyCounted = identity && Array.from(identity.clients).some((candidate) => candidate.ip === client.ip);
+  if (!alreadyCounted && IP_MAX_IDENTITIES > 0 && countIpIdentities(client.scene, client.ip) >= IP_MAX_IDENTITIES) {
+    closeRateLimited(client);
+    return false;
+  }
+
+  if ((!identity || !identity.joined) && !consumeIpBudget(client, "join", IP_JOIN_LIMIT, IP_JOIN_WINDOW_MS)) {
+    closeRateLimited(client);
+    return false;
+  }
+  return true;
 }
 
 function recentBucket(map, key, limit) {
@@ -2162,6 +2248,7 @@ const wss = new WebSocketServer({
 
 function handleInit(client, message) {
   if (client.joined) return;
+  if (!allowIdentityInit(client, message)) return;
 
   syncClientSceneProps(client, message);
 
@@ -2274,6 +2361,7 @@ function handleMove(client, message) {
 
   const now = Date.now();
   if (now - client.lastMoveAt < MOVE_THROTTLE_MS) return;
+  if (!allowIpEvent(client, "state", IP_STATE_EVENT_LIMIT)) return;
 
   client.lastMoveAt = now;
   client.identity.x = nextX;
@@ -2299,6 +2387,7 @@ function handleAction(client, message) {
     if (!target || !target.joined || target.id === client.identity.id) return;
     if (Math.abs(target.x - client.identity.x) > HIGH_FIVE_DISTANCE) return;
   }
+  if (!allowIpEvent(client, "state", IP_STATE_EVENT_LIMIT)) return;
 
   client.lastActionAt = now;
   clearPose(client.identity);
@@ -2316,8 +2405,13 @@ function handleAction(client, message) {
 function handleProfile(client, message) {
   if (!client.identity) return;
 
-  client.identity.displayName = filterDisplayName(client.site, sanitizeDisplayName(message.displayName));
-  client.identity.color = sanitizeCharacterColor(message.color);
+  const displayName = filterDisplayName(client.site, sanitizeDisplayName(message.displayName));
+  const color = sanitizeCharacterColor(message.color);
+  if (displayName === client.identity.displayName && color === client.identity.color) return;
+  if (!allowIpEvent(client, "state", IP_STATE_EVENT_LIMIT)) return;
+
+  client.identity.displayName = displayName;
+  client.identity.color = color;
   touchIdentityActivity(client.identity);
   // Owners keep their look across resets: persist their own edits too.
   rememberOwnerProfile(client.site, client.identity);
@@ -2344,6 +2438,7 @@ function handleReading(client, message) {
     && readingUrl === previousReadingUrl
     && readingActive === client.readingActive
   ) return;
+  if (!allowIpEvent(client, "state", IP_STATE_EVENT_LIMIT)) return;
 
   client.readingActive = readingActive;
   client.identity.readingLabel = readingLabel;
@@ -2378,6 +2473,7 @@ function handleSettle(client, message) {
 
   const seatX = findAvailableSeatX(client.scene, prop, identity.x, identity.id);
   if (seatX === null) return;
+  if (!allowIpEvent(client, "state", IP_STATE_EVENT_LIMIT)) return;
 
   identity.x = seatX;
   identity.pose = prop.pose;
@@ -2399,6 +2495,7 @@ function handleSay(client, message) {
   let text = sanitizeMessage(message.text);
   if (site) text = applyWordFilter(text, site.blockedWords);
   if (!text) return;
+  if (!allowIpEvent(client, "chat", IP_CHAT_EVENT_LIMIT)) return;
 
   client.lastChatAt = now;
   client.identity.messages.push({ text, at: now });
@@ -2432,10 +2529,12 @@ function handleTyping(client, message) {
   if (!client.identity || typeof message.typing !== "boolean") return;
 
   const wasTyping = Array.from(client.identity.clients).some((candidate) => candidate.typing);
-  client.typing = message.typing;
-  const typing = Array.from(client.identity.clients).some((candidate) => candidate.typing);
+  const typing = message.typing
+    || Array.from(client.identity.clients).some((candidate) => candidate !== client && candidate.typing);
   if (typing === wasTyping) return;
+  if (!allowIpEvent(client, "state", IP_STATE_EVENT_LIMIT)) return;
 
+  client.typing = message.typing;
   broadcast(client.scene, { type: "typing", id: client.identity.id, typing });
 }
 
@@ -2490,6 +2589,7 @@ function handleClientClose(client) {
 }
 
 const heartbeatTimer = setInterval(() => {
+  const now = Date.now();
   for (const scene of scenes.values()) {
     for (const client of scene.clients.values()) {
       if (client.ws.readyState !== client.ws.OPEN) continue;
@@ -2503,6 +2603,7 @@ const heartbeatTimer = setInterval(() => {
       client.ws.ping();
     }
   }
+  pruneIpActivity(now);
 }, HEARTBEAT_INTERVAL_MS);
 
 heartbeatTimer.unref?.();
@@ -2544,7 +2645,7 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  const client = createClient(nextConnectionId++, ws, access.scene, access.site, origin || "");
+  const client = createClient(nextConnectionId++, ws, access.scene, access.site, origin || "", getRequestIp(req));
   access.scene.clients.set(client.connectionId, client);
   ws.isAlive = true;
 

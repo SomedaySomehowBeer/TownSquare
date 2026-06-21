@@ -17,9 +17,16 @@ function siteSocketUrl(siteKey) {
   return url.toString();
 }
 
-function connect({ x, browserId, browserSecret = "", siteKey = "", origin = "", displayName = "", color = "", readingLabel, readingUrl, readingActive }) {
+function socketOptions(origin, ip) {
+  const headers = {};
+  if (origin) headers.Origin = origin;
+  if (ip) headers["X-Real-IP"] = ip;
+  return Object.keys(headers).length > 0 ? { headers } : undefined;
+}
+
+function connect({ x, browserId, browserSecret = "", siteKey = "", origin = "", ip = "", displayName = "", color = "", readingLabel, readingUrl, readingActive }) {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(siteSocketUrl(siteKey), origin ? { headers: { Origin: origin } } : undefined);
+    const ws = new WebSocket(siteSocketUrl(siteKey), socketOptions(origin, ip));
     const seen = [];
 
     ws.on("open", () => {
@@ -40,6 +47,25 @@ function connect({ x, browserId, browserSecret = "", siteKey = "", origin = "", 
     });
 
     ws.on("error", reject);
+  });
+}
+
+function connectUntilClose({ x, browserId, siteKey = "", origin = "", ip = "" }) {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(siteSocketUrl(siteKey), socketOptions(origin, ip));
+    ws.on("open", () => ws.send(JSON.stringify({ type: "init", x, browserId })));
+    ws.on("message", (buffer) => {
+      const message = JSON.parse(String(buffer));
+      if (message.type === "hello") reject(new Error("rate-limited connection unexpectedly joined"));
+    });
+    ws.on("close", (code, reason) => resolve({ code, reason: String(reason) }));
+    ws.on("error", reject);
+  });
+}
+
+function waitForClose(ws) {
+  return new Promise((resolve) => {
+    ws.on("close", (code, reason) => resolve({ code, reason: String(reason) }));
   });
 }
 
@@ -677,11 +703,118 @@ async function assertInactiveDisconnect() {
   }
 }
 
+function assertRateLimited(close) {
+  assert(close.code === 1008, `expected rate-limit close code 1008, got ${close.code}`);
+  assert(close.reason === "rate limited", `expected rate-limit reason, got ${close.reason}`);
+}
+
+async function assertIpLimits() {
+  assert(process.env.IP_MAX_IDENTITIES === "2", "IP limit smoke test requires IP_MAX_IDENTITIES=2");
+  assert(process.env.IP_JOIN_LIMIT === "2", "IP limit smoke test requires IP_JOIN_LIMIT=2");
+  assert(process.env.IP_STATE_EVENT_LIMIT === "3", "IP limit smoke test requires IP_STATE_EVENT_LIMIT=3");
+  assert(process.env.IP_CHAT_EVENT_LIMIT === "2", "IP limit smoke test requires IP_CHAT_EVENT_LIMIT=2");
+
+  const identitySite = await createSite("IP identity limits");
+  const identityArgs = { siteKey: identitySite.site.siteKey, origin: HTTP_ORIGIN, ip: "192.0.2.10" };
+  const first = await connect({ ...identityArgs, x: 0.2, browserId: "ip-first" });
+  const sameIdentity = await connect({
+    ...identityArgs,
+    x: 0.3,
+    browserId: "ip-first",
+    browserSecret: first.hello.browserSecret,
+  });
+  const second = await connect({ ...identityArgs, x: 0.5, browserId: "ip-second" });
+  assert(first.id === sameIdentity.id, "same identity should not consume another IP identity slot");
+  assertRateLimited(await connectUntilClose({ ...identityArgs, x: 0.7, browserId: "ip-third" }));
+  const otherIp = await connect({ ...identityArgs, ip: "192.0.2.11", x: 0.8, browserId: "other-ip" });
+  first.ws.close();
+  sameIdentity.ws.close();
+  second.ws.close();
+  otherIp.ws.close();
+
+  const joinSite = await createSite("IP join limits");
+  const joinArgs = { siteKey: joinSite.site.siteKey, origin: HTTP_ORIGIN, ip: "192.0.2.20" };
+  for (const browserId of ["join-one", "join-two"]) {
+    const visitor = await connect({ ...joinArgs, x: 0.4, browserId });
+    visitor.ws.close();
+    await delay(1700);
+  }
+  assertRateLimited(await connectUntilClose({ ...joinArgs, x: 0.4, browserId: "join-three" }));
+
+  const stateSite = await createSite("IP state limits");
+  const stateObserver = await connect({
+    siteKey: stateSite.site.siteKey,
+    origin: HTTP_ORIGIN,
+    ip: "192.0.2.31",
+    x: 0.1,
+    browserId: "state-observer",
+  });
+  const stateSender = await connect({
+    siteKey: stateSite.site.siteKey,
+    origin: HTTP_ORIGIN,
+    ip: "192.0.2.30",
+    x: 0.2,
+    browserId: "state-sender",
+  });
+  for (const x of [0.3, 0.4, 0.5]) {
+    stateSender.ws.send(JSON.stringify({ type: "move", x }));
+    await delay(50);
+  }
+  const stateClose = waitForClose(stateSender.ws);
+  stateSender.ws.send(JSON.stringify({ type: "move", x: 0.6 }));
+  assertRateLimited(await stateClose);
+  assert(
+    stateObserver.seen.filter((message) => message.type === "move" && message.id === stateSender.id).length === 3,
+    "state-event IP limit did not stop the fourth movement",
+  );
+  stateObserver.ws.close();
+
+  const chatSite = await createSite("IP chat limits");
+  await postJson("/api/admin/action", {
+    siteKey: chatSite.site.siteKey,
+    adminToken: chatSite.adminToken,
+    action: "updateModeration",
+    blockedWords: [],
+    chatThrottleMs: 0,
+  });
+  const chatObserver = await connect({
+    siteKey: chatSite.site.siteKey,
+    origin: HTTP_ORIGIN,
+    ip: "192.0.2.41",
+    x: 0.1,
+    browserId: "chat-observer",
+  });
+  const chatSender = await connect({
+    siteKey: chatSite.site.siteKey,
+    origin: HTTP_ORIGIN,
+    ip: "192.0.2.40",
+    x: 0.2,
+    browserId: "chat-sender",
+  });
+  for (const text of ["one", "two"]) {
+    chatSender.ws.send(JSON.stringify({ type: "say", text }));
+    await delay(25);
+  }
+  const chatClose = waitForClose(chatSender.ws);
+  chatSender.ws.send(JSON.stringify({ type: "say", text: "three" }));
+  assertRateLimited(await chatClose);
+  assert(
+    chatObserver.seen.filter((message) => message.type === "say" && message.id === chatSender.id).length === 2,
+    "chat-event IP limit did not stop the third message",
+  );
+  chatObserver.ws.close();
+}
+
 async function main() {
   const inactiveMs = Number(process.env.INACTIVE_DISCONNECT_MS || 0);
   if (inactiveMs > 0 && inactiveMs <= 5000) {
     await assertInactiveDisconnect();
     console.log("Inactive disconnect smoke test passed.");
+    return;
+  }
+  if (process.env.TEST_IP_LIMITS === "1") {
+    await assertIpLimits();
+    console.log("IP limit smoke test passed.");
     return;
   }
 

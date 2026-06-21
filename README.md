@@ -244,6 +244,19 @@ Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to send a Telegram notification 
 Set `INACTIVE_DISCONNECT_MS` and `INACTIVE_CHECK_INTERVAL_MS` to control away/inactive disconnects (see `.env.example`).
 For local runs, copy `.env.example` to `.env` (or create `.env` directly); `server.js` loads it on startup. Real environment variables win over `.env` values.
 
+### Realtime abuse limits
+
+The server limits concurrent identities, joins, state-changing events, and chat
+per source IP and site. Configure the limits through the `IP_*` variables in
+`.env.example`; `0` disables an individual limit. Rate-limited sockets close
+with code `1008` and reason `rate limited`. `server.js` trusts `X-Real-IP` only
+from a loopback peer, matching the supported local reverse-proxy deployment.
+
+For defense before a WebSocket reaches Node, install
+`ops/nginx/townsquare-http-limits.conf` in Nginx's `http` context and include
+`ops/nginx/townsquare-server-limits.conf` in the TownSquare `server` block.
+These limits apply only to `/live`; normal pages and assets are not counted.
+
 ## Deploy updates
 
 This repo includes a deployment helper:
@@ -326,6 +339,19 @@ Run the websocket smoke test in a second shell while the server is already runni
 npm run smoke
 ```
 
+The IP-limit path is covered by the same real-server smoke runner. Start a
+separate server with the low limits asserted in `assertIpLimits`:
+
+```bash
+PORT=8794 DATA_DIR=/tmp/townsquare-ip-test IP_MAX_IDENTITIES=2 IP_JOIN_LIMIT=2 IP_STATE_EVENT_LIMIT=3 IP_CHAT_EVENT_LIMIT=2 npm start
+```
+
+Then run:
+
+```bash
+TOWNSQUARE_WS_URL=ws://127.0.0.1:8794/live TOWNSQUARE_HTTP_ORIGIN=http://127.0.0.1:8794 DATA_DIR=/tmp/townsquare-ip-test TEST_IP_LIMITS=1 IP_MAX_IDENTITIES=2 IP_JOIN_LIMIT=2 IP_STATE_EVENT_LIMIT=3 IP_CHAT_EVENT_LIMIT=2 npm run smoke
+```
+
 The smoke test verifies:
 
 - hello/initial peer snapshot
@@ -336,6 +362,7 @@ The smoke test verifies:
 - hosted site isolation and admin token hashing
 - moderation tools (word filter, mute/unmute, slow mode, moderation log)
 - service-admin map validation and persistence
+- per-IP identity, join, state-event, and chat limits
 
 To also verify inactive disconnect, restart the server with a short timeout and rerun smoke:
 
