@@ -19,14 +19,33 @@ function buildMessage({ site, visitor, message }) {
   ].join("\n");
 }
 
-function createTelegramNotificationsPlugin({ botToken = "", chatId = "" } = {}) {
+function createNotificationBudget(maxPerMinute) {
+  let windowStart = 0;
+  let windowCount = 0;
+
+  return function allowNotification(now = Date.now()) {
+    if (maxPerMinute <= 0) return true;
+    if (now - windowStart >= 60000) {
+      windowStart = now;
+      windowCount = 0;
+    }
+    if (windowCount >= maxPerMinute) return false;
+    windowCount += 1;
+    return true;
+  };
+}
+
+function createTelegramNotificationsPlugin({ botToken = "", chatId = "", maxPerMinute = 20 } = {}) {
   const token = String(botToken).trim();
   const target = String(chatId).trim();
+  const allowNotification = createNotificationBudget(maxPerMinute);
 
   return {
     name: "telegram-notifications",
     onMessage(event) {
       if (!token || !target) return;
+      const at = event.message?.at;
+      if (!allowNotification(typeof at === "number" ? at : Date.now())) return;
       void sendNotification(token, target, event);
     },
   };

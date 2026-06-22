@@ -86,7 +86,14 @@ const INACTIVE_DISCONNECT_MS = Number(process.env.INACTIVE_DISCONNECT_MS || 30 *
 const INACTIVE_CHECK_INTERVAL_MS = Number(process.env.INACTIVE_CHECK_INTERVAL_MS || 60000);
 const HEARTBEAT_INTERVAL_MS = 30000;
 const BIRD_TICK_INTERVAL_MS = 1000;
-const TELEGRAM_API_TIMEOUT_MS = 5000;
+// Minimum delay between a visitor joining and their first chat message. A human
+// cannot read the widget and type within this window, so faster messages are the
+// scripted enter-say-leave pattern and are dropped. 0 disables the check.
+const MIN_HUMAN_SAY_MS = readLimit("MIN_HUMAN_SAY_MS", 1500);
+// Proof-of-work difficulty (leading zero bits) for the per-site bot-protection
+// gate. Sent to the widget in the challenge, so it is tunable without shipping a
+// new widget. Higher costs the client more CPU per join.
+const POW_DIFFICULTY_BITS = readLimit("POW_DIFFICULTY_BITS", 15);
 const BIRD_FLEE_RADIUS = 0.07;
 const VALID_ACTIONS = new Set(["jump", "raise-hand", "high-five"]);
 const BIRD_SPAWN_MIN_MS = Number(process.env.BIRD_SPAWN_MIN_MS || 12000);
@@ -805,55 +812,6 @@ function getPublicOrigin(req) {
   const forwardedProto = String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim();
   const proto = forwardedProto === "https" ? "https" : "http";
   return normalizeOrigin(`${proto}://${req.headers.host || `${HOST}:${PORT}`}`);
-}
-
-function escapeTelegramMarkdown(text) {
-  return String(text || "").replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
-}
-
-function buildTelegramMessage(site, identity, text, at) {
-  const siteLabel = site
-    ? `${site.name} (${site.origin})`
-    : "default scene";
-
-  return [
-    "*TownSquare message*",
-    `Site: ${escapeTelegramMarkdown(siteLabel)}`,
-    `Visitor: ${escapeTelegramMarkdown(String(identity.id))}`,
-    `Browser: ${escapeTelegramMarkdown(identity.browserId)}`,
-    `At: ${escapeTelegramMarkdown(new Date(at).toISOString())}`,
-    "",
-    escapeTelegramMarkdown(text),
-  ].join("\n");
-}
-
-async function sendTelegramChatNotification(site, identity, text, at) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TELEGRAM_API_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "content-type": "application/json; charset=utf-8" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: buildTelegramMessage(site, identity, text, at),
-        parse_mode: "MarkdownV2",
-        disable_web_page_preview: true,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      console.warn(`Telegram notification failed with ${response.status}`);
-    }
-  } catch (error) {
-    console.warn(`Telegram notification failed: ${error.message}`);
-  } finally {
-    clearTimeout(timeout);
-  }
 }
 
 function getSceneConfig(site) {
@@ -2732,6 +2690,7 @@ function handleSay(client, message) {
   let text = sanitizeMessage(message.text);
   if (site) text = applyWordFilter(text, site.blockedWords);
   if (!text) return;
+  if (!allowIpEvent(client, "chat", IP_CHAT_EVENT_LIMIT)) return;
 
   client.lastChatAt = now;
 
@@ -2753,8 +2712,6 @@ function handleSay(client, message) {
       saveSites();
     }
   }
-
-  void sendTelegramChatNotification(client.site, client.identity, text, now);
 
   broadcast(
     client.scene,
