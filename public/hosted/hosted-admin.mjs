@@ -60,6 +60,7 @@ const addConnectionButton = document.getElementById("add-connection");
 const saveConnectionsButton = document.getElementById("save-connections");
 const connectionsStatusEl = document.getElementById("connections-status");
 const chatDisabledInput = document.getElementById("chat-disabled");
+const botProtectionInput = document.getElementById("bot-protection");
 const clearMessagesButton = document.getElementById("clear-messages");
 const disableSiteButton = document.getElementById("disable-site");
 const visitorList = document.getElementById("visitor-list");
@@ -760,6 +761,7 @@ function render(data) {
     styleSnippetEl.value = data.styleSnippet;
   }
   chatDisabledInput.checked = currentSite.chatDisabled;
+  botProtectionInput.checked = Boolean(currentSite.botProtection);
   disableSiteButton.textContent = currentSite.disabled ? "Enable site" : "Disable site";
   syncCustomizationForm();
   syncConnectionsFromServer();
@@ -880,6 +882,7 @@ moderationForm.addEventListener("submit", (event) => {
 });
 
 chatDisabledInput.addEventListener("change", () => session.action("setChatDisabled", { disabled: chatDisabledInput.checked }));
+botProtectionInput.addEventListener("change", () => session.action("setBotProtection", { enabled: botProtectionInput.checked }));
 clearMessagesButton.addEventListener("click", () => session.action("clearMessages"));
 disableSiteButton.addEventListener("click", () => session.action("disableSite", { disabled: !currentSite.disabled }));
 
