@@ -15,6 +15,7 @@ import {
   updateStatus,
 } from "./presence.mjs";
 import { getBrowserSecret, saveBrowserSecret } from "./utils.mjs";
+import { solveChallenge } from "./pow.mjs";
 
 /**
  * @typedef {import("./context.mjs").WidgetContext} WidgetContext
@@ -130,6 +131,18 @@ export function wireSocket(ctx) {
       }
 
       if (!message || typeof message !== "object") {
+        return;
+      }
+
+      // Per-site bot protection: solve the proof-of-work, then the server
+      // replays our init and proceeds to the normal hello.
+      if (message.type === "challenge") {
+        if (typeof message.salt !== "string" || typeof message.difficulty !== "number") return;
+        solveChallenge({ salt: message.salt, difficulty: message.difficulty }).then((nonce) => {
+          if (socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({ type: "solve", nonce }));
+          }
+        });
         return;
       }
 

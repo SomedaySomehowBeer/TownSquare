@@ -92,6 +92,10 @@ const TELEGRAM_MAX_NOTIFICATIONS_PER_MIN = readLimit("TELEGRAM_MAX_NOTIFICATIONS
 // cannot read the widget and type within this window, so faster messages are the
 // scripted enter-say-leave pattern and are dropped. 0 disables the check.
 const MIN_HUMAN_SAY_MS = readLimit("MIN_HUMAN_SAY_MS", 1500);
+// Proof-of-work difficulty (leading zero bits) for the per-site bot-protection
+// gate. Sent to the widget in the challenge, so it is tunable without shipping a
+// new widget. Higher costs the client more CPU per join.
+const POW_DIFFICULTY_BITS = readLimit("POW_DIFFICULTY_BITS", 15);
 const BIRD_FLEE_RADIUS = 0.07;
 const VALID_ACTIONS = new Set(["jump", "raise-hand", "high-five"]);
 const BIRD_SPAWN_MIN_MS = Number(process.env.BIRD_SPAWN_MIN_MS || 12000);
@@ -247,6 +251,7 @@ const MESSAGE_HANDLERS = {
   sceneConfig: handleSceneConfig,
   settle: handleSettle,
   say: handleSay,
+  solve: handleSolve,
   typing: handleTyping,
 };
 
@@ -267,7 +272,51 @@ function createClient(connectionId, ws, scene, site, origin = "", ip = "unknown"
     lastActionAt: 0,
     lastChatAt: 0,
     typing: false,
+    challenge: null,
+    powVerified: false,
+    pendingInit: null,
   };
+}
+
+// Count the leading zero bits of a hash buffer, used to grade proof-of-work.
+function leadingZeroBits(buffer) {
+  let bits = 0;
+  for (const byte of buffer) {
+    if (byte === 0) {
+      bits += 8;
+      continue;
+    }
+    bits += Math.clz32(byte) - 24;
+    break;
+  }
+  return bits;
+}
+
+// Issue a fresh per-connection proof-of-work challenge. The salt is random so a
+// solution cannot be precomputed or replayed across connections.
+function issuePowChallenge(client) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  client.challenge = { salt, difficulty: POW_DIFFICULTY_BITS };
+  send(client.ws, { type: "challenge", salt, difficulty: POW_DIFFICULTY_BITS });
+}
+
+function verifyPow(challenge, nonce) {
+  if (!challenge || typeof nonce !== "string" || nonce.length === 0 || nonce.length > 64) return false;
+  const hash = crypto.createHash("sha256").update(`${challenge.salt}:${nonce}`).digest();
+  return leadingZeroBits(hash) >= challenge.difficulty;
+}
+
+function handleSolve(client, message) {
+  if (client.powVerified || !client.challenge) return;
+  if (!verifyPow(client.challenge, message.nonce)) {
+    client.ws.close(1008, "challenge failed");
+    return;
+  }
+  client.powVerified = true;
+  client.challenge = null;
+  const pending = client.pendingInit;
+  client.pendingInit = null;
+  if (pending) handleInit(client, pending);
 }
 
 function syncClientSceneProps(client, message) {
@@ -1329,6 +1378,11 @@ const ADMIN_ACTIONS = {
     logModeration(site, site.chatDisabled ? "chat-off" : "chat-on");
     touchSite(site);
   },
+  setBotProtection(site, scene, body) {
+    site.botProtection = Boolean(body.enabled);
+    logModeration(site, site.botProtection ? "bot-protection-on" : "bot-protection-off");
+    touchSite(site);
+  },
   updateModeration(site, scene, body) {
     site.blockedWords = sanitizeBlockedWords(body.blockedWords);
     site.chatThrottleMs = sanitizeChatThrottle(body.chatThrottleMs);
@@ -2003,6 +2057,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       connections: sanitizeConnections(connections),
       disabled: false,
       chatDisabled: false,
+      botProtection: false,
       verifiedAt: null,
       lastSeenAt: null,
       messageCount: 0,
@@ -2145,6 +2200,7 @@ function publicSite(site) {
     connections: getConnections(site),
     disabled: site.disabled,
     chatDisabled: site.chatDisabled,
+    botProtection: Boolean(site.botProtection),
     verifiedAt: site.verifiedAt,
     lastSeenAt: site.lastSeenAt,
     messageCount: site.messageCount || 0,
@@ -2347,6 +2403,16 @@ const wss = new WebSocketServer({
 
 function handleInit(client, message) {
   if (client.joined) return;
+
+  // Per-site bot protection: require a solved proof-of-work before joining. A
+  // raw script that does not run the widget never solves it; a scripted solver
+  // pays CPU per visitor. The init is replayed once the solution arrives.
+  if (client.site && client.site.botProtection && !client.powVerified) {
+    client.pendingInit = message;
+    issuePowChallenge(client);
+    return;
+  }
+
   if (!allowIdentityInit(client, message)) return;
 
   syncClientSceneProps(client, message);
@@ -2657,7 +2723,7 @@ function handleClientMessage(client, raw) {
   if (typeof message.type !== "string") return;
   if (!Object.hasOwn(MESSAGE_HANDLERS, message.type)) return;
 
-  if (message.type !== "init" && !client.joined) return;
+  if (message.type !== "init" && message.type !== "solve" && !client.joined) return;
 
   MESSAGE_HANDLERS[message.type](client, message);
 }

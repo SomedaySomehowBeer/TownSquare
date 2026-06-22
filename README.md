@@ -264,6 +264,16 @@ joining (the scripted enter-say-leave pattern a human cannot reproduce).
 `TELEGRAM_MAX_NOTIFICATIONS_PER_MIN` caps outbound chat notifications per minute
 across all sites so a notification flood cannot form. Both are in `.env.example`.
 
+Site owners can enable **bot protection** per site from the chat admin. When on,
+each visitor's browser must solve a small proof-of-work (`crypto`-grade SHA-256
+in `public/widget/pow.mjs`) before the server accepts their join. A script that
+never runs the widget cannot solve it, and a scripted solver pays CPU per
+visitor, while real visitors see only a brief invisible delay. The server gates
+the join in `allowIdentityInit`/`handleInit` and grades the work with
+`POW_DIFFICULTY_BITS` (sent to the widget in the challenge, so it tunes without a
+widget redeploy). The verifier is pluggable — a hosted challenge (e.g.
+Turnstile) can later replace the proof-of-work behind the same per-site toggle.
+
 For defense before a WebSocket reaches Node, install
 `ops/nginx/townsquare-http-limits.conf` in Nginx's `http` context and include
 `ops/nginx/townsquare-server-limits.conf` in the TownSquare `server` block.
