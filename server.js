@@ -42,6 +42,10 @@ const SITES_FILE = path.join(DATA_DIR, "sites.json");
 const MAP_WORLD_FILE = path.join(DATA_DIR, "map-world.json");
 const DEFAULT_MAP_WORLD_FILE = path.join(PUBLIC_DIR, "default-map-world.json");
 let ALLOWED_ORIGINS = new Set();
+// Wildcard subdomain rules parsed from the same ALLOWED_ORIGINS env value, e.g.
+// `https://*.myshopify.dev`. Kept separate from the exact Set because a wildcard
+// entry is not a valid absolute origin and so can't be normalized/stored there.
+let ALLOWED_ORIGIN_PATTERNS = [];
 const DEFAULT_DEV_ORIGINS = new Set([
   `http://${HOST}:${PORT}`,
   `http://127.0.0.1:${PORT}`,
@@ -217,6 +221,53 @@ function parseAllowedOrigins(value) {
   );
 }
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Parse the wildcard entries out of the ALLOWED_ORIGINS env value. A wildcard
+// entry contains exactly one `*`, which stands in for a single host label
+// segment (one or more chars, never a dot — so it can't span labels); the rest
+// of the host is matched literally and anchored. Kept deliberately narrow so a
+// wildcard can never open up more than intended:
+//   - scheme-locked: `https://...*` only matches https origins;
+//   - exactly one `*`, matching at least one character;
+//   - the text after the `*` must be a real domain of >=2 labels, so neither a
+//     bare TLD (`https://*.dev`) nor a trailing `*` is accepted;
+//   - because the remainder is literal and anchored, look-alikes such as
+//     `myshopify.dev.evil.com` never match.
+// Examples:
+//   https://*.myshopify.dev                        any single-label subdomain
+//   https://*-6cab3d0bdc2950366dcf.myshopify.dev   only this project's previews
+function parseAllowedOriginPatterns(value) {
+  const patterns = [];
+  const seen = new Set();
+  for (const raw of String(value).split(",").map((entry) => entry.trim()).filter(Boolean)) {
+    const match = /^(https?):\/\/([a-z0-9.*-]+)$/i.exec(raw);
+    if (!match) continue;
+    const protocol = `${match[1].toLowerCase()}:`;
+    const hostPattern = match[2].toLowerCase().replace(/\.+$/, "");
+    if ((hostPattern.match(/\*/g) || []).length !== 1) continue;
+    const star = hostPattern.indexOf("*");
+    const before = hostPattern.slice(0, star);
+    const after = hostPattern.slice(star + 1);
+    if (after.split(".").filter(Boolean).length < 2) continue;
+    const key = `${protocol}//${hostPattern}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const regex = new RegExp(`^${escapeRegExp(before)}[a-z0-9-]+${escapeRegExp(after)}$`);
+    patterns.push({ protocol, regex });
+  }
+  return patterns;
+}
+
+// A wildcard matches only hosts whose literal parts line up exactly, with the
+// `*` standing in for a single non-empty label segment (no dots).
+function matchesOriginPattern(originUrl, pattern) {
+  if (originUrl.protocol !== pattern.protocol) return false;
+  return pattern.regex.test(originUrl.hostname.toLowerCase());
+}
+
 function isAllowedOrigin(origin, hostHeader) {
   if (!origin) {
     return true;
@@ -225,6 +276,7 @@ function isAllowedOrigin(origin, hostHeader) {
   const normalized = normalizeOrigin(origin);
   if (!normalized) return false;
   if (DEFAULT_DEV_ORIGINS.has(normalized)) return true;
+  if (ALLOWED_ORIGINS.has(normalized)) return true;
 
   try {
     const originUrl = new URL(normalized);
@@ -232,12 +284,14 @@ function isAllowedOrigin(origin, hostHeader) {
     if (requestHost && originUrl.host.toLowerCase() === requestHost) {
       return true;
     }
+    for (const pattern of ALLOWED_ORIGIN_PATTERNS) {
+      if (matchesOriginPattern(originUrl, pattern)) return true;
+    }
   } catch {
     return false;
   }
 
-  if (ALLOWED_ORIGINS.size === 0) return false;
-  return ALLOWED_ORIGINS.has(normalized);
+  return false;
 }
 
 function isPlainObject(value) {
@@ -2926,6 +2980,7 @@ async function loadSharedModules() {
   getMatchingWwwOrigin = urlModule.getMatchingWwwOrigin;
   originUsesMatchingWwwPair = urlModule.originUsesMatchingWwwPair;
   ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS || "");
+  ALLOWED_ORIGIN_PATTERNS = parseAllowedOriginPatterns(process.env.ALLOWED_ORIGINS || "");
   mapWorld = loadMapWorld();
   ensureMapWorldGrown();
 
