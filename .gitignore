@@ -19,3 +19,4 @@ npm-debug.log*
 
 # Admin scripts
 /scripts/admin/*
+docker-compose.override.yml
