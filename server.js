@@ -1611,11 +1611,17 @@ function isServiceAdminAuthorized(req, body, res) {
 
 function serviceAdminSite(site) {
   const scene = scenes.get(site.siteKey);
+  const connectionClicks = isPlainObject(site.connectionClicks) ? site.connectionClicks : {};
 
   return {
     ...publicSite(site),
     updatedAt: site.updatedAt,
     activeVisitors: scene ? countActiveVisitors(scene) : 0,
+    connectionClicks,
+    connectionClickTotal: Object.values(connectionClicks).reduce(
+      (sum, entry) => sum + (entry?.count || 0),
+      0,
+    ),
   };
 }
 
@@ -2107,6 +2113,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       lastSeenAt: null,
       messageCount: 0,
       lastMessageAt: null,
+      connectionClicks: {},
       createdAt: now,
       updatedAt: now,
       blockedBrowserIds: [],
@@ -2181,6 +2188,9 @@ function loadSites() {
       if (site.lastMessageAt === undefined) {
         site.lastMessageAt = null;
       }
+      if (!isPlainObject(site.connectionClicks)) {
+        site.connectionClicks = {};
+      }
       if (typeof site.supporter !== "boolean") {
         site.supporter = false;
       }
@@ -2209,6 +2219,57 @@ function saveSites() {
 function touchSite(site) {
   site.updatedAt = Date.now();
   saveSites();
+}
+
+// Visitor connection clicks are high-frequency, so we mirror the lastSeen save
+// pattern: tally in memory on every click and flush the whole registry to disk
+// at most once per interval. Losing up to a minute of clicks on a crash is fine
+// for traffic analytics.
+let lastConnectionClicksSaveAt = 0;
+
+/**
+ * Record one visitor click on a configured neighbouring-town link. The reported
+ * destination must match one of the source site's sanitized connections, so the
+ * tally cannot be inflated with arbitrary URLs.
+ *
+ * @param {import("http").IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ */
+function handleConnectionClick(req, res) {
+  readJsonBody(req, res, (body) => {
+    // sendBeacon ignores the response, so a 204 with permissive CORS is enough.
+    const respond = (status) => {
+      res.writeHead(status, { "access-control-allow-origin": "*" });
+      res.end();
+    };
+
+    const siteKey = typeof body.siteKey === "string" ? body.siteKey : "";
+    const url = typeof body.url === "string" ? body.url : "";
+    const site = sitesByKey.get(siteKey);
+    if (!site || site.disabled) {
+      respond(204);
+      return;
+    }
+
+    const target = getConnections(site).find((connection) => connection.url === url);
+    if (!target) {
+      respond(204);
+      return;
+    }
+
+    const now = Date.now();
+    const clicks = isPlainObject(site.connectionClicks) ? site.connectionClicks : (site.connectionClicks = {});
+    const entry = isPlainObject(clicks[url]) ? clicks[url] : (clicks[url] = { count: 0, lastAt: 0 });
+    entry.count += 1;
+    entry.lastAt = now;
+
+    if (now - lastConnectionClicksSaveAt > LAST_SEEN_SAVE_INTERVAL_MS) {
+      lastConnectionClicksSaveAt = now;
+      saveSites();
+    }
+
+    respond(204);
+  });
 }
 
 function closeIdentityClients(identity, code, reason) {
@@ -2381,6 +2442,11 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "POST" && url.pathname === "/api/sites") {
     handleRegisterSite(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/connection-click") {
+    handleConnectionClick(req, res);
     return;
   }
 

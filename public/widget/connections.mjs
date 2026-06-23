@@ -191,6 +191,11 @@ export function openConnectionsModal(ctx, side) {
     go.textContent = `walk over ${SIDE_ARROWS[side]}`;
 
     link.append(name, host, go);
+    // Report the outbound visit home before the browser navigates away. Previews
+    // open in a new tab and are owner-driven, so they are not counted.
+    if (!newTab) {
+      link.addEventListener("click", () => reportConnectionClick(ctx, connection.url));
+    }
     item.appendChild(link);
     list.appendChild(item);
   }
@@ -225,6 +230,28 @@ export function closeConnectionsModal(ctx) {
   modal.overlay.remove();
   ctx.connectionsModal = null;
   if (modal.trigger?.isConnected) modal.trigger.focus();
+}
+
+/**
+ * Tell the TownSquare server a visitor walked over to a neighbouring town, so it
+ * can tally which towns lead traffic where. Fire-and-forget via sendBeacon, which
+ * survives the page navigation that follows the click; failures are ignored.
+ *
+ * @param {WidgetContext} ctx
+ * @param {string} url Destination town the visitor is travelling to.
+ */
+function reportConnectionClick(ctx, url) {
+  const siteKey = ctx.options.siteKey || ctx.root?.dataset?.townsquareSiteKey || "";
+  if (!siteKey || !ctx.serverOrigin || typeof navigator?.sendBeacon !== "function") return;
+
+  try {
+    // A text/plain body keeps this a CORS-simple request (no preflight); the
+    // server parses it as JSON regardless of the declared content type.
+    const payload = new Blob([JSON.stringify({ siteKey, url })], { type: "text/plain" });
+    navigator.sendBeacon(`${ctx.serverOrigin}/api/connection-click`, payload);
+  } catch {
+    // Tracking is best-effort and must never block the visit.
+  }
 }
 
 /**
