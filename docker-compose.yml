@@ -1,0 +1,27 @@
+services:
+  townsquare:
+    image: ghcr.io/somedaysomehowbeer/townsquare:latest
+    restart: unless-stopped
+    environment:
+      HOST: "0.0.0.0"
+      PORT: "8787"
+      DATA_DIR: "/data"
+      PUBLIC_ORIGIN: "https://townsquare.somedaysomehow.beer"
+      # SERVICE_ADMIN_PASSWORD intentionally unset -> /service-admin stays off.
+      INACTIVE_DISCONNECT_MS: "120000"
+    volumes:
+      - townsquare-data:/data
+    ports:
+      - "127.0.0.1:8787:8787"   # only Caddy reaches the app
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    network_mode: host
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile
+      - caddy-data:/data
+      - caddy-config:/config
+volumes:
+  townsquare-data:
+  caddy-data:
+  caddy-config:

@@ -1,0 +1,10 @@
+# Someday Somehow — single, isolated TownSquare.
+# TLS + the /live WebSocket upgrade are automatic.
+# The blocked paths keep this instance off the wider TownSquare network:
+# no public site registration and no service-operator panel are reachable.
+townsquare.somedaysomehow.beer {
+	@offnetwork path /register /register/* /service-admin /service-admin/*
+	respond @offnetwork 404
+
+	reverse_proxy 127.0.0.1:8787
+}
