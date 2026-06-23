@@ -1,39 +1,27 @@
-name: deploy
+name: build
+# Manual deploys for now. GitHub-hosted runners can't reach the Tailscale-only
+# droplet, so there is NO SSH deploy step here — this workflow only validates
+# that the Docker image builds. To deploy, on the droplet:
+#   cd /opt/townsquare && git pull && docker compose up -d --build
 on:
   push:
     branches: [main]
+  pull_request:
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
     steps:
       - uses: actions/checkout@v4
-      - uses: docker/login-action@v3
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
       - uses: docker/build-push-action@v6
         with:
           context: .
-          push: true
-          tags: ghcr.io/somedaysomehowbeer/townsquare:latest
+          push: false
+          tags: townsquare:ci
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: appleboy/ssh-action@v1
-        with:
-          host: ${{ secrets.DROPLET_HOST }}
-          username: ${{ secrets.DROPLET_USER }}
-          key: ${{ secrets.DROPLET_SSH_KEY }}
-          script: |
-            cd /opt/townsquare
-            docker compose pull
-            docker compose up -d
-            docker image prune -f
+# Later, to switch to pull-based auto-deploy (e.g. Watchtower on the droplet):
+#   - add a docker/login-action step (registry ghcr.io, username ${{ github.actor }},
+#     password ${{ secrets.GITHUB_TOKEN }}),
+#   - set `push: true` and `tags: ghcr.io/somedaysomehowbeer/townsquare:latest`,
+#   - add `permissions: { contents: read, packages: write }` to this job.
