@@ -38,6 +38,11 @@ const PLAUSIBLE_API_PATH = process.env.PLAUSIBLE_API_PATH === undefined
   ? "/api/event"
   : String(process.env.PLAUSIBLE_API_PATH).trim();
 const PUBLIC_DIR = path.join(__dirname, "public");
+// Optional overlay of extra static assets (e.g. private plugin browser modules)
+// served as a fallback after the core public dir. Replaces the dev symlink.
+const PLUGIN_ASSETS_DIR = process.env.TOWNSQUARE_PLUGIN_ASSETS_DIR
+  ? path.resolve(process.env.TOWNSQUARE_PLUGIN_ASSETS_DIR)
+  : null;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
 const DEV_TOOLS_ENABLED = envFlag("ENABLE_DEV_TOOLS");
 const SITES_FILE = path.join(DATA_DIR, "sites.json");
@@ -730,13 +735,18 @@ function resolvePublicFile(requestUrl, hostHeader) {
   ]);
   const pathname = aliases.get(url.pathname) || url.pathname;
   const normalized = path.normalize(pathname).replace(/^\.+/, "");
-  const filePath = path.join(PUBLIC_DIR, normalized);
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
-    return null;
+  // Candidate files are tried in order: the core public dir first, then the
+  // optional plugin assets overlay. Each must stay inside its own root.
+  const candidates = [];
+  const corePath = path.join(PUBLIC_DIR, normalized);
+  if (corePath.startsWith(PUBLIC_DIR)) candidates.push(corePath);
+  if (PLUGIN_ASSETS_DIR) {
+    const pluginPath = path.join(PLUGIN_ASSETS_DIR, normalized);
+    if (pluginPath.startsWith(PLUGIN_ASSETS_DIR)) candidates.push(pluginPath);
   }
 
-  return filePath;
+  return candidates.length > 0 ? candidates : null;
 }
 
 function isDevToolsRequest(pathname) {
@@ -1637,6 +1647,11 @@ const SERVICE_ADMIN_ACTIONS = {
     touchSite(site);
     return { site: serviceAdminSite(site) };
   },
+  setSitePro(req, site, body) {
+    site.pro = Boolean(body.pro);
+    touchSite(site);
+    return { site: serviceAdminSite(site) };
+  },
   deleteSite(req, site) {
     closeSiteScene(site.siteKey, 4003, "site deleted");
     sitesByKey.delete(site.siteKey);
@@ -2046,6 +2061,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       disabled: false,
       chatDisabled: false,
       botProtection: false,
+      pro: false,
       verifiedAt: null,
       lastSeenAt: null,
       messageCount: 0,
@@ -2119,6 +2135,9 @@ function loadSites() {
       }
       if (typeof site.supporter !== "boolean") {
         site.supporter = false;
+      }
+      if (typeof site.pro !== "boolean") {
+        site.pro = false;
       }
       return [site.siteKey, site];
     }));
@@ -2204,6 +2223,7 @@ function publicSite(site) {
     chatThrottleMs: typeof site.chatThrottleMs === "number" ? site.chatThrottleMs : DEFAULT_CHAT_THROTTLE_MS,
     moderationLog: Array.isArray(site.moderationLog) ? site.moderationLog : [],
     supporter: Boolean(site.supporter),
+    pro: Boolean(site.pro),
   };
   const extendedConfig = plugins.extend("extendSiteConfig", config, pluginContext(site));
   return isPlainObject(extendedConfig) ? extendedConfig : config;
@@ -2216,6 +2236,7 @@ function pluginSite(site) {
     name: site.name,
     origin: site.origin,
     supporter: Boolean(site.supporter),
+    pro: Boolean(site.pro),
   });
 }
 
@@ -2395,16 +2416,27 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  const filePath = resolvePublicFile(req.url || "/", req.headers.host || `${HOST}:${PORT}`);
+  const candidates = resolvePublicFile(req.url || "/", req.headers.host || `${HOST}:${PORT}`);
 
-  if (!filePath) {
+  if (!candidates) {
     res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
     res.end("forbidden");
     return;
   }
 
+  serveStaticCandidate(candidates, 0, res);
+});
+
+// Tries each candidate file path in order, falling back to the next on a
+// missing file so the plugin assets overlay can back the core public dir.
+function serveStaticCandidate(candidates, index, res) {
+  const filePath = candidates[index];
   fs.readFile(filePath, (error, data) => {
     if (error) {
+      if (error.code === "ENOENT" && index + 1 < candidates.length) {
+        serveStaticCandidate(candidates, index + 1, res);
+        return;
+      }
       const status = error.code === "ENOENT" ? 404 : 500;
       const body = status === 404 ? "not found" : "server error";
       res.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
@@ -2420,7 +2452,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, getStaticHeaders(filePath));
     res.end(body);
   });
-});
+}
 
 const wss = new WebSocketServer({
   server,

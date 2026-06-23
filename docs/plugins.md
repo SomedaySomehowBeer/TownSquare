@@ -16,7 +16,10 @@ require("../TownSquare/server");
 
 Plugin names use lowercase kebab-case and are also their storage and wire-data
 namespace. Browser module paths are same-origin absolute `.mjs` paths. The Pro
-deployment must serve those paths itself, normally through its reverse proxy.
+deployment must make those paths reachable. Set `TOWNSQUARE_PLUGIN_ASSETS_DIR`
+to a directory and the core serves its files as a fallback overlay after its
+own `public/` (e.g. point it at the Pro repo's `public/`, so `/pro/...` resolves
+to `<dir>/pro/...`). A reverse-proxy alias also works.
 
 ## Full-stack plugin manifest
 
