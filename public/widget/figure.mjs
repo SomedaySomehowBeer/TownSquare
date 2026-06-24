@@ -20,7 +20,7 @@
  */
 export function figureMarkup(svgAttributes = "") {
   return `
-    <svg viewBox="0 0 20 44" preserveAspectRatio="xMidYMax meet" ${svgAttributes}>
+    <svg viewBox="0 0 20 42.8" preserveAspectRatio="xMidYMax meet" ${svgAttributes}>
       <g class="figure-core">
         <g class="joint arm-r far">
           <line class="limb" x1="9.6" y1="16" x2="9.6" y2="22.24"></line>

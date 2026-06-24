@@ -10,7 +10,7 @@
 :root {
   /* Surfaces — warm gray scene, cream chrome */
   --scene: #e4e2dd;
-  --scene-edge: #dad8d1;
+  --scene-edge: #cdcabf;
   --page: #efede9;
   --surface: #fdf8f4;
   --surface-2: #f4eee6;
@@ -31,7 +31,7 @@
 
   /* Cast + ground */
   --other: #26241f;
-  --ground: rgba(42, 41, 38, 0.16);
+  --ground: rgba(42, 41, 38, 0.42);
 
   /* Radii */
   --r: 20px;
@@ -67,7 +67,7 @@
 /* Dark palette — keep both blocks in sync (see applyWidgetTheme in utils.mjs). */
 #townsquare-root[data-townsquare-theme="dark"] {
   --scene: #242521;
-  --scene-edge: #31322d;
+  --scene-edge: #3b3c35;
   --page: #181917;
   --surface: #24231f;
   --surface-2: #2d2b25;
@@ -84,7 +84,7 @@
   --you-tint: rgba(223, 138, 67, 0.17);
 
   --other: #ddd7cc;
-  --ground: rgba(242, 238, 230, 0.18);
+  --ground: rgba(242, 238, 230, 0.42);
   --prop-ink: color-mix(in oklab, var(--text) 58%, var(--muted) 42%);
   --tree-trunk: var(--prop-ink);
   --tree-canopy: var(--prop-ink);
@@ -96,7 +96,7 @@
 @media (prefers-color-scheme: dark) {
   #townsquare-root[data-townsquare-theme="auto"] {
     --scene: #242521;
-    --scene-edge: #31322d;
+    --scene-edge: #3b3c35;
     --page: #181917;
     --surface: #24231f;
     --surface-2: #2d2b25;
@@ -113,7 +113,7 @@
     --you-tint: rgba(223, 138, 67, 0.17);
 
     --other: #ddd7cc;
-    --ground: rgba(242, 238, 230, 0.18);
+    --ground: rgba(242, 238, 230, 0.42);
     --prop-ink: color-mix(in oklab, var(--text) 58%, var(--muted) 42%);
     --tree-trunk: var(--prop-ink);
     --tree-canopy: var(--prop-ink);

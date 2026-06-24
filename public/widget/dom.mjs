@@ -199,7 +199,10 @@ export function renderShell(container) {
   helpPanel.append(helpTitle, description, instructions, links);
   helpScrim.appendChild(helpPanel);
 
-  controls.append(expandButton, quietButton, helpButton);
+  // Someday Somehow: drop the expand (fullscreen) and quiet (disable) controls;
+  // keep only the help "?". The buttons are still created + returned so the
+  // mount/expand wiring stays valid, they're just never put in the DOM.
+  controls.append(helpButton);
 
   const actions = document.createElement("div");
   actions.className = "townsquare__actions";
