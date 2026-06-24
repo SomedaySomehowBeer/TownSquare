@@ -65,6 +65,7 @@ const TABLE_COLUMNS = [
   { key: "disabled", label: "Status", render: (site) => (site.disabled ? "Disabled" : "Enabled") },
   { key: "chatDisabled", label: "Chat", render: (site) => (site.chatDisabled ? "Disabled" : "Enabled") },
   { key: "supporter", label: "Supporter", render: (site) => (site.supporter ? "Yes" : "No") },
+  { key: "pro", label: "Pro", render: (site) => (site.pro ? "Yes" : "No") },
   { key: "verifiedAt", label: "Verified", render: (site) => formatTime(site.verifiedAt) },
   { key: "lastSeenAt", label: "Last seen", render: (site) => formatTime(site.lastSeenAt) },
   { key: "messageCount", label: "Messages", render: (site) => String(site.messageCount ?? 0) },
@@ -447,6 +448,7 @@ function siteSortValue(site, key) {
     case "disabled":
     case "chatDisabled":
     case "supporter":
+    case "pro":
       return Number(Boolean(site[key]));
     case "verifiedAt":
     case "lastSeenAt":
@@ -591,7 +593,15 @@ function createActionMenu(site) {
     void action("setSiteSupporter", site.siteKey, { supporter: !site.supporter });
   });
 
-  panel.append(toggleSite, toggleChat, toggleSupporter, reset, remove);
+  const togglePro = document.createElement("button");
+  togglePro.type = "button";
+  togglePro.textContent = site.pro ? "Remove Pro" : "Mark as Pro";
+  togglePro.addEventListener("click", () => {
+    menu.open = false;
+    void action("setSitePro", site.siteKey, { pro: !site.pro });
+  });
+
+  panel.append(toggleSite, toggleChat, toggleSupporter, togglePro, reset, remove);
   menu.append(panel);
 
   menu.addEventListener("toggle", () => {
@@ -619,9 +629,11 @@ function renderCell(site, column) {
     } else {
       cell.textContent = site.name;
     }
-  } else if (column.key === "disabled" || column.key === "chatDisabled" || column.key === "supporter") {
+  } else if (column.key === "disabled" || column.key === "chatDisabled" || column.key === "supporter" || column.key === "pro") {
     const badge = document.createElement("span");
-    const on = column.key === "supporter" ? site.supporter : !(column.key === "disabled" ? site.disabled : site.chatDisabled);
+    const on = (column.key === "supporter" || column.key === "pro")
+      ? site[column.key]
+      : !(column.key === "disabled" ? site.disabled : site.chatDisabled);
     badge.className = `service-status-badge${on ? "" : " service-status-badge--off"}`;
     badge.textContent = value;
     cell.append(badge);

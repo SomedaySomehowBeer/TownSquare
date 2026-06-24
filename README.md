@@ -245,6 +245,13 @@ Set `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID` to send a Telegram notification 
 Set `INACTIVE_DISCONNECT_MS` and `INACTIVE_CHECK_INTERVAL_MS` to control away/inactive disconnects (see `.env.example`).
 For local runs, copy `.env.example` to `.env` (or create `.env` directly); `server.js` loads it on startup. Real environment variables win over `.env` values.
 
+## Server feature plugins
+
+TownSquare has a small in-process plugin registry for trusted feature modules.
+Public modules live in `plugins/`; a hosted bootstrap can register private
+modules through `registerPlugin` before requiring `server.js`. The supported
+hooks and full-stack composition contract are documented in `docs/plugins.md`.
+There is intentionally no remote install or external-extension system.
 ### Realtime abuse limits
 
 The server limits concurrent identities, joins, state-changing events, and chat

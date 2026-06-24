@@ -22,6 +22,7 @@ import {
   updatePropEffects,
 } from "./widget/dom.mjs";
 import { watchCurrentPage } from "./widget/page-watch.mjs";
+import { createWidgetPluginRuntime } from "./widget/plugins.mjs";
 import {
   closeTrays,
   startGameLoop,
@@ -68,6 +69,7 @@ import {
  * @property {boolean} [simulate=false] Dev simulation harness: no socket and local prop settle (like `preview`), but peers and birds stay visible so the scene matches production. The caller drives simulated peers through the exposed `ctx`.
  * @property {import("./widget/bubble-layout.mjs").LayoutConfig} [layout] Live reading-experience dials read by the loop every frame. Omit in production to run on the defaults; the dev scene passes a mutable object its sliders edit in place.
  * @property {Array<{ side: "left"|"right", label?: string, url: string }>} [connections] Neighbouring towns linked at the stage edges. Each grows a signpost on its side that opens a "walk over" modal.
+ * @property {Array<{ name: string, module: string }>} [pluginModules] Trusted widget feature modules registered by the TownSquare server.
  */
 
 /**
@@ -248,6 +250,7 @@ export function mountTownSquare(root, options = {}) {
       typing: false,
       isOwner: false,
       badgeColor: "",
+      plugins: {},
       propZoneEnteredAt: 0,
       settlePropId: null,
       settleRequested: false,
@@ -287,6 +290,8 @@ export function mountTownSquare(root, options = {}) {
     onStagePointerCancel: () => {},
     onStageClick: () => {},
   };
+
+  ctx.widgetPlugins = createWidgetPluginRuntime(ctx);
 
   const expandController = createExpandController({
     app,
@@ -369,6 +374,7 @@ export function mountTownSquare(root, options = {}) {
   stage.appendChild(ctx.self.avatar.el);
   renderAvatar(ctx.self.avatar, ctx.self.x);
   updatePose(ctx.self.avatar, ctx.self.pose);
+  ctx.widgetPlugins.setModules(options.pluginModules || []);
   if (localOnly) {
     setStatusMessage(ctx, null);
   } else {
@@ -410,6 +416,7 @@ export function mountTownSquare(root, options = {}) {
       stopGameLoop(ctx);
       destroyBirds(ctx);
       destroyClouds(ctx);
+      ctx.widgetPlugins.destroy();
       unwireKeyboard(ctx);
       unwireStagePointer(ctx);
       unwireHelpPanel();

@@ -3,8 +3,12 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const { ensurePluginData, getPluginData, setPluginData } = require("./server/plugin-data");
+const { plugins } = require("./server/plugins");
+const { registerPublicPlugins } = require("./plugins");
 
 loadEnvFile();
+registerPublicPlugins();
 
 /**
  * Tiny demo server for the first playable TownSquare slice.
@@ -26,8 +30,6 @@ loadEnvFile();
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8787);
 const SERVICE_ADMIN_PASSWORD = process.env.SERVICE_ADMIN_PASSWORD || "";
-const TELEGRAM_BOT_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
-const TELEGRAM_CHAT_ID = String(process.env.TELEGRAM_CHAT_ID || "").trim();
 const LANDING_ORIGIN = parseHttpOrigin(process.env.LANDING_ORIGIN);
 const PLAUSIBLE_DOMAIN = String(process.env.PLAUSIBLE_DOMAIN || "").trim();
 const PLAUSIBLE_UPSTREAM = String(process.env.PLAUSIBLE_UPSTREAM || "https://plausible.io").replace(/\/$/, "");
@@ -36,6 +38,11 @@ const PLAUSIBLE_API_PATH = process.env.PLAUSIBLE_API_PATH === undefined
   ? "/api/event"
   : String(process.env.PLAUSIBLE_API_PATH).trim();
 const PUBLIC_DIR = path.join(__dirname, "public");
+// Optional overlay of extra static assets (e.g. private plugin browser modules)
+// served as a fallback after the core public dir. Replaces the dev symlink.
+const PLUGIN_ASSETS_DIR = process.env.TOWNSQUARE_PLUGIN_ASSETS_DIR
+  ? path.resolve(process.env.TOWNSQUARE_PLUGIN_ASSETS_DIR)
+  : null;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
 const DEV_TOOLS_ENABLED = envFlag("ENABLE_DEV_TOOLS");
 const STAGING_PAGE_ENABLED = envFlag("ENABLE_STAGING_PAGE");
@@ -86,10 +93,6 @@ const INACTIVE_DISCONNECT_MS = Number(process.env.INACTIVE_DISCONNECT_MS || 30 *
 const INACTIVE_CHECK_INTERVAL_MS = Number(process.env.INACTIVE_CHECK_INTERVAL_MS || 60000);
 const HEARTBEAT_INTERVAL_MS = 30000;
 const BIRD_TICK_INTERVAL_MS = 1000;
-const TELEGRAM_API_TIMEOUT_MS = 5000;
-// Global cap on outbound Telegram notifications per minute, across all sites.
-// Bounds notification floods from distributed abuse. 0 disables the cap.
-const TELEGRAM_MAX_NOTIFICATIONS_PER_MIN = readLimit("TELEGRAM_MAX_NOTIFICATIONS_PER_MIN", 20);
 // Minimum delay between a visitor joining and their first chat message. A human
 // cannot read the widget and type within this window, so faster messages are the
 // scripted enter-say-leave pattern and are dropped. 0 disables the check.
@@ -764,13 +767,18 @@ function resolvePublicFile(requestUrl, hostHeader) {
   ]);
   const pathname = aliases.get(url.pathname) || url.pathname;
   const normalized = path.normalize(pathname).replace(/^\.+/, "");
-  const filePath = path.join(PUBLIC_DIR, normalized);
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
-    return null;
+  // Candidate files are tried in order: the core public dir first, then the
+  // optional plugin assets overlay. Each must stay inside its own root.
+  const candidates = [];
+  const corePath = path.join(PUBLIC_DIR, normalized);
+  if (corePath.startsWith(PUBLIC_DIR)) candidates.push(corePath);
+  if (PLUGIN_ASSETS_DIR) {
+    const pluginPath = path.join(PLUGIN_ASSETS_DIR, normalized);
+    if (pluginPath.startsWith(PLUGIN_ASSETS_DIR)) candidates.push(pluginPath);
   }
 
-  return filePath;
+  return candidates.length > 0 ? candidates : null;
 }
 
 function isDevToolsRequest(pathname) {
@@ -852,72 +860,6 @@ function getPublicOrigin(req) {
   return normalizeOrigin(`${proto}://${req.headers.host || `${HOST}:${PORT}`}`);
 }
 
-function escapeTelegramMarkdown(text) {
-  return String(text || "").replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
-}
-
-function buildTelegramMessage(site, identity, text, at) {
-  const siteLabel = site
-    ? `${site.name} (${site.origin})`
-    : "default scene";
-
-  return [
-    "*TownSquare message*",
-    `Site: ${escapeTelegramMarkdown(siteLabel)}`,
-    `Visitor: ${escapeTelegramMarkdown(String(identity.id))}`,
-    `Browser: ${escapeTelegramMarkdown(identity.browserId)}`,
-    `At: ${escapeTelegramMarkdown(new Date(at).toISOString())}`,
-    "",
-    escapeTelegramMarkdown(text),
-  ].join("\n");
-}
-
-let telegramWindowStart = 0;
-let telegramWindowCount = 0;
-
-// Global token bucket: at most TELEGRAM_MAX_NOTIFICATIONS_PER_MIN notifications
-// leave the process per rolling minute, regardless of how many sites or visitors
-// are active. Returns false when the budget for the current window is spent.
-function allowTelegramNotification(now = Date.now()) {
-  if (TELEGRAM_MAX_NOTIFICATIONS_PER_MIN <= 0) return true;
-  if (now - telegramWindowStart >= 60000) {
-    telegramWindowStart = now;
-    telegramWindowCount = 0;
-  }
-  if (telegramWindowCount >= TELEGRAM_MAX_NOTIFICATIONS_PER_MIN) return false;
-  telegramWindowCount += 1;
-  return true;
-}
-
-async function sendTelegramChatNotification(site, identity, text, at) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TELEGRAM_API_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "content-type": "application/json; charset=utf-8" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: buildTelegramMessage(site, identity, text, at),
-        parse_mode: "MarkdownV2",
-        disable_web_page_preview: true,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      console.warn(`Telegram notification failed with ${response.status}`);
-    }
-  } catch (error) {
-    console.warn(`Telegram notification failed: ${error.message}`);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function getSceneConfig(site) {
   return sanitizeSceneConfig(site?.sceneConfig || DEFAULT_SITE_SCENE_CONFIG);
 }
@@ -985,9 +927,21 @@ function parseSiteOriginSettings(body, { defaultIncludeMatchingWww = true } = {}
 function buildEmbedSnippet(req, site) {
   const serverOrigin = getPublicOrigin(req);
   const connections = getConnections(site);
-  const connectionsLine = connections.length > 0
-    ? `\n    connections: ${JSON.stringify(connections)},`
-    : "";
+  const pluginModules = plugins.browserModules("widget", pluginContext(site));
+  const coreConfig = {
+    serverOrigin,
+    siteKey: site.siteKey,
+    scene: getSceneConfig(site),
+    ...(connections.length > 0 ? { connections } : {}),
+    ...(pluginModules.length > 0 ? { pluginModules } : {}),
+    theme: "host",
+  };
+  const extendedConfig = plugins.extend("extendWidgetConfig", coreConfig, pluginContext(site));
+  const widgetConfig = isPlainObject(extendedConfig) ? extendedConfig : coreConfig;
+  const configLines = Object.entries(widgetConfig)
+    .filter(([key]) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key))
+    .map(([key, value]) => `    ${key}: ${JSON.stringify(value)}`)
+    .join(",\n");
 
   return `<link rel="stylesheet" href="${serverOrigin}/widget.css" />
 <div id="townsquare-root"></div>
@@ -995,10 +949,7 @@ function buildEmbedSnippet(req, site) {
   import { mountTownSquare } from "${serverOrigin}/townsquare.mjs";
 
   mountTownSquare(document.getElementById("townsquare-root"), {
-    serverOrigin: "${serverOrigin}",
-    siteKey: "${site.siteKey}",
-    scene: ${JSON.stringify(getSceneConfig(site))},${connectionsLine}
-    theme: "host"
+${configLines}
   });
 </script>`;
 }
@@ -1291,7 +1242,9 @@ function handleMap(req, res) {
     .filter((site) => site.verifiedAt && !site.disabled)
     .map(publicMapSite);
 
-  sendJson(res, 200, { sites, world: resolvedMapWorld() });
+  const coreMap = { sites, world: resolvedMapWorld() };
+  const extendedMap = plugins.extend("extendMapData", coreMap);
+  sendJson(res, 200, isPlainObject(extendedMap) ? extendedMap : coreMap);
 }
 
 function getPublicStats() {
@@ -1342,14 +1295,22 @@ function sendAdminSite(req, res, site, adminToken) {
   }
 
   const scene = getScene(site.siteKey, site);
-  sendJson(res, 200, {
+  const panel = {
     site: publicSite(site),
     adminUrl: buildAdminUrl(req, adminToken),
     embedSnippet: buildEmbedSnippet(req, site),
     styleSnippet: buildStyleSnippet(site),
     scene: getSceneStats(scene, site),
     owners: getOwners(site, scene),
-  });
+  };
+  sendJson(res, 200, extendAdminPanel(panel, site));
+}
+
+function extendAdminPanel(panel, site) {
+  const pluginModules = plugins.browserModules("admin", pluginContext(site));
+  const corePanel = pluginModules.length > 0 ? { ...panel, pluginModules } : panel;
+  const extended = plugins.extend("extendAdminPanel", corePanel, pluginContext(site));
+  return isPlainObject(extended) ? extended : corePanel;
 }
 
 function handlePostAdminSite(req, res) {
@@ -1509,14 +1470,7 @@ const ADMIN_ACTIONS = {
       delete site.ownerProfiles[identity.browserId];
     }
     touchSite(site);
-    broadcast(scene, {
-      type: "profile",
-      id: identity.id,
-      displayName: identity.displayName,
-      color: identity.color,
-      badgeColor: identity.badgeColor,
-      isOwner: owner,
-    });
+    broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
   },
   updateOwnerProfile(site, scene, body) {
     // Keyed by the opaque owner handle so the dedicated admin section can edit
@@ -1536,14 +1490,7 @@ const ADMIN_ACTIONS = {
     const identity = scene.identityByBrowser.get(browserId);
     if (identity) {
       applyOwnerProfile(site, identity);
-      broadcast(scene, {
-        type: "profile",
-        id: identity.id,
-        displayName: identity.displayName,
-        color: identity.color,
-        badgeColor: identity.badgeColor,
-        isOwner: true,
-      });
+      broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
     }
   },
   clearMessages(site, scene) {
@@ -1582,18 +1529,65 @@ function handleAdminAction(req, res) {
 
     clearAuthFailures(adminAuthFailuresByIp, ip);
     const action = String(body.action || "");
+    const pluginName = String(body.plugin || "");
+    const scene = getScene(site.siteKey, site);
+
+    if (pluginName) {
+      let changed = false;
+      const hadPluginData = Object.hasOwn(site.plugins, pluginName);
+      const previousPluginData = getPluginData(site, pluginName);
+      const context = (name) => Object.freeze({
+        site: pluginSite(site),
+        data: getPluginData(site, name),
+        owners: getOwners(site, scene),
+        visitors: getSceneStats(scene, site).visitors,
+        setData(value) {
+          setPluginData(site, name, value);
+          changed = true;
+        },
+      });
+      const invoked = plugins.invokeAdminAction(
+        pluginName,
+        action,
+        context,
+        isPlainObject(body.input) ? body.input : {},
+      );
+      if (!invoked.found) {
+        sendJson(res, 400, { error: "Unknown plugin action." });
+        return;
+      }
+      if (invoked.error || invoked.result?.error) {
+        if (changed) {
+          if (hadPluginData) site.plugins[pluginName] = previousPluginData;
+          else delete site.plugins[pluginName];
+        }
+        sendJson(res, 400, { error: invoked.error || invoked.result.error });
+        return;
+      }
+      if (changed) {
+        touchSite(site);
+        for (const identity of scene.identities.values()) {
+          if (!identity.joined) continue;
+          broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
+        }
+      }
+      const panel = { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) };
+      sendJson(res, 200, extendAdminPanel(panel, site));
+      return;
+    }
+
     if (!Object.hasOwn(ADMIN_ACTIONS, action)) {
       sendJson(res, 400, { error: "Unknown action." });
       return;
     }
 
-    const scene = getScene(site.siteKey, site);
     const actionResult = ADMIN_ACTIONS[action](site, scene, body);
     if (actionResult?.error) {
       sendJson(res, 400, actionResult);
       return;
     }
-    sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) });
+    const panel = { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) };
+    sendJson(res, 200, extendAdminPanel(panel, site));
   });
 }
 
@@ -1721,6 +1715,11 @@ const SERVICE_ADMIN_ACTIONS = {
     touchSite(site);
     return { site: serviceAdminSite(site) };
   },
+  setSitePro(req, site, body) {
+    site.pro = Boolean(body.pro);
+    touchSite(site);
+    return { site: serviceAdminSite(site) };
+  },
   deleteSite(req, site) {
     closeSiteScene(site.siteKey, 4003, "site deleted");
     sitesByKey.delete(site.siteKey);
@@ -1788,7 +1787,10 @@ function serializeIdentity(identity, options = {}) {
   if (messages) {
     serialized.messages = identity.messages;
   }
-  return serialized;
+  return plugins.extendVisitor(
+    serialized,
+    pluginContext(identity.scene?.site || null, { visitor: pluginVisitor(identity) }),
+  );
 }
 
 function snapshotIdentity(identity) {
@@ -2060,6 +2062,7 @@ function createScene(key, site = null) {
   const props = getSceneProps(site);
   return {
     key,
+    site,
     props,
     propsById: new Map(props.map((prop) => [prop.id, prop])),
     birdPerches: getSceneBirdPerches(site),
@@ -2126,6 +2129,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       disabled: false,
       chatDisabled: false,
       botProtection: false,
+      pro: false,
       verifiedAt: null,
       lastSeenAt: null,
       messageCount: 0,
@@ -2141,6 +2145,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       chatThrottleMs: DEFAULT_CHAT_THROTTLE_MS,
       connectionLimit: DEFAULT_CONNECTION_LIMIT,
       moderationLog: [],
+      plugins: {},
     },
   };
 }
@@ -2194,6 +2199,9 @@ function loadSites() {
       if (!Array.isArray(site.connections)) {
         site.connections = [];
       }
+      if (ensurePluginData(site)) {
+        sitesMigratedOnLoad = true;
+      }
       const nextAllowedOrigins = getAllowedOrigins(site);
       if (JSON.stringify(nextAllowedOrigins) !== JSON.stringify(site.allowedOrigins || [])) {
         site.allowedOrigins = nextAllowedOrigins;
@@ -2210,6 +2218,9 @@ function loadSites() {
       }
       if (typeof site.supporter !== "boolean") {
         site.supporter = false;
+      }
+      if (typeof site.pro !== "boolean") {
+        site.pro = false;
       }
       return [site.siteKey, site];
     }));
@@ -2326,7 +2337,7 @@ function logModeration(site, action, detail = "") {
 }
 
 function publicSite(site) {
-  return {
+  const config = {
     siteKey: site.siteKey,
     name: site.name,
     origin: site.origin,
@@ -2351,12 +2362,49 @@ function publicSite(site) {
     connectionLimit: getConnectionLimit(site),
     moderationLog: Array.isArray(site.moderationLog) ? site.moderationLog : [],
     supporter: Boolean(site.supporter),
+    pro: Boolean(site.pro),
   };
+  const extendedConfig = plugins.extend("extendSiteConfig", config, pluginContext(site));
+  return isPlainObject(extendedConfig) ? extendedConfig : config;
+}
+
+function pluginSite(site) {
+  if (!site) return null;
+  return Object.freeze({
+    siteKey: site.siteKey,
+    name: site.name,
+    origin: site.origin,
+    supporter: Boolean(site.supporter),
+    pro: Boolean(site.pro),
+  });
+}
+
+function pluginVisitor(identity) {
+  const site = identity.scene?.site || null;
+  return Object.freeze({
+    id: identity.id,
+    browserId: identity.browserId,
+    displayName: identity.displayName,
+    color: identity.color,
+    isOwner: identity.isOwner,
+    ownerHandle: identity.isOwner && site ? ownerHandle(site.siteKey, identity.browserId) : null,
+  });
+}
+
+function pluginContext(site, values = {}) {
+  return (pluginName) => Object.freeze({
+    ...values,
+    site: pluginSite(site),
+    data: getPluginData(site, pluginName),
+  });
 }
 
 function getScene(sceneKey, site = null) {
   const existing = scenes.get(sceneKey);
-  if (existing) return existing;
+  if (existing) {
+    if (!existing.site && site) existing.site = site;
+    return existing;
+  }
 
   const scene = createScene(sceneKey, site);
   scenes.set(sceneKey, scene);
@@ -2515,16 +2563,27 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  const filePath = resolvePublicFile(req.url || "/", req.headers.host || `${HOST}:${PORT}`);
+  const candidates = resolvePublicFile(req.url || "/", req.headers.host || `${HOST}:${PORT}`);
 
-  if (!filePath) {
+  if (!candidates) {
     res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
     res.end("forbidden");
     return;
   }
 
+  serveStaticCandidate(candidates, 0, res);
+});
+
+// Tries each candidate file path in order, falling back to the next on a
+// missing file so the plugin assets overlay can back the core public dir.
+function serveStaticCandidate(candidates, index, res) {
+  const filePath = candidates[index];
   fs.readFile(filePath, (error, data) => {
     if (error) {
+      if (error.code === "ENOENT" && index + 1 < candidates.length) {
+        serveStaticCandidate(candidates, index + 1, res);
+        return;
+      }
       const status = error.code === "ENOENT" ? 404 : 500;
       const body = status === 404 ? "not found" : "server error";
       res.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
@@ -2540,7 +2599,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, getStaticHeaders(filePath));
     res.end(body);
   });
-});
+}
 
 const wss = new WebSocketServer({
   server,
@@ -2619,6 +2678,7 @@ function handleInit(client, message) {
     peers,
     birds: snapshotBirds(scene),
     chatThrottleMs: getChatThrottle(site),
+    pluginModules: plugins.browserModules("widget", pluginContext(site)),
   });
 
   if (identity.joined) {
@@ -2632,14 +2692,11 @@ function handleInit(client, message) {
     // Reconnect during the grace window: the owner gets applyOwnerProfile above
     // but we skip the join broadcast, so refresh peers with the claimed look.
     if (identity.isOwner && site) {
-      broadcast(scene, {
-        type: "profile",
-        id: identity.id,
-        displayName: identity.displayName,
-        color: identity.color,
-        badgeColor: identity.badgeColor,
-        isOwner: true,
-      }, { exceptConnectionId: client.connectionId });
+      broadcast(
+        scene,
+        { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) },
+        { exceptConnectionId: client.connectionId },
+      );
     }
     syncIdentityAwayState(identity);
     return;
@@ -2665,6 +2722,10 @@ function handleInit(client, message) {
 
   broadcast(scene, { type: "join", peer: snapshotIdentity(identity) }, { exceptConnectionId: client.connectionId });
   syncIdentityAwayState(identity, joinedAt);
+  plugins.run("onVisitorJoin", pluginContext(site, {
+    visitor: pluginVisitor(identity),
+    joinedAt,
+  }));
 }
 
 function handleMove(client, message) {
@@ -2731,12 +2792,7 @@ function handleProfile(client, message) {
   // Owners keep their look across resets: persist their own edits too.
   rememberOwnerProfile(client.site, client.identity);
 
-  broadcast(client.scene, {
-    type: "profile",
-    id: client.identity.id,
-    displayName: client.identity.displayName,
-    color: client.identity.color,
-  });
+  broadcast(client.scene, { type: "profile", ...serializeIdentity(client.identity, { owner: true, badge: true }) });
 }
 
 function handleReading(client, message) {
@@ -2817,6 +2873,13 @@ function handleSay(client, message) {
   if (!allowIpEvent(client, "chat", IP_CHAT_EVENT_LIMIT)) return;
 
   client.lastChatAt = now;
+
+  const event = pluginContext(client.site, {
+    visitor: pluginVisitor(client.identity),
+    message: Object.freeze({ text, at: now }),
+  });
+  if (!plugins.run("onMessage", event)) return;
+
   client.identity.messages.push({ text, at: now });
   client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
   touchIdentityActivity(client.identity, now);
@@ -2828,10 +2891,6 @@ function handleSay(client, message) {
     if (now - lastSavedMessageAt > LAST_SEEN_SAVE_INTERVAL_MS) {
       saveSites();
     }
-  }
-
-  if (allowTelegramNotification(now)) {
-    void sendTelegramChatNotification(client.site, client.identity, text, now);
   }
 
   broadcast(
@@ -2869,6 +2928,15 @@ function handleClientMessage(client, raw) {
 
   if (!isPlainObject(message)) return;
   if (typeof message.type !== "string") return;
+
+  const pluginMessage = { ...message };
+  delete pluginMessage.browserSecret;
+  const accepted = plugins.run("onSocketMessage", pluginContext(client.site, {
+    visitor: client.identity ? pluginVisitor(client.identity) : null,
+    message: Object.freeze(pluginMessage),
+  }));
+  if (!accepted) return;
+
   if (!Object.hasOwn(MESSAGE_HANDLERS, message.type)) return;
 
   if (message.type !== "init" && message.type !== "solve" && !client.joined) return;

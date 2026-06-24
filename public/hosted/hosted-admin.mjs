@@ -1,6 +1,7 @@
 import { bindCopy } from "../lib/ui-common.mjs";
 import { createStatusSetter, escapeHtml, formatTime } from "./hosted-common.mjs";
 import { createAdminSession } from "./hosted-admin-session.mjs";
+import { createAdminPluginRuntime } from "./admin-plugins.mjs";
 import {
   applyConfigToForm,
   applySceneConfigToForm,
@@ -74,6 +75,7 @@ const chatThrottleSelect = document.getElementById("chat-throttle");
 const saveModerationButton = document.getElementById("save-moderation");
 const moderationStatusEl = document.getElementById("moderation-status");
 const moderationLog = document.getElementById("moderation-log");
+const pluginPanels = document.getElementById("plugin-panels");
 
 renderStyleOverrideFields(styleOverrideFields);
 bindStyleColorFields(customizationForm);
@@ -157,6 +159,11 @@ const setCustomizationStatus = createStatusSetter(customizationStatusEl, { toggl
 const setConnectionsStatus = createStatusSetter(connectionsStatusEl, { toggleHidden: true });
 const setModerationStatus = createStatusSetter(moderationStatusEl, { toggleHidden: true });
 
+const adminPlugins = createAdminPluginRuntime({
+  container: pluginPanels,
+  action: (plugin, name, input) => session.pluginAction(plugin, name, input),
+});
+
 const session = createAdminSession({
   redirectPath: "/admin",
   elements: {
@@ -186,6 +193,7 @@ const session = createAdminSession({
     moderationTouched = false;
     moderationBusy = false;
     moderationSavedMessage = "";
+    adminPlugins.clear();
     preview.destroy();
   },
 });
@@ -800,6 +808,7 @@ function render(data) {
   syncConnectionsFromServer();
   syncModerationFromServer();
   renderModerationLog(currentSite.moderationLog);
+  adminPlugins.render(data);
 
   visitorList.replaceChildren();
   if (scene.visitors.length === 0) {

@@ -79,6 +79,7 @@ export function getOrCreatePeer(ctx, peer) {
     readingUrl: peer.readingUrl || "",
     readingActive: peer.readingActive !== false,
     isOwner: peer.isOwner === true,
+    plugins: peer.plugins && typeof peer.plugins === "object" ? peer.plugins : {},
     avatar,
     walkTimer: null,
   };
@@ -100,6 +101,7 @@ export function removePeer(ctx, id) {
   const peer = ctx.peers.get(id);
   if (!peer) return;
   clearTimeout(peer.walkTimer);
+  ctx.widgetPlugins?.removePresence(peer);
   peer.avatar.el.remove();
   ctx.peers.delete(id);
   updateStatus(ctx);
@@ -121,6 +123,7 @@ export function applySelfState(ctx, state) {
   if (typeof state.readingUrl === "string") ctx.self.readingUrl = state.readingUrl;
   if (typeof state.readingActive === "boolean") ctx.self.readingActive = state.readingActive;
   if (typeof state.isOwner === "boolean") ctx.self.isOwner = state.isOwner;
+  if (state.plugins && typeof state.plugins === "object") ctx.self.plugins = state.plugins;
   if (ctx.self.pose) {
     // The server snapped us onto a seat; abandon any pending tap destination.
     ctx.self.targetX = null;
@@ -135,6 +138,7 @@ export function applySelfState(ctx, state) {
   }
   updatePose(ctx.self.avatar, ctx.self.pose);
   updatePropEffects(ctx.self.avatar, ctx.self.x, ctx.self.propId, ctx.sceneProps);
+  ctx.widgetPlugins?.renderPresence(ctx.self);
 }
 
 /**
@@ -156,6 +160,7 @@ export function applyPeerState(ctx, peerState) {
   if (typeof peerState.readingUrl === "string") peer.readingUrl = peerState.readingUrl;
   if (typeof peerState.readingActive === "boolean") peer.readingActive = peerState.readingActive;
   if (typeof peerState.isOwner === "boolean") peer.isOwner = peerState.isOwner;
+  if (peerState.plugins && typeof peerState.plugins === "object") peer.plugins = peerState.plugins;
   renderAvatar(peer.avatar, peer.x);
   setAvatarProfile(peer.avatar, peer);
   if (hadPeer && peer.x !== previousX) {
@@ -163,6 +168,7 @@ export function applyPeerState(ctx, peerState) {
   }
   updatePose(peer.avatar, peer.pose);
   updatePropEffects(peer.avatar, peer.x, peer.propId, ctx.sceneProps);
+  ctx.widgetPlugins?.renderPresence(peer);
   return peer;
 }
 
@@ -181,7 +187,9 @@ function applyPresenceFields(ctx, state, fields) {
     const value = state[field];
     if (typeof value === "string" || typeof value === "boolean") presence[field] = value;
   }
+  if (state.plugins && typeof state.plugins === "object") presence.plugins = state.plugins;
   setAvatarProfile(presence.avatar, presence);
+  ctx.widgetPlugins?.renderPresence(presence);
 }
 
 /**
