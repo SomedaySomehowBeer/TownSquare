@@ -92,6 +92,7 @@
  * @property {(event: MouseEvent) => void} onStageClick
  * @property {Map<number, import("./birds.mjs").BirdView>} [birds]
  * @property {HTMLElement} [birdLayer]
+ * @property {HTMLElement} [cloudLayer]
  * @property {{ left: Array<import("../shared/site-config.mjs").Connection>, right: Array<import("../shared/site-config.mjs").Connection> } | null} [connectionsBySide]
  * @property {{ left: HTMLButtonElement | null, right: HTMLButtonElement | null } | null} [signposts]
  * @property {{ overlay: HTMLElement, onKeyDown: (event: KeyboardEvent) => void, trigger: HTMLButtonElement | null } | null} [connectionsModal]

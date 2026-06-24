@@ -8,6 +8,7 @@
 
 import { setLocalTyping, submitChat } from "./widget/chat.mjs";
 import { initBirds, destroyBirds } from "./widget/birds.mjs";
+import { initClouds, destroyClouds } from "./widget/clouds.mjs";
 import { setupConnections, teardownConnections } from "./widget/connections.mjs";
 import { CHARACTER_COLORS, DEFAULT_CHAT_THROTTLE_MS, MAX_X, MIN_X, randomSpawnX } from "./widget/constants.mjs";
 import { createExpandController } from "./widget/expand.mjs";
@@ -363,6 +364,7 @@ export function mountTownSquare(root, options = {}) {
 
   if (!preview) {
     initBirds(ctx);
+    initClouds(ctx);
   }
   stage.appendChild(ctx.self.avatar.el);
   renderAvatar(ctx.self.avatar, ctx.self.x);
@@ -407,6 +409,7 @@ export function mountTownSquare(root, options = {}) {
       unwatchTheme();
       stopGameLoop(ctx);
       destroyBirds(ctx);
+      destroyClouds(ctx);
       unwireKeyboard(ctx);
       unwireStagePointer(ctx);
       unwireHelpPanel();

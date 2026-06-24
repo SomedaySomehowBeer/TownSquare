@@ -570,6 +570,55 @@
   z-index: 0;
 }
 
+/* Ambient drifting clouds — only painted in expanded mode, where the taller
+   sky gives them room. Kept display:none while collapsed so the drift keyframes
+   don't tick in the background. */
+.townsquare__clouds {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 0;
+  display: none;
+}
+
+.townsquare--expanded .townsquare__clouds {
+  display: block;
+}
+
+.cloud {
+  position: absolute;
+  top: var(--cloud-top, 12%);
+  left: 0;
+  width: calc(64px * var(--cloud-scale, 1));
+  color: rgba(255, 255, 255, 0.82);
+  filter: drop-shadow(0 2px 6px rgba(70, 90, 120, 0.12));
+  will-change: transform;
+  animation: cloud-drift var(--cloud-duration, 60s) linear infinite;
+  animation-delay: var(--cloud-delay, 0s);
+}
+
+.cloud svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.cloud svg path {
+  fill: currentColor;
+}
+
+@keyframes cloud-drift {
+  from { transform: translateX(-140px); }
+  to { transform: translateX(calc(100cqw + 40px)); }
+}
+
+/* Freeze the drift but keep the clouds in place — the negative start delays
+   leave them spread across the sky rather than parked off-screen. */
+@media (prefers-reduced-motion: reduce) {
+  .cloud { animation-play-state: paused; }
+}
+
 .bird {
   position: absolute;
   left: calc(var(--bird-x) * 100%);
