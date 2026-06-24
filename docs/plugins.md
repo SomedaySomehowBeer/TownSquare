@@ -15,19 +15,19 @@ require("../TownSquare/server");
 ```
 
 Plugin names use lowercase kebab-case and are also their storage and wire-data
-namespace. Browser module paths are same-origin absolute `.mjs` paths. The Pro
+namespace. Browser module paths are same-origin absolute `.mjs` paths. The Plus
 deployment must make those paths reachable. Set `TOWNSQUARE_PLUGIN_ASSETS_DIR`
 to a directory and the core serves its files as a fallback overlay after its
-own `public/` (e.g. point it at the Pro repo's `public/`, so `/pro/...` resolves
-to `<dir>/pro/...`). A reverse-proxy alias also works.
+own `public/` (e.g. point it at the Plus repo's `public/`, so `/plus/...` resolves
+to `<dir>/plus/...`). A reverse-proxy alias also works.
 
 ## Full-stack plugin manifest
 
 ```js
 module.exports = {
   name: "owner-figure",
-  adminModule: "/pro/owner-figure/admin.mjs",
-  widgetModule: "/pro/owner-figure/widget.mjs",
+  adminModule: "/plus/owner-figure/admin.mjs",
+  widgetModule: "/plus/owner-figure/widget.mjs",
 
   isEnabled: ({ site }) => site?.supporter === true,
 
@@ -81,10 +81,10 @@ A plugin's own `isEnabled` layers on top of the owner's choice as an
 *entitlement* gate. The toggle is only offered to a site when its `isEnabled`
 passes, and the plugin runs only when both the entitlement holds **and** the
 owner has switched it on. For example, `owner-figure` keeps
-`isEnabled: ({ site }) => site?.pro === true`, so its switch appears only on Pro
+`isEnabled: ({ site }) => site?.plus === true`, so its switch appears only on Plus
 sites and activates only once that owner turns it on. The same toggle framework
-covers core and Pro plugins alike — a Pro plugin opts in purely by adding a
-`label`; no toggle code lives in the Pro repo.
+covers core and Plus plugins alike — a Plus plugin opts in purely by adding a
+`label`; no toggle code lives in the Plus repo.
 
 ## Plugin storage and admin actions
 

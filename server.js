@@ -1727,8 +1727,8 @@ const SERVICE_ADMIN_ACTIONS = {
     touchSite(site);
     return { site: serviceAdminSite(site) };
   },
-  setSitePro(req, site, body) {
-    site.pro = Boolean(body.pro);
+  setSitePlus(req, site, body) {
+    site.plus = Boolean(body.plus);
     touchSite(site);
     return { site: serviceAdminSite(site) };
   },
@@ -2141,7 +2141,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       disabled: false,
       chatDisabled: false,
       botProtection: false,
-      pro: false,
+      plus: false,
       verifiedAt: null,
       lastSeenAt: null,
       messageCount: 0,
@@ -2235,9 +2235,11 @@ function loadSites() {
       if (typeof site.supporter !== "boolean") {
         site.supporter = false;
       }
-      if (typeof site.pro !== "boolean") {
-        site.pro = false;
+      if (typeof site.plus !== "boolean") {
+        // Migrate the former `pro` flag onto `plus`; default new/unset sites to false.
+        site.plus = typeof site.pro === "boolean" ? site.pro : false;
       }
+      delete site.pro;
       return [site.siteKey, site];
     }));
   } catch (error) {
@@ -2378,7 +2380,7 @@ function publicSite(site) {
     connectionLimit: getConnectionLimit(site),
     moderationLog: Array.isArray(site.moderationLog) ? site.moderationLog : [],
     supporter: Boolean(site.supporter),
-    pro: Boolean(site.pro),
+    plus: Boolean(site.plus),
   };
   const extendedConfig = plugins.extend("extendSiteConfig", config, pluginContext(site));
   return isPlainObject(extendedConfig) ? extendedConfig : config;
@@ -2391,7 +2393,7 @@ function pluginSite(site) {
     name: site.name,
     origin: site.origin,
     supporter: Boolean(site.supporter),
-    pro: Boolean(site.pro),
+    plus: Boolean(site.plus),
   });
 }
 

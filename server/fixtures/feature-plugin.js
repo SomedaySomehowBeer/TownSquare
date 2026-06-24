@@ -4,8 +4,8 @@ const { registerPlugin } = require("../plugins");
 
 registerPlugin({
   name: "test-feature",
-  adminModule: "/pro/test-feature/admin.mjs",
-  widgetModule: "/pro/test-feature/widget.mjs",
+  adminModule: "/plus/test-feature/admin.mjs",
+  widgetModule: "/plus/test-feature/widget.mjs",
   adminActions: {
     update({ setData }, input) {
       if (!/^[a-z-]+$/.test(String(input.hat || ""))) return { error: "Invalid hat." };
