@@ -1837,34 +1837,41 @@
 
 /* ───────────────────────────────────────────────────────────────────────
    Someday Somehow: bold side-on silhouette skin.
-   Re-skins the upstream stick figure as solid rounded-capsule limbs in a
-   profile pose. The animation rig and all @keyframes are unchanged — only the
-   stroke weight, stroke scaling, and joint pivot coordinates move. Appended
-   last so these override the upstream avatar rules.
+   Solid rounded-capsule limbs in a profile pose. The animation rig and all
+   @keyframes are unchanged — only stroke weight, stroke scaling, the joint
+   pivot coordinates, and the back-limb shade. Appended last so these override
+   the upstream avatar rules. Proportions tuned 2026-06.
    ─────────────────────────────────────────────────────────────────────── */
 .townsquare-avatar svg * {
   vector-effect: none;        /* scale the stroke with the figure (bold at size) */
   stroke-linejoin: round;
 }
-.townsquare-avatar svg .torso { stroke-width: 4.4; }
-.townsquare-avatar svg .limb  { stroke-width: 3.3; }
-.townsquare-avatar svg .fore  { stroke-width: 2.7; }
-.townsquare-avatar svg .foot  { stroke-width: 2.7; }
+.townsquare-avatar svg .torso { stroke-width: 6.3; }
+.townsquare-avatar svg .limb  { stroke-width: 4.5; }
+.townsquare-avatar svg .fore  { stroke-width: 4.5; }
+.townsquare-avatar svg .foot  { stroke-width: 3.51; }
 .townsquare-avatar svg circle.head { fill: currentColor; stroke: none; }
-.townsquare-avatar svg .far { stroke-opacity: 0.72; }
 
-.townsquare-avatar svg g.figure-core { transform-origin: 10px 24px; }
-.townsquare-avatar svg g.arm-l   { transform-origin: 10.4px 13.5px; }
-.townsquare-avatar svg g.arm-r   { transform-origin: 9.6px 13.5px; }
-.townsquare-avatar svg g.elbow-l { transform-origin: 10.4px 20px; }
-.townsquare-avatar svg g.elbow-r { transform-origin: 9.6px 20px; }
-.townsquare-avatar svg g.leg-l   { transform-origin: 10.4px 25.8px; }
-.townsquare-avatar svg g.leg-r   { transform-origin: 9.6px 25.8px; }
-.townsquare-avatar svg g.knee-l  { transform-origin: 10.3px 33.6px; }
-.townsquare-avatar svg g.knee-r  { transform-origin: 9.7px 33.6px; }
+/* Off-side (far) arm + leg: a solid lighter shade so overlapping segments don't
+   darken (as semi-transparency did) and the limb recedes. Mixed toward the
+   scene background so it reads right in light and dark. Targets the lines
+   directly to beat the per-element stroke rule. */
+.townsquare-avatar svg .far line {
+  stroke: color-mix(in oklab, currentColor 60%, var(--scene, #e4e2dd) 40%);
+}
 
-/* Walk-sandbox preview keeps the bold weights too (override the thin preview stroke). */
-.townsquare-avatar--preview svg .torso { stroke-width: 4.4; }
-.townsquare-avatar--preview svg .limb  { stroke-width: 3.3; }
-.townsquare-avatar--preview svg .fore,
-.townsquare-avatar--preview svg .foot  { stroke-width: 2.7; }
+.townsquare-avatar svg g.figure-core { transform-origin: 10px 21.4px; }
+.townsquare-avatar svg g.arm-l   { transform-origin: 10.4px 16px; }
+.townsquare-avatar svg g.arm-r   { transform-origin: 9.6px 16px; }
+.townsquare-avatar svg g.elbow-l { transform-origin: 10.4px 22.24px; }
+.townsquare-avatar svg g.elbow-r { transform-origin: 9.6px 22.24px; }
+.townsquare-avatar svg g.leg-l   { transform-origin: 10.4px 26.8px; }
+.townsquare-avatar svg g.leg-r   { transform-origin: 9.6px 26.8px; }
+.townsquare-avatar svg g.knee-l  { transform-origin: 10.4px 33.05px; }
+.townsquare-avatar svg g.knee-r  { transform-origin: 9.6px 33.05px; }
+
+/* Walk-sandbox preview keeps the bold weights too. */
+.townsquare-avatar--preview svg .torso { stroke-width: 6.3; }
+.townsquare-avatar--preview svg .limb,
+.townsquare-avatar--preview svg .fore { stroke-width: 4.5; }
+.townsquare-avatar--preview svg .foot { stroke-width: 3.51; }
