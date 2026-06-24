@@ -68,6 +68,7 @@ const TABLE_COLUMNS = [
   { key: "plus", label: "Plus", render: (site) => (site.plus ? "Yes" : "No") },
   { key: "verifiedAt", label: "Verified", render: (site) => formatTime(site.verifiedAt) },
   { key: "lastSeenAt", label: "Last seen", render: (site) => formatTime(site.lastSeenAt) },
+  { key: "lastSeenUrl", label: "Last URL", link: true, render: (site) => site.lastSeenUrl || "" },
   { key: "messageCount", label: "Messages", render: (site) => String(site.messageCount ?? 0) },
   { key: "lastMessageAt", label: "Last message", render: (site) => formatTime(site.lastMessageAt) },
   { key: "activeVisitors", label: "Active", render: (site) => String(site.activeVisitors ?? 0) },
@@ -615,7 +616,18 @@ function renderCell(site, column) {
   const cell = document.createElement("td");
   const value = column.render ? column.render(site) : String(site[column.key] ?? "");
 
-  if (column.mono) {
+  if (column.link) {
+    if (value) {
+      const link = document.createElement("a");
+      link.href = value;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = value;
+      cell.append(link);
+    } else {
+      cell.textContent = "—";
+    }
+  } else if (column.mono) {
     const code = document.createElement("code");
     code.textContent = value;
     cell.append(code);

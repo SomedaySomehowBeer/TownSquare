@@ -852,6 +852,7 @@ function render(data) {
       <div><dt>Also allows</dt><dd>${escapeHtml((currentSite.allowedOrigins || []).filter((origin) => origin !== currentSite.origin).join(", ") || "—")}</dd></div>
       <div><dt>Status</dt><dd>${currentSite.disabled ? "Disabled" : "Enabled"}</dd></div>
       <div><dt>Verified</dt><dd>${formatTime(currentSite.verifiedAt, "Not seen yet")}</dd></div>
+      <div><dt>Last loaded on</dt><dd>${currentSite.lastSeenUrl ? `<a href="${escapeHtml(currentSite.lastSeenUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(currentSite.lastSeenUrl)}</a>` : "—"}</dd></div>
       <div><dt>Messages</dt><dd>${currentSite.messageCount ?? 0}</dd></div>
       <div><dt>Last message</dt><dd>${formatTime(currentSite.lastMessageAt)}</dd></div>
       <div><dt>Active visitors</dt><dd>${scene.activeVisitors} / ${currentSite.connectionLimit ?? 100}</dd></div>

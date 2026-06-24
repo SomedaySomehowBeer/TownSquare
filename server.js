@@ -67,6 +67,7 @@ const MAX_READING_URL_LEN = 240;
 const MAX_SITE_NAME_LEN = 80;
 const MAX_EMAIL_LEN = 254;
 const MAX_ORIGIN_LEN = 240;
+const MAX_PAGE_URL_LEN = 512;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
 const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
@@ -262,14 +263,15 @@ const MESSAGE_HANDLERS = {
   typing: handleTyping,
 };
 
-/** @returns {{connectionId:number,ws:any,scene:any,site:any,origin:string,ip:string,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,typing:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
-function createClient(connectionId, ws, scene, site, origin = "", ip = "unknown") {
+/** @returns {{connectionId:number,ws:any,scene:any,site:any,origin:string,pageUrl:string,ip:string,propsById:Map<string, any>,identity:any,joined:boolean,readingActive:boolean,typing:boolean,lastMoveAt:number,lastActionAt:number,lastChatAt:number}} */
+function createClient(connectionId, ws, scene, site, origin = "", ip = "unknown", pageUrl = "") {
   return {
     connectionId,
     ws,
     scene,
     site,
     origin,
+    pageUrl,
     ip,
     propsById: scene.propsById,
     identity: null,
@@ -2144,6 +2146,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       plus: false,
       verifiedAt: null,
       lastSeenAt: null,
+      lastSeenUrl: null,
       messageCount: 0,
       lastMessageAt: null,
       connectionClicks: {},
@@ -2370,6 +2373,7 @@ function publicSite(site) {
     botProtection: Boolean(site.botProtection),
     verifiedAt: site.verifiedAt,
     lastSeenAt: site.lastSeenAt,
+    lastSeenUrl: site.lastSeenUrl || null,
     messageCount: site.messageCount || 0,
     lastMessageAt: site.lastMessageAt || null,
     createdAt: site.createdAt,
@@ -2482,6 +2486,25 @@ function isOriginAllowedForSite(origin, site) {
   if (!site) return true;
   const normalized = normalizeOrigin(origin);
   return Boolean(normalized && getAllowedOrigins(site).includes(normalized));
+}
+
+/**
+ * The full page URL a widget loaded from, derived from the upgrade Referer.
+ * Returns origin + pathname only (query and hash are dropped so we never
+ * persist tokens or other sensitive params), and only when the origin is one
+ * the site allows. Anything malformed or off-origin yields "".
+ */
+function sanitizePageUrl(referer, site) {
+  if (!referer) return "";
+  let url;
+  try {
+    url = new URL(String(referer));
+  } catch {
+    return "";
+  }
+  if (!["http:", "https:"].includes(url.protocol)) return "";
+  if (!isOriginAllowedForSite(url.origin, site)) return "";
+  return `${normalizeOrigin(url.origin)}${url.pathname}`.slice(0, MAX_PAGE_URL_LEN);
 }
 
 let sitesByKey = new Map();
@@ -2746,7 +2769,10 @@ function handleInit(client, message) {
     site.lastSeenAt = now;
     site.verifiedAt = site.verifiedAt || now;
 
-    if (firstVerify || now - lastSavedSeenAt > LAST_SEEN_SAVE_INTERVAL_MS) {
+    const urlChanged = client.pageUrl && client.pageUrl !== site.lastSeenUrl;
+    if (urlChanged) site.lastSeenUrl = client.pageUrl;
+
+    if (firstVerify || urlChanged || now - lastSavedSeenAt > LAST_SEEN_SAVE_INTERVAL_MS) {
       saveSites();
       if (firstVerify) ensureMapWorldGrown();
     }
@@ -3072,7 +3098,8 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  const client = createClient(nextConnectionId++, ws, access.scene, access.site, origin || "", ip);
+  const pageUrl = sanitizePageUrl(req.headers.referer, access.site);
+  const client = createClient(nextConnectionId++, ws, access.scene, access.site, origin || "", ip, pageUrl);
   access.scene.clients.set(client.connectionId, client);
   ws.isAlive = true;
 
