@@ -55,7 +55,6 @@
           <button type="button" class="hosted-tab" data-tab="moderation" role="tab" aria-selected="false" aria-controls="tab-moderation">Moderation</button>
           <button type="button" class="hosted-tab" data-tab="appearance" role="tab" aria-selected="false" aria-controls="tab-appearance">Appearance</button>
           <button type="button" class="hosted-tab" data-tab="addons" role="tab" aria-selected="false" aria-controls="tab-addons">Add-ons</button>
-          <button type="button" class="hosted-tab" data-tab="install" role="tab" aria-selected="false" aria-controls="tab-install">Install</button>
         </nav>
 
         <!-- Tab: Site — identity, owners, connected towns. -->
@@ -202,7 +201,7 @@
             <h2>Scene customization</h2>
           </div>
           <p class="hosted-note">
-            Change the scene and style here and preview it live. Your choices save to this site automatically. If you pasted the Customization CSS into your own stylesheet, re-copy it from the Install tab after you change the style — it won't update on your site on its own.
+            Change the scene and style here and preview it live. Your choices save to this site automatically. The embed snippet and Customization CSS below are generated from these settings — if you pasted them into your own site, re-copy them after you make changes, as they won't update on your site on their own.
           </p>
 
           <form class="hosted-form" id="customization-form">
@@ -283,6 +282,25 @@
           </section>
         </section>
 
+        <!-- Embed output — snippet + CSS derived from the appearance settings above. -->
+        <section class="hosted-section" id="install-section">
+          <h2>Embed snippet</h2>
+          <p class="hosted-note">Paste this where you want the square to appear.</p>
+          <textarea id="embed-snippet" readonly rows="7" spellcheck="false"></textarea>
+          <div class="hosted-actions">
+            <button type="button" id="copy-snippet">Copy snippet</button>
+          </div>
+        </section>
+
+        <section class="hosted-section" id="style-section">
+          <h2>Customization CSS</h2>
+          <p class="hosted-note">Paste this into your site stylesheet, then tweak it if you want. Re-copy it whenever you change the scene or style above.</p>
+          <textarea id="style-snippet" readonly rows="7" spellcheck="false"></textarea>
+          <div class="hosted-actions">
+            <button type="button" id="copy-style">Copy CSS</button>
+          </div>
+        </section>
+
         </div>
         <!-- /tab-appearance -->
 
@@ -299,31 +317,6 @@
           </section>
         </div>
         <!-- /tab-addons -->
-
-        <!-- Tab: Install — embed snippet + CSS derived from the settings above. -->
-        <div class="hosted-tabpanel" id="tab-install" role="tabpanel" data-tab="install" hidden>
-
-        <!-- Embed output — snippet + CSS derived from the settings above. -->
-        <section class="hosted-section" id="install-section">
-          <h2>Embed snippet</h2>
-          <p class="hosted-note">Paste this where you want the square to appear.</p>
-          <textarea id="embed-snippet" readonly rows="7" spellcheck="false"></textarea>
-          <div class="hosted-actions">
-            <button type="button" id="copy-snippet">Copy snippet</button>
-          </div>
-        </section>
-
-        <section class="hosted-section" id="style-section">
-          <h2>Customization CSS</h2>
-          <p class="hosted-note">Paste this into your site stylesheet, then tweak it if you want. Re-copy it whenever you change the style under Appearance.</p>
-          <textarea id="style-snippet" readonly rows="7" spellcheck="false"></textarea>
-          <div class="hosted-actions">
-            <button type="button" id="copy-style">Copy CSS</button>
-          </div>
-        </section>
-
-        </div>
-        <!-- /tab-install -->
       </section>
     </main>
 
