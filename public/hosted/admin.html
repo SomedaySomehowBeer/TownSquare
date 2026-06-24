@@ -50,6 +50,17 @@
         </div>
         <p class="hosted-status" id="admin-status" role="status"></p>
 
+        <nav class="hosted-tabs" id="admin-tabs" role="tablist" aria-label="Admin sections">
+          <button type="button" class="hosted-tab is-active" data-tab="site" role="tab" aria-selected="true" aria-controls="tab-site">Site</button>
+          <button type="button" class="hosted-tab" data-tab="moderation" role="tab" aria-selected="false" aria-controls="tab-moderation">Moderation</button>
+          <button type="button" class="hosted-tab" data-tab="appearance" role="tab" aria-selected="false" aria-controls="tab-appearance">Appearance</button>
+          <button type="button" class="hosted-tab" data-tab="addons" role="tab" aria-selected="false" aria-controls="tab-addons">Add-ons</button>
+          <button type="button" class="hosted-tab" data-tab="install" role="tab" aria-selected="false" aria-controls="tab-install">Install</button>
+        </nav>
+
+        <!-- Tab: Site — identity, owners, connected towns. -->
+        <div class="hosted-tabpanel" id="tab-site" role="tabpanel" data-tab="site" aria-labelledby="admin-title">
+
         <!-- 1. Site details — identity, allowed origins, capacity. -->
         <section class="hosted-section" aria-labelledby="site-details-title">
           <div class="hosted-section-head">
@@ -114,6 +125,12 @@
           <p class="hosted-status" id="connections-status" role="status" hidden></p>
         </section>
 
+        </div>
+        <!-- /tab-site -->
+
+        <!-- Tab: Moderation — chat controls, filtering, visitors. -->
+        <div class="hosted-tabpanel" id="tab-moderation" role="tabpanel" data-tab="moderation" hidden>
+
         <!-- 4. Moderation — chat controls, filtering, owners/visitors. -->
         <section class="hosted-section" id="moderation-section">
           <div class="hosted-section-head">
@@ -173,7 +190,11 @@
           <div class="visitor-list" id="visitor-list"></div>
         </section>
 
-        <div id="plugin-panels"></div>
+        </div>
+        <!-- /tab-moderation -->
+
+        <!-- Tab: Appearance — scene props, style, live preview. -->
+        <div class="hosted-tabpanel" id="tab-appearance" role="tabpanel" data-tab="appearance" hidden>
 
         <!-- 5. Scene customization — scene props, style, live preview, embed output. -->
         <section class="hosted-section" id="customization-section">
@@ -262,6 +283,26 @@
           </section>
         </section>
 
+        </div>
+        <!-- /tab-appearance -->
+
+        <!-- Tab: Add-ons — pro features and plugins, each in its own panel. -->
+        <div class="hosted-tabpanel" id="tab-addons" role="tabpanel" data-tab="addons" hidden>
+          <section class="hosted-section" id="addons-section" aria-labelledby="addons-title">
+            <div class="hosted-section-head">
+              <h2 id="addons-title">Add-ons</h2>
+            </div>
+            <p class="hosted-note">
+              Pro features and plugins installed on your site appear here. Each add-on brings its own controls.
+            </p>
+            <div id="plugin-panels"></div>
+          </section>
+        </div>
+        <!-- /tab-addons -->
+
+        <!-- Tab: Install — embed snippet + CSS derived from the settings above. -->
+        <div class="hosted-tabpanel" id="tab-install" role="tabpanel" data-tab="install" hidden>
+
         <!-- Embed output — snippet + CSS derived from the settings above. -->
         <section class="hosted-section" id="install-section">
           <h2>Embed snippet</h2>
@@ -280,6 +321,9 @@
             <button type="button" id="copy-style">Copy CSS</button>
           </div>
         </section>
+
+        </div>
+        <!-- /tab-install -->
       </section>
     </main>
 

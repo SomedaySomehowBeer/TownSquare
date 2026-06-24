@@ -130,8 +130,12 @@ preview.bindThemeToggle(previewModeButtons);
 // the way. While collapsed we tear the preview down so it isn't animating offscreen.
 let previewCollapsed = false;
 
+// The admin view is split into tabs; only the Appearance tab hosts the preview, so
+// we keep it torn down on every other tab the same way collapsing does.
+let activeTab = "site";
+
 function mountPreview(options) {
-  if (previewCollapsed) return;
+  if (previewCollapsed || activeTab !== "appearance") return;
   preview.mount(options);
 }
 
@@ -152,6 +156,35 @@ function setPreviewCollapsed(collapsed) {
 previewToggle?.addEventListener("click", () => {
   setPreviewCollapsed(!previewCollapsed);
 });
+
+const adminTabs = document.getElementById("admin-tabs");
+const tabButtons = adminTabs ? Array.from(adminTabs.querySelectorAll("[data-tab]")) : [];
+const tabPanels = Array.from(document.querySelectorAll(".hosted-tabpanel"));
+
+function setActiveTab(name) {
+  if (!tabPanels.some((panel) => panel.dataset.tab === name)) return;
+  activeTab = name;
+  adminView?.setAttribute("data-active-tab", name);
+  for (const button of tabButtons) {
+    const selected = button.dataset.tab === name;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+  }
+  for (const panel of tabPanels) {
+    panel.hidden = panel.dataset.tab !== name;
+  }
+  // The preview only lives on the Appearance tab; mount it on arrival and tear it
+  // down on departure so it never animates while hidden behind another tab.
+  if (name === "appearance") {
+    if (currentSite && !previewCollapsed) preview.mount({ remount: true });
+  } else {
+    preview.destroy();
+  }
+}
+
+for (const button of tabButtons) {
+  button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+}
 
 const setStatus = createStatusSetter(statusEl);
 const setSiteDetailsStatus = createStatusSetter(siteDetailsStatusEl, { toggleHidden: true });
@@ -195,6 +228,7 @@ const session = createAdminSession({
     moderationSavedMessage = "";
     adminPlugins.clear();
     preview.destroy();
+    setActiveTab("site");
   },
 });
 
