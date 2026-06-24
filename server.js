@@ -45,6 +45,7 @@ const PLUGIN_ASSETS_DIR = process.env.TOWNSQUARE_PLUGIN_ASSETS_DIR
   : null;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
 const DEV_TOOLS_ENABLED = envFlag("ENABLE_DEV_TOOLS");
+const STAGING_PAGE_ENABLED = envFlag("ENABLE_STAGING_PAGE");
 const SITES_FILE = path.join(DATA_DIR, "sites.json");
 const MAP_WORLD_FILE = path.join(DATA_DIR, "map-world.json");
 const DEFAULT_MAP_WORLD_FILE = path.join(PUBLIC_DIR, "default-map-world.json");
@@ -57,7 +58,8 @@ const DEFAULT_DEV_ORIGINS = new Set([
   `https://127.0.0.1:${PORT}`,
   `https://localhost:${PORT}`,
 ]);
-const MAX_CONNECTIONS = Number(process.env.MAX_CONNECTIONS || 100);
+const MAX_SITE_CONNECTION_LIMIT = 1000;
+const DEFAULT_CONNECTION_LIMIT = Math.min(MAX_SITE_CONNECTION_LIMIT, Math.max(1, readLimit("MAX_CONNECTIONS", 100)));
 const MAX_BROWSER_ID_LEN = 80;
 const MAX_BROWSER_SECRET_LEN = 64;
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
@@ -191,6 +193,8 @@ let buildSiteCss = () => "";
 /** @type {(prop: import("./public/shared/site-config.mjs").SceneProp, x: number) => boolean} */
 let isWithinPropSettleZone = () => false;
 let validateMapWorld;
+/** @type {(storedWorld: object, siteCount: number) => object} */
+let resolveMapWorld = (storedWorld) => storedWorld;
 let mapWorld;
 let normalizeOrigin;
 let buildAllowedOrigins = (origin) => (origin ? [origin] : []);
@@ -403,6 +407,13 @@ function sanitizeChatThrottle(input) {
   return Math.min(Math.round(ms), MAX_CHAT_THROTTLE_MS);
 }
 
+/** Per-site concurrent WebSocket cap, persisted on each site record. */
+function sanitizeConnectionLimit(input) {
+  const limit = Number(input);
+  if (!Number.isFinite(limit) || limit < 1) return DEFAULT_CONNECTION_LIMIT;
+  return Math.min(Math.round(limit), MAX_SITE_CONNECTION_LIMIT);
+}
+
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -427,9 +438,26 @@ function filterDisplayName(site, name) {
   return site ? applyWordFilter(name, site.blockedWords) : name;
 }
 
+/**
+ * The verified owner badge is a 👑 the server renders next to a name only when
+ * it has stamped `isOwner` on that identity. A visitor could otherwise fake the
+ * badge by simply typing a crown (or a crown-like confusable) into their own
+ * name. Strip those glyphs from every display name so the crown stays a signal
+ * the server alone can grant. Covers the crown emoji plus the obvious royalty /
+ * chess-king/queen lookalikes; ordinary letters are untouched.
+ */
+const OWNER_BADGE_LOOKALIKES = /[\u{1F451}\u{1F934}\u{1F478}\u{1FAC5}♔♕♚♛]/gu;
+
+function stripOwnerBadgeLookalikes(text) {
+  return text.replace(OWNER_BADGE_LOOKALIKES, "");
+}
+
 function sanitizeDisplayName(displayName) {
   if (typeof displayName !== "string") return "";
-  return displayName.trim().replace(/\s+/g, " ").slice(0, MAX_DISPLAY_NAME_LEN);
+  return stripOwnerBadgeLookalikes(displayName)
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, MAX_DISPLAY_NAME_LEN);
 }
 
 function sanitizeReadingLabel(readingLabel) {
@@ -724,6 +752,9 @@ function resolvePublicFile(requestUrl, hostHeader) {
   if (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname)) {
     return null;
   }
+  if (!STAGING_PAGE_ENABLED && isStagingPageRequest(url.pathname)) {
+    return null;
+  }
   const aliases = new Map([
     ["/register", "/hosted/register.html"],
     ["/admin", "/hosted/admin.html"],
@@ -732,6 +763,7 @@ function resolvePublicFile(requestUrl, hostHeader) {
     ["/map", "/map.html"],
     ["/dev", "/dev/dev.html"],
     ["/walk-sandbox", "/dev/walk-sandbox.html"],
+    ["/staging", "/staging.html"],
   ]);
   const pathname = aliases.get(url.pathname) || url.pathname;
   const normalized = path.normalize(pathname).replace(/^\.+/, "");
@@ -753,6 +785,10 @@ function isDevToolsRequest(pathname) {
   return pathname === "/dev"
     || pathname === "/walk-sandbox"
     || pathname.startsWith("/dev/");
+}
+
+function isStagingPageRequest(pathname) {
+  return pathname === "/staging" || pathname === "/staging.html";
 }
 
 function readJsonBody(req, res, callback, maxBytes = 4096) {
@@ -1179,12 +1215,34 @@ function publicMapSite(site) {
   };
 }
 
+function countVerifiedMapSites() {
+  let count = 0;
+  for (const site of sitesByKey.values()) {
+    if (site.verifiedAt && !site.disabled) count += 1;
+  }
+  return count;
+}
+
+function resolvedMapWorld() {
+  return resolveMapWorld(mapWorld, countVerifiedMapSites());
+}
+
+function ensureMapWorldGrown(siteCount = countVerifiedMapSites()) {
+  const resolved = resolveMapWorld(mapWorld, siteCount);
+  if (resolved.width <= mapWorld.width && resolved.height <= mapWorld.height) return;
+  saveMapWorld({
+    ...mapWorld,
+    width: resolved.width,
+    height: resolved.height,
+  });
+}
+
 function handleMap(req, res) {
   const sites = Array.from(sitesByKey.values())
     .filter((site) => site.verifiedAt && !site.disabled)
     .map(publicMapSite);
 
-  const coreMap = { sites, world: mapWorld };
+  const coreMap = { sites, world: resolvedMapWorld() };
   const extendedMap = plugins.extend("extendMapData", coreMap);
   sendJson(res, 200, isPlainObject(extendedMap) ? extendedMap : coreMap);
 }
@@ -1316,6 +1374,9 @@ const ADMIN_ACTIONS = {
     site.allowedOrigins = originSettings.allowedOrigins;
     site.name = sanitizeSiteName(body.name, site.origin);
     site.email = parsedEmail.email;
+    if (Object.hasOwn(body, "connectionLimit")) {
+      site.connectionLimit = sanitizeConnectionLimit(body.connectionLimit);
+    }
     touchSite(site);
   },
   updateCustomization(site, scene, body) {
@@ -1561,11 +1622,17 @@ function isServiceAdminAuthorized(req, body, res) {
 
 function serviceAdminSite(site) {
   const scene = scenes.get(site.siteKey);
+  const connectionClicks = isPlainObject(site.connectionClicks) ? site.connectionClicks : {};
 
   return {
     ...publicSite(site),
     updatedAt: site.updatedAt,
     activeVisitors: scene ? countActiveVisitors(scene) : 0,
+    connectionClicks,
+    connectionClickTotal: Object.values(connectionClicks).reduce(
+      (sum, entry) => sum + (entry?.count || 0),
+      0,
+    ),
   };
 }
 
@@ -1595,7 +1662,7 @@ function handleServiceAdminSites(req, res) {
 function handleServiceAdminMap(req, res) {
   readJsonBody(req, res, (body) => {
     if (!isServiceAdminAuthorized(req, body, res)) return;
-    sendJson(res, 200, { world: mapWorld });
+    sendJson(res, 200, { world: resolvedMapWorld() });
   });
 }
 
@@ -1609,7 +1676,8 @@ function handleServiceAdminMapSave(req, res) {
     }
     try {
       saveMapWorld(result.world);
-      sendJson(res, 200, { world: mapWorld });
+      ensureMapWorldGrown();
+      sendJson(res, 200, { world: resolvedMapWorld() });
     } catch (error) {
       console.warn(`Could not save map world: ${error.message}`);
       sendJson(res, 500, { error: "Could not save the map." });
@@ -2066,6 +2134,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       lastSeenAt: null,
       messageCount: 0,
       lastMessageAt: null,
+      connectionClicks: {},
       createdAt: now,
       updatedAt: now,
       blockedBrowserIds: [],
@@ -2074,6 +2143,7 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       ownerProfiles: {},
       blockedWords: [],
       chatThrottleMs: DEFAULT_CHAT_THROTTLE_MS,
+      connectionLimit: DEFAULT_CONNECTION_LIMIT,
       moderationLog: [],
       plugins: {},
     },
@@ -2113,6 +2183,16 @@ function loadSites() {
       if (typeof site.chatThrottleMs !== "number") {
         site.chatThrottleMs = DEFAULT_CHAT_THROTTLE_MS;
       }
+      if (typeof site.connectionLimit !== "number") {
+        site.connectionLimit = DEFAULT_CONNECTION_LIMIT;
+        sitesMigratedOnLoad = true;
+      } else {
+        const nextConnectionLimit = sanitizeConnectionLimit(site.connectionLimit);
+        if (nextConnectionLimit !== site.connectionLimit) {
+          site.connectionLimit = nextConnectionLimit;
+          sitesMigratedOnLoad = true;
+        }
+      }
       if (!Array.isArray(site.moderationLog)) {
         site.moderationLog = [];
       }
@@ -2132,6 +2212,9 @@ function loadSites() {
       }
       if (site.lastMessageAt === undefined) {
         site.lastMessageAt = null;
+      }
+      if (!isPlainObject(site.connectionClicks)) {
+        site.connectionClicks = {};
       }
       if (typeof site.supporter !== "boolean") {
         site.supporter = false;
@@ -2166,6 +2249,57 @@ function touchSite(site) {
   saveSites();
 }
 
+// Visitor connection clicks are high-frequency, so we mirror the lastSeen save
+// pattern: tally in memory on every click and flush the whole registry to disk
+// at most once per interval. Losing up to a minute of clicks on a crash is fine
+// for traffic analytics.
+let lastConnectionClicksSaveAt = 0;
+
+/**
+ * Record one visitor click on a configured neighbouring-town link. The reported
+ * destination must match one of the source site's sanitized connections, so the
+ * tally cannot be inflated with arbitrary URLs.
+ *
+ * @param {import("http").IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ */
+function handleConnectionClick(req, res) {
+  readJsonBody(req, res, (body) => {
+    // sendBeacon ignores the response, so a 204 with permissive CORS is enough.
+    const respond = (status) => {
+      res.writeHead(status, { "access-control-allow-origin": "*" });
+      res.end();
+    };
+
+    const siteKey = typeof body.siteKey === "string" ? body.siteKey : "";
+    const url = typeof body.url === "string" ? body.url : "";
+    const site = sitesByKey.get(siteKey);
+    if (!site || site.disabled) {
+      respond(204);
+      return;
+    }
+
+    const target = getConnections(site).find((connection) => connection.url === url);
+    if (!target) {
+      respond(204);
+      return;
+    }
+
+    const now = Date.now();
+    const clicks = isPlainObject(site.connectionClicks) ? site.connectionClicks : (site.connectionClicks = {});
+    const entry = isPlainObject(clicks[url]) ? clicks[url] : (clicks[url] = { count: 0, lastAt: 0 });
+    entry.count += 1;
+    entry.lastAt = now;
+
+    if (now - lastConnectionClicksSaveAt > LAST_SEEN_SAVE_INTERVAL_MS) {
+      lastConnectionClicksSaveAt = now;
+      saveSites();
+    }
+
+    respond(204);
+  });
+}
+
 function closeIdentityClients(identity, code, reason) {
   for (const client of Array.from(identity.clients)) {
     client.ws.close(code, reason);
@@ -2175,6 +2309,10 @@ function closeIdentityClients(identity, code, reason) {
 /** Effective slow-mode cooldown for a site (default when site-less or unset). */
 function getChatThrottle(site) {
   return site ? sanitizeChatThrottle(site.chatThrottleMs) : DEFAULT_CHAT_THROTTLE_MS;
+}
+
+function getConnectionLimit(site) {
+  return site ? sanitizeConnectionLimit(site.connectionLimit) : DEFAULT_CONNECTION_LIMIT;
 }
 
 /** A muted visitor stays present but their messages are dropped server-side. */
@@ -2221,6 +2359,7 @@ function publicSite(site) {
     mutedCount: Array.isArray(site.mutedBrowserIds) ? site.mutedBrowserIds.length : 0,
     blockedWords: Array.isArray(site.blockedWords) ? site.blockedWords : [],
     chatThrottleMs: typeof site.chatThrottleMs === "number" ? site.chatThrottleMs : DEFAULT_CHAT_THROTTLE_MS,
+    connectionLimit: getConnectionLimit(site),
     moderationLog: Array.isArray(site.moderationLog) ? site.moderationLog : [],
     supporter: Boolean(site.supporter),
     pro: Boolean(site.pro),
@@ -2336,7 +2475,10 @@ const server = http.createServer((req, res) => {
 
   const url = new URL(req.url || "/", `http://${req.headers.host || `${HOST}:${PORT}`}`);
 
-  if (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname)) {
+  if (
+    (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname))
+    || (!STAGING_PAGE_ENABLED && isStagingPageRequest(url.pathname))
+  ) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end(req.method === "HEAD" ? undefined : "not found");
     return;
@@ -2365,6 +2507,11 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "POST" && url.pathname === "/api/sites") {
     handleRegisterSite(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/connection-click") {
+    handleConnectionClick(req, res);
     return;
   }
 
@@ -2569,6 +2716,7 @@ function handleInit(client, message) {
 
     if (firstVerify || now - lastSavedSeenAt > LAST_SEEN_SAVE_INTERVAL_MS) {
       saveSites();
+      if (firstVerify) ensureMapWorldGrown();
     }
   }
 
@@ -2881,7 +3029,7 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  if (access.scene.clients.size >= MAX_CONNECTIONS) {
+  if (access.scene.clients.size >= getConnectionLimit(access.site)) {
     ws.close(1013, "full");
     return;
   }
@@ -2962,12 +3110,14 @@ async function loadSharedModules() {
   buildSiteCss = siteConfig.buildSiteCss;
   isWithinPropSettleZone = geometry.isWithinPropSettleZone;
   validateMapWorld = mapWorldModule.validateMapWorld;
+  resolveMapWorld = mapWorldModule.resolveMapWorld;
   normalizeOrigin = urlModule.normalizeAbsoluteOrigin;
   buildAllowedOrigins = urlModule.buildAllowedOrigins;
   getMatchingWwwOrigin = urlModule.getMatchingWwwOrigin;
   originUsesMatchingWwwPair = urlModule.originUsesMatchingWwwPair;
   ALLOWED_ORIGINS = parseAllowedOrigins(process.env.ALLOWED_ORIGINS || "");
   mapWorld = loadMapWorld();
+  ensureMapWorldGrown();
 
   PROPS_BY_ID = new Map(scenePropsModule.PROPS.map((prop) => [prop.id, prop]));
   BIRD_PERCHES = birdPerchesModule.BIRD_PERCHES;

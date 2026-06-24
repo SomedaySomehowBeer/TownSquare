@@ -40,6 +40,7 @@ const siteDetailsForm = document.getElementById("site-details-form");
 const siteOriginInput = document.getElementById("site-origin");
 const siteNameInput = document.getElementById("site-name");
 const siteEmailInput = document.getElementById("site-email");
+const connectionLimitInput = document.getElementById("connection-limit");
 const includeMatchingWwwInput = document.getElementById("include-matching-www");
 const includeMatchingWwwLabel = document.getElementById("include-matching-www-label");
 const includeMatchingWwwNote = document.getElementById("include-matching-www-note");
@@ -50,6 +51,8 @@ const customizationStatusEl = document.getElementById("customization-status");
 const saveCustomizationButton = document.getElementById("save-customization");
 const resetCustomizationButton = document.getElementById("reset-customization");
 const previewRoot = document.getElementById("townsquare-root");
+const previewDock = document.getElementById("preview-dock");
+const previewToggle = document.getElementById("preview-toggle");
 const scenePositionFields = document.getElementById("scene-position-fields");
 const styleOverrideFields = document.getElementById("style-override-fields");
 const snippetEl = document.getElementById("embed-snippet");
@@ -123,6 +126,33 @@ const preview = createCustomizationPreview({
 const previewModeButtons = document.querySelectorAll("[data-preview-mode]");
 preview.bindThemeToggle(previewModeButtons);
 
+// The preview docks to the bottom of the viewport; let owners collapse it out of
+// the way. While collapsed we tear the preview down so it isn't animating offscreen.
+let previewCollapsed = false;
+
+function mountPreview(options) {
+  if (previewCollapsed) return;
+  preview.mount(options);
+}
+
+function setPreviewCollapsed(collapsed) {
+  previewCollapsed = collapsed;
+  previewDock?.classList.toggle("is-collapsed", collapsed);
+  if (previewToggle) {
+    previewToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    previewToggle.textContent = collapsed ? "Show" : "Hide";
+  }
+  if (collapsed) {
+    preview.destroy();
+  } else if (currentSite) {
+    preview.mount({ remount: true });
+  }
+}
+
+previewToggle?.addEventListener("click", () => {
+  setPreviewCollapsed(!previewCollapsed);
+});
+
 const setStatus = createStatusSetter(statusEl);
 const setSiteDetailsStatus = createStatusSetter(siteDetailsStatusEl, { toggleHidden: true });
 const setCustomizationStatus = createStatusSetter(customizationStatusEl, { toggleHidden: true });
@@ -173,6 +203,7 @@ function siteDetailsAreDirty() {
     siteOriginInput.value.trim() !== currentSite.origin
     || siteNameInput.value.trim() !== currentSite.name
     || siteEmailInput.value.trim() !== (currentSite.email || "")
+    || Number(connectionLimitInput.value) !== Number(currentSite.connectionLimit || 100)
     || includeMatchingWwwInput.checked !== Boolean(currentSite.includeMatchingWww)
   );
 }
@@ -210,6 +241,7 @@ function syncSiteDetailsFromServer() {
     siteOriginInput.value = currentSite.origin;
     siteNameInput.value = currentSite.name;
     siteEmailInput.value = currentSite.email || "";
+    connectionLimitInput.value = String(currentSite.connectionLimit || 100);
     includeMatchingWwwInput.checked = Boolean(currentSite.includeMatchingWww);
     siteDetailsTouched = false;
   }
@@ -227,6 +259,7 @@ async function saveSiteDetails() {
     origin: siteOriginInput.value,
     name: siteNameInput.value,
     email: siteEmailInput.value,
+    connectionLimit: Number(connectionLimitInput.value),
     includeMatchingWww: includeMatchingWwwInput.checked,
   });
 
@@ -361,7 +394,7 @@ function syncCustomizationForm({ force = false } = {}) {
   updateCustomizationButtons();
   updateCustomizationStatus();
   if (force || !preview.mounted) {
-    preview.mount({ remount: force });
+    mountPreview({ remount: force });
   }
 }
 
@@ -395,7 +428,7 @@ function onConnectionsEdited() {
   connectionsTouched = true;
   updateConnectionsControls();
   // Reflect signposts in the live preview as the owner edits.
-  preview.mount();
+  mountPreview();
 }
 
 function createConnectionRow(connection, index) {
@@ -482,7 +515,7 @@ function syncConnectionsFromServer() {
   connectionsTouched = false;
   renderConnectionRows();
   updateConnectionsControls();
-  if (preview.mounted) preview.mount();
+  if (preview.mounted) mountPreview();
 }
 
 function addConnection() {
@@ -757,7 +790,7 @@ function render(data) {
       <div><dt>Verified</dt><dd>${formatTime(currentSite.verifiedAt, "Not seen yet")}</dd></div>
       <div><dt>Messages</dt><dd>${currentSite.messageCount ?? 0}</dd></div>
       <div><dt>Last message</dt><dd>${formatTime(currentSite.lastMessageAt)}</dd></div>
-      <div><dt>Active visitors</dt><dd>${scene.activeVisitors}</dd></div>
+      <div><dt>Active visitors</dt><dd>${scene.activeVisitors} / ${currentSite.connectionLimit ?? 100}</dd></div>
       <div><dt>Blocked</dt><dd>${currentSite.blockedCount}</dd></div>
     </dl>
   `;
@@ -857,7 +890,7 @@ customizationForm.addEventListener("input", (event) => {
   }
   updateCustomizationButtons();
   updateCustomizationStatus();
-  preview.mount();
+  mountPreview();
   scheduleAutoSave();
 });
 
@@ -873,7 +906,7 @@ resetCustomizationButton.addEventListener("click", () => {
   applyCustomizationToForm(getDefaultCustomization());
   updateCustomizationButtons();
   updateCustomizationStatus();
-  preview.mount({ remount: true });
+  mountPreview({ remount: true });
   scheduleAutoSave();
 });
 
