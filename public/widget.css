@@ -1875,3 +1875,13 @@
 .townsquare-avatar--preview svg .limb,
 .townsquare-avatar--preview svg .fore { stroke-width: 4.5; }
 .townsquare-avatar--preview svg .foot { stroke-width: 3.51; }
+
+/* ── Someday Somehow embed tweaks (2026-06) ──────────────────────────────
+   The embed stage is transparent over the host page, so the surface-gated
+   scene/ground never paint. Paint the ground line directly (using --ground),
+   lift the faint props, and raise the sit/rest poses that sat too low with the
+   chunkier proportions. */
+.townsquare__ground { background: var(--ground); height: 1.5px; }
+.townsquare .prop { opacity: 0.82; }
+.townsquare-avatar--sitting { bottom: 51px; }
+.townsquare-avatar--resting { bottom: 49px; }
