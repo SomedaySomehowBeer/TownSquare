@@ -21,6 +21,7 @@ import {
   updatePropEffects,
 } from "./widget/dom.mjs";
 import { watchCurrentPage } from "./widget/page-watch.mjs";
+import { startDayNight } from "./widget/daynight.mjs";
 import {
   closeTrays,
   startGameLoop,
@@ -179,7 +180,12 @@ export function mountTownSquare(root, options = {}) {
   const coarsePointer = typeof window.matchMedia === "function"
     && window.matchMedia("(pointer: coarse)").matches;
 
-  const unwatchTheme = applyWidgetTheme(root, resolveWidgetTheme(root, options));
+  const resolvedTheme = resolveWidgetTheme(root, options);
+  const unwatchTheme = applyWidgetTheme(root, resolvedTheme);
+  // Someday Somehow: when the host leaves the theme on `auto`, drive the
+  // light/dark flip and the scene sky/ground glow from the local clock rather
+  // than the OS colour-scheme. Skipped for preview/simulate and explicit themes.
+  const stopDayNight = !localOnly && resolvedTheme === "auto" ? startDayNight(root) : null;
   root.replaceChildren();
 
   const {
@@ -405,6 +411,7 @@ export function mountTownSquare(root, options = {}) {
     destroy() {
       ctx.disposed = true;
       unwatchTheme();
+      stopDayNight?.();
       stopGameLoop(ctx);
       destroyBirds(ctx);
       unwireKeyboard(ctx);

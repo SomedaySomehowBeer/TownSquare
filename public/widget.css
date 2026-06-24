@@ -1881,7 +1881,29 @@
    scene/ground never paint. Paint the ground line directly (using --ground),
    lift the faint props, and raise the sit/rest poses that sat too low with the
    chunkier proportions. */
-.townsquare__ground { background: var(--ground); height: 1.5px; }
+.townsquare__ground { height: 1.5px; }
 .townsquare .prop { opacity: 0.82; }
 .townsquare-avatar--sitting { bottom: 51px; }
 .townsquare-avatar--resting { bottom: 49px; }
+
+/* ── Someday Somehow day/night cycle (2026-06) ──────────────────────
+   daynight.mjs sets --ss-sky-rgb / --ss-ground-rgb and flips the light/dark
+   theme from the visitor local clock, marking the root [data-ss-daynight].
+   The embed stage is otherwise transparent, so paint the horizon glow here:
+   a tall elliptical sky wash in the day colour (black at midnight -> cream at
+   midday) fading up, and a shorter elliptical ground wash in the scene-items
+   ink fading down, meeting at the ground line (52px up from the stage floor). */
+#townsquare-root[data-ss-daynight] .townsquare__stage {
+  background:
+    radial-gradient(ellipse 82% 132% at 50% 100%,
+      rgba(var(--ss-sky-rgb), 0.96) 0%,
+      rgba(var(--ss-sky-rgb), 0.45) 46%,
+      rgba(var(--ss-sky-rgb), 0) 100%) top / 100% calc(100% - 52px) no-repeat,
+    radial-gradient(ellipse 82% 150% at 50% 0%,
+      rgba(var(--ss-ground-rgb), 0.6) 0%,
+      rgba(var(--ss-ground-rgb), 0.2) 50%,
+      rgba(var(--ss-ground-rgb), 0) 100%) bottom / 100% 52px no-repeat;
+}
+#townsquare-root[data-ss-daynight] .townsquare__ground {
+  background: rgba(var(--ss-ground-rgb), 0.55);
+}
