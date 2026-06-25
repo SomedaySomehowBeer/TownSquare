@@ -1,6 +1,7 @@
 import { bindCopy } from "../lib/ui-common.mjs";
 import { createStatusSetter, escapeHtml, formatTime } from "./hosted-common.mjs";
 import { createAdminSession } from "./hosted-admin-session.mjs";
+import { createAdminPluginRuntime } from "./admin-plugins.mjs";
 import {
   applyConfigToForm,
   applySceneConfigToForm,
@@ -39,6 +40,7 @@ const siteDetailsForm = document.getElementById("site-details-form");
 const siteOriginInput = document.getElementById("site-origin");
 const siteNameInput = document.getElementById("site-name");
 const siteEmailInput = document.getElementById("site-email");
+const connectionLimitInput = document.getElementById("connection-limit");
 const includeMatchingWwwInput = document.getElementById("include-matching-www");
 const includeMatchingWwwLabel = document.getElementById("include-matching-www-label");
 const includeMatchingWwwNote = document.getElementById("include-matching-www-note");
@@ -49,6 +51,8 @@ const customizationStatusEl = document.getElementById("customization-status");
 const saveCustomizationButton = document.getElementById("save-customization");
 const resetCustomizationButton = document.getElementById("reset-customization");
 const previewRoot = document.getElementById("townsquare-root");
+const previewDock = document.getElementById("preview-dock");
+const previewToggle = document.getElementById("preview-toggle");
 const scenePositionFields = document.getElementById("scene-position-fields");
 const styleOverrideFields = document.getElementById("style-override-fields");
 const snippetEl = document.getElementById("embed-snippet");
@@ -71,6 +75,8 @@ const chatThrottleSelect = document.getElementById("chat-throttle");
 const saveModerationButton = document.getElementById("save-moderation");
 const moderationStatusEl = document.getElementById("moderation-status");
 const moderationLog = document.getElementById("moderation-log");
+const pluginPanels = document.getElementById("plugin-panels");
+const pluginToggles = document.getElementById("plugin-toggles");
 
 renderStyleOverrideFields(styleOverrideFields);
 bindStyleColorFields(customizationForm);
@@ -121,11 +127,76 @@ const preview = createCustomizationPreview({
 const previewModeButtons = document.querySelectorAll("[data-preview-mode]");
 preview.bindThemeToggle(previewModeButtons);
 
+// The preview docks to the bottom of the viewport; let owners collapse it out of
+// the way. While collapsed we tear the preview down so it isn't animating offscreen.
+let previewCollapsed = false;
+
+// The admin view is split into tabs; only the Appearance tab hosts the preview, so
+// we keep it torn down on every other tab the same way collapsing does.
+let activeTab = "site";
+
+function mountPreview(options) {
+  if (previewCollapsed || activeTab !== "appearance") return;
+  preview.mount(options);
+}
+
+function setPreviewCollapsed(collapsed) {
+  previewCollapsed = collapsed;
+  previewDock?.classList.toggle("is-collapsed", collapsed);
+  if (previewToggle) {
+    previewToggle.setAttribute("aria-expanded", collapsed ? "false" : "true");
+    previewToggle.textContent = collapsed ? "Show" : "Hide";
+  }
+  if (collapsed) {
+    preview.destroy();
+  } else if (currentSite) {
+    preview.mount({ remount: true });
+  }
+}
+
+previewToggle?.addEventListener("click", () => {
+  setPreviewCollapsed(!previewCollapsed);
+});
+
+const adminTabs = document.getElementById("admin-tabs");
+const tabButtons = adminTabs ? Array.from(adminTabs.querySelectorAll("[data-tab]")) : [];
+const tabPanels = Array.from(document.querySelectorAll(".hosted-tabpanel"));
+
+function setActiveTab(name) {
+  if (!tabPanels.some((panel) => panel.dataset.tab === name)) return;
+  activeTab = name;
+  adminView?.setAttribute("data-active-tab", name);
+  for (const button of tabButtons) {
+    const selected = button.dataset.tab === name;
+    button.classList.toggle("is-active", selected);
+    button.setAttribute("aria-selected", selected ? "true" : "false");
+  }
+  for (const panel of tabPanels) {
+    panel.hidden = panel.dataset.tab !== name;
+  }
+  // The preview only lives on the Appearance tab; mount it on arrival and tear it
+  // down on departure so it never animates while hidden behind another tab.
+  if (name === "appearance") {
+    if (currentSite && !previewCollapsed) preview.mount({ remount: true });
+  } else {
+    preview.destroy();
+  }
+}
+
+for (const button of tabButtons) {
+  button.addEventListener("click", () => setActiveTab(button.dataset.tab));
+}
+
 const setStatus = createStatusSetter(statusEl);
 const setSiteDetailsStatus = createStatusSetter(siteDetailsStatusEl, { toggleHidden: true });
 const setCustomizationStatus = createStatusSetter(customizationStatusEl, { toggleHidden: true });
 const setConnectionsStatus = createStatusSetter(connectionsStatusEl, { toggleHidden: true });
 const setModerationStatus = createStatusSetter(moderationStatusEl, { toggleHidden: true });
+
+const adminPlugins = createAdminPluginRuntime({
+  container: pluginPanels,
+  action: (plugin, name, input) => session.pluginAction(plugin, name, input),
+});
 
 const session = createAdminSession({
   redirectPath: "/admin",
@@ -156,7 +227,9 @@ const session = createAdminSession({
     moderationTouched = false;
     moderationBusy = false;
     moderationSavedMessage = "";
+    adminPlugins.clear();
     preview.destroy();
+    setActiveTab("site");
   },
 });
 
@@ -165,6 +238,7 @@ function siteDetailsAreDirty() {
     siteOriginInput.value.trim() !== currentSite.origin
     || siteNameInput.value.trim() !== currentSite.name
     || siteEmailInput.value.trim() !== (currentSite.email || "")
+    || Number(connectionLimitInput.value) !== Number(currentSite.connectionLimit || 100)
     || includeMatchingWwwInput.checked !== Boolean(currentSite.includeMatchingWww)
   );
 }
@@ -202,6 +276,7 @@ function syncSiteDetailsFromServer() {
     siteOriginInput.value = currentSite.origin;
     siteNameInput.value = currentSite.name;
     siteEmailInput.value = currentSite.email || "";
+    connectionLimitInput.value = String(currentSite.connectionLimit || 100);
     includeMatchingWwwInput.checked = Boolean(currentSite.includeMatchingWww);
     siteDetailsTouched = false;
   }
@@ -219,6 +294,7 @@ async function saveSiteDetails() {
     origin: siteOriginInput.value,
     name: siteNameInput.value,
     email: siteEmailInput.value,
+    connectionLimit: Number(connectionLimitInput.value),
     includeMatchingWww: includeMatchingWwwInput.checked,
   });
 
@@ -353,7 +429,7 @@ function syncCustomizationForm({ force = false } = {}) {
   updateCustomizationButtons();
   updateCustomizationStatus();
   if (force || !preview.mounted) {
-    preview.mount({ remount: force });
+    mountPreview({ remount: force });
   }
 }
 
@@ -387,7 +463,7 @@ function onConnectionsEdited() {
   connectionsTouched = true;
   updateConnectionsControls();
   // Reflect signposts in the live preview as the owner edits.
-  preview.mount();
+  mountPreview();
 }
 
 function createConnectionRow(connection, index) {
@@ -474,7 +550,7 @@ function syncConnectionsFromServer() {
   connectionsTouched = false;
   renderConnectionRows();
   updateConnectionsControls();
-  if (preview.mounted) preview.mount();
+  if (preview.mounted) mountPreview();
 }
 
 function addConnection() {
@@ -734,6 +810,35 @@ function renderOwners(owners) {
   owners.forEach((owner, index) => ownerList.appendChild(buildOwnerRow(owner, index)));
 }
 
+function renderPluginToggles(list) {
+  pluginToggles.replaceChildren();
+  const items = Array.isArray(list) ? list : [];
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "hosted-note";
+    empty.textContent = "No plugins are available for your site yet.";
+    pluginToggles.appendChild(empty);
+    return;
+  }
+
+  for (const plugin of items) {
+    const row = document.createElement("div");
+    row.className = "hosted-section";
+    row.innerHTML = `
+      <label class="hosted-toggle">
+        <input type="checkbox" ${plugin.enabled ? "checked" : ""} />
+        <span>${escapeHtml(plugin.label)}</span>
+      </label>
+      ${plugin.description ? `<p class="hosted-note">${escapeHtml(plugin.description)}</p>` : ""}
+    `;
+    const input = row.querySelector("input");
+    input.addEventListener("change", () => {
+      session.action("setPluginEnabled", { name: plugin.name, enabled: input.checked });
+    });
+    pluginToggles.appendChild(row);
+  }
+}
+
 function render(data) {
   currentSite = data.site;
   const scene = data.scene;
@@ -747,9 +852,10 @@ function render(data) {
       <div><dt>Also allows</dt><dd>${escapeHtml((currentSite.allowedOrigins || []).filter((origin) => origin !== currentSite.origin).join(", ") || "—")}</dd></div>
       <div><dt>Status</dt><dd>${currentSite.disabled ? "Disabled" : "Enabled"}</dd></div>
       <div><dt>Verified</dt><dd>${formatTime(currentSite.verifiedAt, "Not seen yet")}</dd></div>
+      <div><dt>Last loaded on</dt><dd>${currentSite.lastSeenUrl ? `<a href="${escapeHtml(currentSite.lastSeenUrl)}" target="_blank" rel="noopener noreferrer">${escapeHtml(currentSite.lastSeenUrl)}</a>` : "—"}</dd></div>
       <div><dt>Messages</dt><dd>${currentSite.messageCount ?? 0}</dd></div>
       <div><dt>Last message</dt><dd>${formatTime(currentSite.lastMessageAt)}</dd></div>
-      <div><dt>Active visitors</dt><dd>${scene.activeVisitors}</dd></div>
+      <div><dt>Active visitors</dt><dd>${scene.activeVisitors} / ${currentSite.connectionLimit ?? 100}</dd></div>
       <div><dt>Blocked</dt><dd>${currentSite.blockedCount}</dd></div>
     </dl>
   `;
@@ -767,6 +873,8 @@ function render(data) {
   syncConnectionsFromServer();
   syncModerationFromServer();
   renderModerationLog(currentSite.moderationLog);
+  renderPluginToggles(data.plugins);
+  adminPlugins.render(data);
 
   visitorList.replaceChildren();
   if (scene.visitors.length === 0) {
@@ -848,7 +956,7 @@ customizationForm.addEventListener("input", (event) => {
   }
   updateCustomizationButtons();
   updateCustomizationStatus();
-  preview.mount();
+  mountPreview();
   scheduleAutoSave();
 });
 
@@ -864,7 +972,7 @@ resetCustomizationButton.addEventListener("click", () => {
   applyCustomizationToForm(getDefaultCustomization());
   updateCustomizationButtons();
   updateCustomizationStatus();
-  preview.mount({ remount: true });
+  mountPreview({ remount: true });
   scheduleAutoSave();
 });
 

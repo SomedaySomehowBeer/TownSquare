@@ -137,6 +137,8 @@ const HOST_THEME_SELECTORS = Object.freeze({
   dark: Object.freeze([
     "html.dark",
     "body.dark",
+    "html.dark-mode",
+    "body.dark-mode",
     "html[data-theme='dark']",
     "body[data-theme='dark']",
     "html[data-bs-theme='dark']",
@@ -147,6 +149,8 @@ const HOST_THEME_SELECTORS = Object.freeze({
   light: Object.freeze([
     "html.light",
     "body.light",
+    "html.light-mode",
+    "body.light-mode",
     "html[data-theme='light']",
     "body[data-theme='light']",
     "html[data-bs-theme='light']",
@@ -160,7 +164,8 @@ const HOST_THEME_SELECTORS = Object.freeze({
  * Resolve the widget color theme from mount options or a pre-set root attribute.
  *
  * `auto` (default) follows `prefers-color-scheme`. `host` follows common
- * host-page theme signals such as `html.dark` and `data-theme="dark"`.
+ * host-page theme signals such as `html.dark`, `body.dark-mode`, and
+ * `data-theme="dark"`.
  *
  * @param {HTMLElement} root
  * @param {{ theme?: string }} [options]

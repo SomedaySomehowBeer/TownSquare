@@ -35,6 +35,7 @@ const siteTableHeadEl = document.getElementById("site-table-head");
 const siteTableBodyEl = document.getElementById("site-table-body");
 const siteEmptyEl = document.getElementById("site-empty");
 const siteNoMatchesEl = document.getElementById("site-no-matches");
+const trafficFlowsEl = document.getElementById("traffic-flows");
 const tokenResult = document.getElementById("token-result");
 const newAdminTokenEl = document.getElementById("new-admin-token");
 const newAdminLink = document.getElementById("new-admin-link");
@@ -64,11 +65,14 @@ const TABLE_COLUMNS = [
   { key: "disabled", label: "Status", render: (site) => (site.disabled ? "Disabled" : "Enabled") },
   { key: "chatDisabled", label: "Chat", render: (site) => (site.chatDisabled ? "Disabled" : "Enabled") },
   { key: "supporter", label: "Supporter", render: (site) => (site.supporter ? "Yes" : "No") },
+  { key: "plus", label: "Plus", render: (site) => (site.plus ? "Yes" : "No") },
   { key: "verifiedAt", label: "Verified", render: (site) => formatTime(site.verifiedAt) },
   { key: "lastSeenAt", label: "Last seen", render: (site) => formatTime(site.lastSeenAt) },
+  { key: "lastSeenUrl", label: "Last URL", link: true, render: (site) => site.lastSeenUrl || "" },
   { key: "messageCount", label: "Messages", render: (site) => String(site.messageCount ?? 0) },
   { key: "lastMessageAt", label: "Last message", render: (site) => formatTime(site.lastMessageAt) },
   { key: "activeVisitors", label: "Active", render: (site) => String(site.activeVisitors ?? 0) },
+  { key: "connectionClickTotal", label: "Outbound", render: (site) => String(site.connectionClickTotal ?? 0) },
   { key: "blockedCount", label: "Blocked", render: (site) => String(site.blockedCount ?? 0) },
 ];
 
@@ -445,6 +449,7 @@ function siteSortValue(site, key) {
     case "disabled":
     case "chatDisabled":
     case "supporter":
+    case "plus":
       return Number(Boolean(site[key]));
     case "verifiedAt":
     case "lastSeenAt":
@@ -452,6 +457,7 @@ function siteSortValue(site, key) {
       return Number(site[key] || 0);
     case "messageCount":
     case "activeVisitors":
+    case "connectionClickTotal":
     case "blockedCount":
       return Number(site[key] ?? 0);
     default:
@@ -588,7 +594,15 @@ function createActionMenu(site) {
     void action("setSiteSupporter", site.siteKey, { supporter: !site.supporter });
   });
 
-  panel.append(toggleSite, toggleChat, toggleSupporter, reset, remove);
+  const togglePlus = document.createElement("button");
+  togglePlus.type = "button";
+  togglePlus.textContent = site.plus ? "Remove Plus" : "Mark as Plus";
+  togglePlus.addEventListener("click", () => {
+    menu.open = false;
+    void action("setSitePlus", site.siteKey, { plus: !site.plus });
+  });
+
+  panel.append(toggleSite, toggleChat, toggleSupporter, togglePlus, reset, remove);
   menu.append(panel);
 
   menu.addEventListener("toggle", () => {
@@ -602,7 +616,18 @@ function renderCell(site, column) {
   const cell = document.createElement("td");
   const value = column.render ? column.render(site) : String(site[column.key] ?? "");
 
-  if (column.mono) {
+  if (column.link) {
+    if (value) {
+      const link = document.createElement("a");
+      link.href = value;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.textContent = value;
+      cell.append(link);
+    } else {
+      cell.textContent = "—";
+    }
+  } else if (column.mono) {
     const code = document.createElement("code");
     code.textContent = value;
     cell.append(code);
@@ -616,9 +641,11 @@ function renderCell(site, column) {
     } else {
       cell.textContent = site.name;
     }
-  } else if (column.key === "disabled" || column.key === "chatDisabled" || column.key === "supporter") {
+  } else if (column.key === "disabled" || column.key === "chatDisabled" || column.key === "supporter" || column.key === "plus") {
     const badge = document.createElement("span");
-    const on = column.key === "supporter" ? site.supporter : !(column.key === "disabled" ? site.disabled : site.chatDisabled);
+    const on = (column.key === "supporter" || column.key === "plus")
+      ? site[column.key]
+      : !(column.key === "disabled" ? site.disabled : site.chatDisabled);
     badge.className = `service-status-badge${on ? "" : " service-status-badge--off"}`;
     badge.textContent = value;
     cell.append(badge);
@@ -667,9 +694,91 @@ function renderSitesTable() {
   }
 }
 
+function hostOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+// Flatten every site's recorded signpost clicks into source -> destination edges,
+// busiest first, so the operator can read which towns lead visitors where.
+function trafficEdges(sites) {
+  const edges = [];
+  for (const site of sites) {
+    const clicks = site.connectionClicks;
+    if (!clicks || typeof clicks !== "object") continue;
+    const labelByUrl = new Map((site.connections || []).map((c) => [c.url, c.label]));
+    for (const [url, entry] of Object.entries(clicks)) {
+      const count = Number(entry?.count ?? 0);
+      if (count <= 0) continue;
+      edges.push({
+        source: site.name || site.origin || site.siteKey,
+        destLabel: labelByUrl.get(url) || hostOf(url),
+        destHost: hostOf(url),
+        count,
+        lastAt: Number(entry?.lastAt ?? 0),
+      });
+    }
+  }
+  edges.sort((a, b) => b.count - a.count || b.lastAt - a.lastAt);
+  return edges;
+}
+
+function renderTrafficFlows(sites) {
+  if (!trafficFlowsEl) return;
+  trafficFlowsEl.replaceChildren();
+
+  const edges = trafficEdges(sites);
+  if (edges.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "hosted-note";
+    empty.textContent = "No connected-town clicks recorded yet.";
+    trafficFlowsEl.appendChild(empty);
+    return;
+  }
+
+  const table = document.createElement("table");
+  table.className = "service-table";
+
+  const head = document.createElement("thead");
+  const headRow = document.createElement("tr");
+  for (const label of ["From", "To", "Clicks", "Last click"]) {
+    const th = document.createElement("th");
+    th.textContent = label;
+    headRow.appendChild(th);
+  }
+  head.appendChild(headRow);
+
+  const body = document.createElement("tbody");
+  for (const edge of edges) {
+    const row = document.createElement("tr");
+
+    const from = document.createElement("td");
+    from.textContent = edge.source;
+
+    const to = document.createElement("td");
+    to.textContent = edge.destLabel === edge.destHost ? edge.destLabel : `${edge.destLabel} (${edge.destHost})`;
+
+    const count = document.createElement("td");
+    count.textContent = String(edge.count);
+
+    const last = document.createElement("td");
+    last.textContent = formatTime(edge.lastAt);
+
+    row.append(from, to, count, last);
+    body.appendChild(row);
+  }
+
+  table.append(head, body);
+  trafficFlowsEl.appendChild(table);
+}
+
 function renderSites(sites) {
   allSites = sites;
   renderSitesTable();
+  renderTrafficFlows(sites);
   const nextMapTownSnapshot = JSON.stringify(sites.map((site) => ({
     siteKey: site.siteKey,
     name: site.name,

@@ -3,8 +3,12 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { WebSocketServer } = require("ws");
+const { ensurePluginData, getPluginData, setPluginData } = require("./server/plugin-data");
+const { plugins } = require("./server/plugins");
+const { registerPublicPlugins } = require("./plugins");
 
 loadEnvFile();
+registerPublicPlugins();
 
 /**
  * Tiny demo server for the first playable TownSquare slice.
@@ -26,8 +30,6 @@ loadEnvFile();
 const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 8787);
 const SERVICE_ADMIN_PASSWORD = process.env.SERVICE_ADMIN_PASSWORD || "";
-const TELEGRAM_BOT_TOKEN = String(process.env.TELEGRAM_BOT_TOKEN || "").trim();
-const TELEGRAM_CHAT_ID = String(process.env.TELEGRAM_CHAT_ID || "").trim();
 const LANDING_ORIGIN = parseHttpOrigin(process.env.LANDING_ORIGIN);
 const PLAUSIBLE_DOMAIN = String(process.env.PLAUSIBLE_DOMAIN || "").trim();
 const PLAUSIBLE_UPSTREAM = String(process.env.PLAUSIBLE_UPSTREAM || "https://plausible.io").replace(/\/$/, "");
@@ -36,8 +38,14 @@ const PLAUSIBLE_API_PATH = process.env.PLAUSIBLE_API_PATH === undefined
   ? "/api/event"
   : String(process.env.PLAUSIBLE_API_PATH).trim();
 const PUBLIC_DIR = path.join(__dirname, "public");
+// Optional overlay of extra static assets (e.g. private plugin browser modules)
+// served as a fallback after the core public dir. Replaces the dev symlink.
+const PLUGIN_ASSETS_DIR = process.env.TOWNSQUARE_PLUGIN_ASSETS_DIR
+  ? path.resolve(process.env.TOWNSQUARE_PLUGIN_ASSETS_DIR)
+  : null;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, ".data");
 const DEV_TOOLS_ENABLED = envFlag("ENABLE_DEV_TOOLS");
+const STAGING_PAGE_ENABLED = envFlag("ENABLE_STAGING_PAGE");
 const SITES_FILE = path.join(DATA_DIR, "sites.json");
 const MAP_WORLD_FILE = path.join(DATA_DIR, "map-world.json");
 const DEFAULT_MAP_WORLD_FILE = path.join(PUBLIC_DIR, "default-map-world.json");
@@ -54,7 +62,8 @@ const DEFAULT_DEV_ORIGINS = new Set([
   `https://127.0.0.1:${PORT}`,
   `https://localhost:${PORT}`,
 ]);
-const MAX_CONNECTIONS = Number(process.env.MAX_CONNECTIONS || 100);
+const MAX_SITE_CONNECTION_LIMIT = 1000;
+const DEFAULT_CONNECTION_LIMIT = Math.min(MAX_SITE_CONNECTION_LIMIT, Math.max(1, readLimit("MAX_CONNECTIONS", 100)));
 const MAX_BROWSER_ID_LEN = 80;
 const MAX_BROWSER_SECRET_LEN = 64;
 const MAX_WS_PAYLOAD_BYTES = Number(process.env.MAX_WS_PAYLOAD_BYTES || 512);
@@ -62,6 +71,7 @@ const MAX_READING_URL_LEN = 240;
 const MAX_SITE_NAME_LEN = 80;
 const MAX_EMAIL_LEN = 254;
 const MAX_ORIGIN_LEN = 240;
+const MAX_PAGE_URL_LEN = 512;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const REGISTRATIONS_PER_HOUR = Number(process.env.REGISTRATIONS_PER_HOUR || 20);
 const AUTH_FAILURES_PER_HOUR = Number(process.env.AUTH_FAILURES_PER_HOUR || 30);
@@ -88,10 +98,6 @@ const INACTIVE_DISCONNECT_MS = Number(process.env.INACTIVE_DISCONNECT_MS || 30 *
 const INACTIVE_CHECK_INTERVAL_MS = Number(process.env.INACTIVE_CHECK_INTERVAL_MS || 60000);
 const HEARTBEAT_INTERVAL_MS = 30000;
 const BIRD_TICK_INTERVAL_MS = 1000;
-const TELEGRAM_API_TIMEOUT_MS = 5000;
-// Global cap on outbound Telegram notifications per minute, across all sites.
-// Bounds notification floods from distributed abuse. 0 disables the cap.
-const TELEGRAM_MAX_NOTIFICATIONS_PER_MIN = readLimit("TELEGRAM_MAX_NOTIFICATIONS_PER_MIN", 20);
 // Minimum delay between a visitor joining and their first chat message. A human
 // cannot read the widget and type within this window, so faster messages are the
 // scripted enter-say-leave pattern and are dropped. 0 disables the check.
@@ -456,6 +462,13 @@ function sanitizeChatThrottle(input) {
   return Math.min(Math.round(ms), MAX_CHAT_THROTTLE_MS);
 }
 
+/** Per-site concurrent WebSocket cap, persisted on each site record. */
+function sanitizeConnectionLimit(input) {
+  const limit = Number(input);
+  if (!Number.isFinite(limit) || limit < 1) return DEFAULT_CONNECTION_LIMIT;
+  return Math.min(Math.round(limit), MAX_SITE_CONNECTION_LIMIT);
+}
+
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -480,9 +493,26 @@ function filterDisplayName(site, name) {
   return site ? applyWordFilter(name, site.blockedWords) : name;
 }
 
+/**
+ * The verified owner badge is a 👑 the server renders next to a name only when
+ * it has stamped `isOwner` on that identity. A visitor could otherwise fake the
+ * badge by simply typing a crown (or a crown-like confusable) into their own
+ * name. Strip those glyphs from every display name so the crown stays a signal
+ * the server alone can grant. Covers the crown emoji plus the obvious royalty /
+ * chess-king/queen lookalikes; ordinary letters are untouched.
+ */
+const OWNER_BADGE_LOOKALIKES = /[\u{1F451}\u{1F934}\u{1F478}\u{1FAC5}♔♕♚♛]/gu;
+
+function stripOwnerBadgeLookalikes(text) {
+  return text.replace(OWNER_BADGE_LOOKALIKES, "");
+}
+
 function sanitizeDisplayName(displayName) {
   if (typeof displayName !== "string") return "";
-  return displayName.trim().replace(/\s+/g, " ").slice(0, MAX_DISPLAY_NAME_LEN);
+  return stripOwnerBadgeLookalikes(displayName)
+    .trim()
+    .replace(/\s+/g, " ")
+    .slice(0, MAX_DISPLAY_NAME_LEN);
 }
 
 function sanitizeReadingLabel(readingLabel) {
@@ -777,6 +807,9 @@ function resolvePublicFile(requestUrl, hostHeader) {
   if (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname)) {
     return null;
   }
+  if (!STAGING_PAGE_ENABLED && isStagingPageRequest(url.pathname)) {
+    return null;
+  }
   const aliases = new Map([
     ["/register", "/hosted/register.html"],
     ["/admin", "/hosted/admin.html"],
@@ -785,22 +818,32 @@ function resolvePublicFile(requestUrl, hostHeader) {
     ["/map", "/map.html"],
     ["/dev", "/dev/dev.html"],
     ["/walk-sandbox", "/dev/walk-sandbox.html"],
+    ["/staging", "/staging.html"],
   ]);
   const pathname = aliases.get(url.pathname) || url.pathname;
   const normalized = path.normalize(pathname).replace(/^\.+/, "");
-  const filePath = path.join(PUBLIC_DIR, normalized);
 
-  if (!filePath.startsWith(PUBLIC_DIR)) {
-    return null;
+  // Candidate files are tried in order: the core public dir first, then the
+  // optional plugin assets overlay. Each must stay inside its own root.
+  const candidates = [];
+  const corePath = path.join(PUBLIC_DIR, normalized);
+  if (corePath.startsWith(PUBLIC_DIR)) candidates.push(corePath);
+  if (PLUGIN_ASSETS_DIR) {
+    const pluginPath = path.join(PLUGIN_ASSETS_DIR, normalized);
+    if (pluginPath.startsWith(PLUGIN_ASSETS_DIR)) candidates.push(pluginPath);
   }
 
-  return filePath;
+  return candidates.length > 0 ? candidates : null;
 }
 
 function isDevToolsRequest(pathname) {
   return pathname === "/dev"
     || pathname === "/walk-sandbox"
     || pathname.startsWith("/dev/");
+}
+
+function isStagingPageRequest(pathname) {
+  return pathname === "/staging" || pathname === "/staging.html";
 }
 
 function readJsonBody(req, res, callback, maxBytes = 4096) {
@@ -872,72 +915,6 @@ function getPublicOrigin(req) {
   return normalizeOrigin(`${proto}://${req.headers.host || `${HOST}:${PORT}`}`);
 }
 
-function escapeTelegramMarkdown(text) {
-  return String(text || "").replace(/([_*\[\]()~`>#+\-=|{}.!\\])/g, "\\$1");
-}
-
-function buildTelegramMessage(site, identity, text, at) {
-  const siteLabel = site
-    ? `${site.name} (${site.origin})`
-    : "default scene";
-
-  return [
-    "*TownSquare message*",
-    `Site: ${escapeTelegramMarkdown(siteLabel)}`,
-    `Visitor: ${escapeTelegramMarkdown(String(identity.id))}`,
-    `Browser: ${escapeTelegramMarkdown(identity.browserId)}`,
-    `At: ${escapeTelegramMarkdown(new Date(at).toISOString())}`,
-    "",
-    escapeTelegramMarkdown(text),
-  ].join("\n");
-}
-
-let telegramWindowStart = 0;
-let telegramWindowCount = 0;
-
-// Global token bucket: at most TELEGRAM_MAX_NOTIFICATIONS_PER_MIN notifications
-// leave the process per rolling minute, regardless of how many sites or visitors
-// are active. Returns false when the budget for the current window is spent.
-function allowTelegramNotification(now = Date.now()) {
-  if (TELEGRAM_MAX_NOTIFICATIONS_PER_MIN <= 0) return true;
-  if (now - telegramWindowStart >= 60000) {
-    telegramWindowStart = now;
-    telegramWindowCount = 0;
-  }
-  if (telegramWindowCount >= TELEGRAM_MAX_NOTIFICATIONS_PER_MIN) return false;
-  telegramWindowCount += 1;
-  return true;
-}
-
-async function sendTelegramChatNotification(site, identity, text, at) {
-  if (!TELEGRAM_BOT_TOKEN || !TELEGRAM_CHAT_ID) return;
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), TELEGRAM_API_TIMEOUT_MS);
-
-  try {
-    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-      method: "POST",
-      headers: { "content-type": "application/json; charset=utf-8" },
-      body: JSON.stringify({
-        chat_id: TELEGRAM_CHAT_ID,
-        text: buildTelegramMessage(site, identity, text, at),
-        parse_mode: "MarkdownV2",
-        disable_web_page_preview: true,
-      }),
-      signal: controller.signal,
-    });
-
-    if (!response.ok) {
-      console.warn(`Telegram notification failed with ${response.status}`);
-    }
-  } catch (error) {
-    console.warn(`Telegram notification failed: ${error.message}`);
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
 function getSceneConfig(site) {
   return sanitizeSceneConfig(site?.sceneConfig || DEFAULT_SITE_SCENE_CONFIG);
 }
@@ -1005,9 +982,21 @@ function parseSiteOriginSettings(body, { defaultIncludeMatchingWww = true } = {}
 function buildEmbedSnippet(req, site) {
   const serverOrigin = getPublicOrigin(req);
   const connections = getConnections(site);
-  const connectionsLine = connections.length > 0
-    ? `\n    connections: ${JSON.stringify(connections)},`
-    : "";
+  const pluginModules = plugins.browserModules("widget", pluginContext(site));
+  const coreConfig = {
+    serverOrigin,
+    siteKey: site.siteKey,
+    scene: getSceneConfig(site),
+    ...(connections.length > 0 ? { connections } : {}),
+    ...(pluginModules.length > 0 ? { pluginModules } : {}),
+    theme: "host",
+  };
+  const extendedConfig = plugins.extend("extendWidgetConfig", coreConfig, pluginContext(site));
+  const widgetConfig = isPlainObject(extendedConfig) ? extendedConfig : coreConfig;
+  const configLines = Object.entries(widgetConfig)
+    .filter(([key]) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key))
+    .map(([key, value]) => `    ${key}: ${JSON.stringify(value)}`)
+    .join(",\n");
 
   return `<link rel="stylesheet" href="${serverOrigin}/widget.css" />
 <div id="townsquare-root"></div>
@@ -1015,10 +1004,7 @@ function buildEmbedSnippet(req, site) {
   import { mountTownSquare } from "${serverOrigin}/townsquare.mjs";
 
   mountTownSquare(document.getElementById("townsquare-root"), {
-    serverOrigin: "${serverOrigin}",
-    siteKey: "${site.siteKey}",
-    scene: ${JSON.stringify(getSceneConfig(site))},${connectionsLine}
-    theme: "host"
+${configLines}
   });
 </script>`;
 }
@@ -1311,7 +1297,9 @@ function handleMap(req, res) {
     .filter((site) => site.verifiedAt && !site.disabled)
     .map(publicMapSite);
 
-  sendJson(res, 200, { sites, world: resolvedMapWorld() });
+  const coreMap = { sites, world: resolvedMapWorld() };
+  const extendedMap = plugins.extend("extendMapData", coreMap);
+  sendJson(res, 200, isPlainObject(extendedMap) ? extendedMap : coreMap);
 }
 
 function getPublicStats() {
@@ -1362,14 +1350,24 @@ function sendAdminSite(req, res, site, adminToken) {
   }
 
   const scene = getScene(site.siteKey, site);
-  sendJson(res, 200, {
+  const panel = {
     site: publicSite(site),
     adminUrl: buildAdminUrl(req, adminToken),
     embedSnippet: buildEmbedSnippet(req, site),
     styleSnippet: buildStyleSnippet(site),
     scene: getSceneStats(scene, site),
     owners: getOwners(site, scene),
-  });
+  };
+  sendJson(res, 200, extendAdminPanel(panel, site));
+}
+
+function extendAdminPanel(panel, site) {
+  const sitePlugins = describeSitePlugins(site);
+  const withPlugins = sitePlugins.length > 0 ? { ...panel, plugins: sitePlugins } : panel;
+  const pluginModules = plugins.browserModules("admin", pluginContext(site));
+  const corePanel = pluginModules.length > 0 ? { ...withPlugins, pluginModules } : withPlugins;
+  const extended = plugins.extend("extendAdminPanel", corePanel, pluginContext(site));
+  return isPlainObject(extended) ? extended : corePanel;
 }
 
 function handlePostAdminSite(req, res) {
@@ -1433,6 +1431,9 @@ const ADMIN_ACTIONS = {
     site.allowedOrigins = originSettings.allowedOrigins;
     site.name = sanitizeSiteName(body.name, site.origin);
     site.email = parsedEmail.email;
+    if (Object.hasOwn(body, "connectionLimit")) {
+      site.connectionLimit = sanitizeConnectionLimit(body.connectionLimit);
+    }
     touchSite(site);
   },
   updateCustomization(site, scene, body) {
@@ -1526,14 +1527,7 @@ const ADMIN_ACTIONS = {
       delete site.ownerProfiles[identity.browserId];
     }
     touchSite(site);
-    broadcast(scene, {
-      type: "profile",
-      id: identity.id,
-      displayName: identity.displayName,
-      color: identity.color,
-      badgeColor: identity.badgeColor,
-      isOwner: owner,
-    });
+    broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
   },
   updateOwnerProfile(site, scene, body) {
     // Keyed by the opaque owner handle so the dedicated admin section can edit
@@ -1553,14 +1547,7 @@ const ADMIN_ACTIONS = {
     const identity = scene.identityByBrowser.get(browserId);
     if (identity) {
       applyOwnerProfile(site, identity);
-      broadcast(scene, {
-        type: "profile",
-        id: identity.id,
-        displayName: identity.displayName,
-        color: identity.color,
-        badgeColor: identity.badgeColor,
-        isOwner: true,
-      });
+      broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
     }
   },
   clearMessages(site, scene) {
@@ -1568,6 +1555,16 @@ const ADMIN_ACTIONS = {
       identity.messages = [];
     }
     logModeration(site, "clear-messages");
+    touchSite(site);
+  },
+  setPluginEnabled(site, scene, body) {
+    const name = String(body.name || "");
+    if (!plugins.toggleable(pluginContext(site)).some((plugin) => plugin.name === name)) {
+      return { error: "Unknown plugin." };
+    }
+    if (!isPlainObject(site.pluginsEnabled)) site.pluginsEnabled = {};
+    site.pluginsEnabled[name] = Boolean(body.enabled);
+    logModeration(site, body.enabled ? "plugin-on" : "plugin-off", name);
     touchSite(site);
   },
   disableSite(site, scene, body) {
@@ -1599,18 +1596,65 @@ function handleAdminAction(req, res) {
 
     clearAuthFailures(adminAuthFailuresByIp, ip);
     const action = String(body.action || "");
+    const pluginName = String(body.plugin || "");
+    const scene = getScene(site.siteKey, site);
+
+    if (pluginName) {
+      let changed = false;
+      const hadPluginData = Object.hasOwn(site.plugins, pluginName);
+      const previousPluginData = getPluginData(site, pluginName);
+      const context = (name) => Object.freeze({
+        site: pluginSite(site),
+        data: getPluginData(site, name),
+        owners: getOwners(site, scene),
+        visitors: getSceneStats(scene, site).visitors,
+        setData(value) {
+          setPluginData(site, name, value);
+          changed = true;
+        },
+      });
+      const invoked = plugins.invokeAdminAction(
+        pluginName,
+        action,
+        context,
+        isPlainObject(body.input) ? body.input : {},
+      );
+      if (!invoked.found) {
+        sendJson(res, 400, { error: "Unknown plugin action." });
+        return;
+      }
+      if (invoked.error || invoked.result?.error) {
+        if (changed) {
+          if (hadPluginData) site.plugins[pluginName] = previousPluginData;
+          else delete site.plugins[pluginName];
+        }
+        sendJson(res, 400, { error: invoked.error || invoked.result.error });
+        return;
+      }
+      if (changed) {
+        touchSite(site);
+        for (const identity of scene.identities.values()) {
+          if (!identity.joined) continue;
+          broadcast(scene, { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) });
+        }
+      }
+      const panel = { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) };
+      sendJson(res, 200, extendAdminPanel(panel, site));
+      return;
+    }
+
     if (!Object.hasOwn(ADMIN_ACTIONS, action)) {
       sendJson(res, 400, { error: "Unknown action." });
       return;
     }
 
-    const scene = getScene(site.siteKey, site);
     const actionResult = ADMIN_ACTIONS[action](site, scene, body);
     if (actionResult?.error) {
       sendJson(res, 400, actionResult);
       return;
     }
-    sendJson(res, 200, { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) });
+    const panel = { site: publicSite(site), scene: getSceneStats(scene, site), owners: getOwners(site, scene) };
+    sendJson(res, 200, extendAdminPanel(panel, site));
   });
 }
 
@@ -1645,11 +1689,17 @@ function isServiceAdminAuthorized(req, body, res) {
 
 function serviceAdminSite(site) {
   const scene = scenes.get(site.siteKey);
+  const connectionClicks = isPlainObject(site.connectionClicks) ? site.connectionClicks : {};
 
   return {
     ...publicSite(site),
     updatedAt: site.updatedAt,
     activeVisitors: scene ? countActiveVisitors(scene) : 0,
+    connectionClicks,
+    connectionClickTotal: Object.values(connectionClicks).reduce(
+      (sum, entry) => sum + (entry?.count || 0),
+      0,
+    ),
   };
 }
 
@@ -1732,6 +1782,11 @@ const SERVICE_ADMIN_ACTIONS = {
     touchSite(site);
     return { site: serviceAdminSite(site) };
   },
+  setSitePlus(req, site, body) {
+    site.plus = Boolean(body.plus);
+    touchSite(site);
+    return { site: serviceAdminSite(site) };
+  },
   deleteSite(req, site) {
     closeSiteScene(site.siteKey, 4003, "site deleted");
     sitesByKey.delete(site.siteKey);
@@ -1799,7 +1854,10 @@ function serializeIdentity(identity, options = {}) {
   if (messages) {
     serialized.messages = identity.messages;
   }
-  return serialized;
+  return plugins.extendVisitor(
+    serialized,
+    pluginContext(identity.scene?.site || null, { visitor: pluginVisitor(identity) }),
+  );
 }
 
 function snapshotIdentity(identity) {
@@ -2071,6 +2129,7 @@ function createScene(key, site = null) {
   const props = getSceneProps(site);
   return {
     key,
+    site,
     props,
     propsById: new Map(props.map((prop) => [prop.id, prop])),
     birdPerches: getSceneBirdPerches(site),
@@ -2137,10 +2196,13 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       disabled: false,
       chatDisabled: false,
       botProtection: false,
+      plus: false,
       verifiedAt: null,
       lastSeenAt: null,
+      lastSeenUrl: null,
       messageCount: 0,
       lastMessageAt: null,
+      connectionClicks: {},
       createdAt: now,
       updatedAt: now,
       blockedBrowserIds: [],
@@ -2149,7 +2211,10 @@ function createSiteRecord({ name, origin, allowedOrigins, email, sceneConfig, st
       ownerProfiles: {},
       blockedWords: [],
       chatThrottleMs: DEFAULT_CHAT_THROTTLE_MS,
+      connectionLimit: DEFAULT_CONNECTION_LIMIT,
       moderationLog: [],
+      plugins: {},
+      pluginsEnabled: {},
     },
   };
 }
@@ -2187,11 +2252,27 @@ function loadSites() {
       if (typeof site.chatThrottleMs !== "number") {
         site.chatThrottleMs = DEFAULT_CHAT_THROTTLE_MS;
       }
+      if (typeof site.connectionLimit !== "number") {
+        site.connectionLimit = DEFAULT_CONNECTION_LIMIT;
+        sitesMigratedOnLoad = true;
+      } else {
+        const nextConnectionLimit = sanitizeConnectionLimit(site.connectionLimit);
+        if (nextConnectionLimit !== site.connectionLimit) {
+          site.connectionLimit = nextConnectionLimit;
+          sitesMigratedOnLoad = true;
+        }
+      }
       if (!Array.isArray(site.moderationLog)) {
         site.moderationLog = [];
       }
       if (!Array.isArray(site.connections)) {
         site.connections = [];
+      }
+      if (ensurePluginData(site)) {
+        sitesMigratedOnLoad = true;
+      }
+      if (!isPlainObject(site.pluginsEnabled)) {
+        site.pluginsEnabled = {};
       }
       const nextAllowedOrigins = getAllowedOrigins(site);
       if (JSON.stringify(nextAllowedOrigins) !== JSON.stringify(site.allowedOrigins || [])) {
@@ -2204,9 +2285,17 @@ function loadSites() {
       if (site.lastMessageAt === undefined) {
         site.lastMessageAt = null;
       }
+      if (!isPlainObject(site.connectionClicks)) {
+        site.connectionClicks = {};
+      }
       if (typeof site.supporter !== "boolean") {
         site.supporter = false;
       }
+      if (typeof site.plus !== "boolean") {
+        // Migrate the former `pro` flag onto `plus`; default new/unset sites to false.
+        site.plus = typeof site.pro === "boolean" ? site.pro : false;
+      }
+      delete site.pro;
       return [site.siteKey, site];
     }));
   } catch (error) {
@@ -2234,6 +2323,57 @@ function touchSite(site) {
   saveSites();
 }
 
+// Visitor connection clicks are high-frequency, so we mirror the lastSeen save
+// pattern: tally in memory on every click and flush the whole registry to disk
+// at most once per interval. Losing up to a minute of clicks on a crash is fine
+// for traffic analytics.
+let lastConnectionClicksSaveAt = 0;
+
+/**
+ * Record one visitor click on a configured neighbouring-town link. The reported
+ * destination must match one of the source site's sanitized connections, so the
+ * tally cannot be inflated with arbitrary URLs.
+ *
+ * @param {import("http").IncomingMessage} req
+ * @param {import("http").ServerResponse} res
+ */
+function handleConnectionClick(req, res) {
+  readJsonBody(req, res, (body) => {
+    // sendBeacon ignores the response, so a 204 with permissive CORS is enough.
+    const respond = (status) => {
+      res.writeHead(status, { "access-control-allow-origin": "*" });
+      res.end();
+    };
+
+    const siteKey = typeof body.siteKey === "string" ? body.siteKey : "";
+    const url = typeof body.url === "string" ? body.url : "";
+    const site = sitesByKey.get(siteKey);
+    if (!site || site.disabled) {
+      respond(204);
+      return;
+    }
+
+    const target = getConnections(site).find((connection) => connection.url === url);
+    if (!target) {
+      respond(204);
+      return;
+    }
+
+    const now = Date.now();
+    const clicks = isPlainObject(site.connectionClicks) ? site.connectionClicks : (site.connectionClicks = {});
+    const entry = isPlainObject(clicks[url]) ? clicks[url] : (clicks[url] = { count: 0, lastAt: 0 });
+    entry.count += 1;
+    entry.lastAt = now;
+
+    if (now - lastConnectionClicksSaveAt > LAST_SEEN_SAVE_INTERVAL_MS) {
+      lastConnectionClicksSaveAt = now;
+      saveSites();
+    }
+
+    respond(204);
+  });
+}
+
 function closeIdentityClients(identity, code, reason) {
   for (const client of Array.from(identity.clients)) {
     client.ws.close(code, reason);
@@ -2243,6 +2383,10 @@ function closeIdentityClients(identity, code, reason) {
 /** Effective slow-mode cooldown for a site (default when site-less or unset). */
 function getChatThrottle(site) {
   return site ? sanitizeChatThrottle(site.chatThrottleMs) : DEFAULT_CHAT_THROTTLE_MS;
+}
+
+function getConnectionLimit(site) {
+  return site ? sanitizeConnectionLimit(site.connectionLimit) : DEFAULT_CONNECTION_LIMIT;
 }
 
 /** A muted visitor stays present but their messages are dropped server-side. */
@@ -2267,7 +2411,7 @@ function logModeration(site, action, detail = "") {
 }
 
 function publicSite(site) {
-  return {
+  const config = {
     siteKey: site.siteKey,
     name: site.name,
     origin: site.origin,
@@ -2282,6 +2426,7 @@ function publicSite(site) {
     botProtection: Boolean(site.botProtection),
     verifiedAt: site.verifiedAt,
     lastSeenAt: site.lastSeenAt,
+    lastSeenUrl: site.lastSeenUrl || null,
     messageCount: site.messageCount || 0,
     lastMessageAt: site.lastMessageAt || null,
     createdAt: site.createdAt,
@@ -2289,14 +2434,66 @@ function publicSite(site) {
     mutedCount: Array.isArray(site.mutedBrowserIds) ? site.mutedBrowserIds.length : 0,
     blockedWords: Array.isArray(site.blockedWords) ? site.blockedWords : [],
     chatThrottleMs: typeof site.chatThrottleMs === "number" ? site.chatThrottleMs : DEFAULT_CHAT_THROTTLE_MS,
+    connectionLimit: getConnectionLimit(site),
     moderationLog: Array.isArray(site.moderationLog) ? site.moderationLog : [],
     supporter: Boolean(site.supporter),
+    plus: Boolean(site.plus),
   };
+  const extendedConfig = plugins.extend("extendSiteConfig", config, pluginContext(site));
+  return isPlainObject(extendedConfig) ? extendedConfig : config;
+}
+
+function pluginSite(site) {
+  if (!site) return null;
+  return Object.freeze({
+    siteKey: site.siteKey,
+    name: site.name,
+    origin: site.origin,
+    supporter: Boolean(site.supporter),
+    plus: Boolean(site.plus),
+  });
+}
+
+function pluginVisitor(identity) {
+  const site = identity.scene?.site || null;
+  return Object.freeze({
+    id: identity.id,
+    browserId: identity.browserId,
+    displayName: identity.displayName,
+    color: identity.color,
+    isOwner: identity.isOwner,
+    ownerHandle: identity.isOwner && site ? ownerHandle(site.siteKey, identity.browserId) : null,
+  });
+}
+
+function isPluginEnabledForSite(site, pluginName) {
+  // Toggleable add-ons are off until a site owner switches them on, so anything
+  // not explicitly true stays inactive.
+  return Boolean(site && isPlainObject(site.pluginsEnabled) && site.pluginsEnabled[pluginName] === true);
+}
+
+function describeSitePlugins(site) {
+  return plugins.toggleable(pluginContext(site)).map((plugin) => ({
+    ...plugin,
+    enabled: isPluginEnabledForSite(site, plugin.name),
+  }));
+}
+
+function pluginContext(site, values = {}) {
+  return (pluginName) => Object.freeze({
+    ...values,
+    site: pluginSite(site),
+    data: getPluginData(site, pluginName),
+    enabled: isPluginEnabledForSite(site, pluginName),
+  });
 }
 
 function getScene(sceneKey, site = null) {
   const existing = scenes.get(sceneKey);
-  if (existing) return existing;
+  if (existing) {
+    if (!existing.site && site) existing.site = site;
+    return existing;
+  }
 
   const scene = createScene(sceneKey, site);
   scenes.set(sceneKey, scene);
@@ -2344,6 +2541,31 @@ function isOriginAllowedForSite(origin, site) {
   return Boolean(normalized && getAllowedOrigins(site).includes(normalized));
 }
 
+/**
+ * Remember the page a site's widget was last seen on. The source is the
+ * visitor's reading URL, which the widget defaults to `window.location.href`
+ * and which the server has already validated against the site's allowed
+ * origins (browsers do not send a Referer on the WebSocket upgrade, so the
+ * reading URL is how the host page reaches us). Stored as origin + pathname
+ * only, so query strings and hashes are never persisted. Returns true when the
+ * stored value changed.
+ */
+function rememberSiteLastSeenUrl(site, readingUrl) {
+  if (!site || !readingUrl) return false;
+  let url;
+  try {
+    url = new URL(readingUrl);
+  } catch {
+    return false;
+  }
+  const origin = normalizeOrigin(url.origin);
+  if (!origin) return false;
+  const pageUrl = `${origin}${url.pathname}`.slice(0, MAX_PAGE_URL_LEN);
+  if (pageUrl === site.lastSeenUrl) return false;
+  site.lastSeenUrl = pageUrl;
+  return true;
+}
+
 let sitesByKey = new Map();
 const scenes = new Map();
 let nextConnectionId = 1;
@@ -2367,7 +2589,10 @@ const server = http.createServer((req, res) => {
 
   const url = new URL(req.url || "/", `http://${req.headers.host || `${HOST}:${PORT}`}`);
 
-  if (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname)) {
+  if (
+    (!DEV_TOOLS_ENABLED && isDevToolsRequest(url.pathname))
+    || (!STAGING_PAGE_ENABLED && isStagingPageRequest(url.pathname))
+  ) {
     res.writeHead(404, { "content-type": "text/plain; charset=utf-8" });
     res.end(req.method === "HEAD" ? undefined : "not found");
     return;
@@ -2396,6 +2621,11 @@ const server = http.createServer((req, res) => {
 
   if (req.method === "POST" && url.pathname === "/api/sites") {
     handleRegisterSite(req, res);
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/connection-click") {
+    handleConnectionClick(req, res);
     return;
   }
 
@@ -2447,16 +2677,27 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  const filePath = resolvePublicFile(req.url || "/", req.headers.host || `${HOST}:${PORT}`);
+  const candidates = resolvePublicFile(req.url || "/", req.headers.host || `${HOST}:${PORT}`);
 
-  if (!filePath) {
+  if (!candidates) {
     res.writeHead(403, { "content-type": "text/plain; charset=utf-8" });
     res.end("forbidden");
     return;
   }
 
+  serveStaticCandidate(candidates, 0, res);
+});
+
+// Tries each candidate file path in order, falling back to the next on a
+// missing file so the plugin assets overlay can back the core public dir.
+function serveStaticCandidate(candidates, index, res) {
+  const filePath = candidates[index];
   fs.readFile(filePath, (error, data) => {
     if (error) {
+      if (error.code === "ENOENT" && index + 1 < candidates.length) {
+        serveStaticCandidate(candidates, index + 1, res);
+        return;
+      }
       const status = error.code === "ENOENT" ? 404 : 500;
       const body = status === 404 ? "not found" : "server error";
       res.writeHead(status, { "content-type": "text/plain; charset=utf-8" });
@@ -2472,7 +2713,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, getStaticHeaders(filePath));
     res.end(body);
   });
-});
+}
 
 const wss = new WebSocketServer({
   server,
@@ -2551,6 +2792,7 @@ function handleInit(client, message) {
     peers,
     birds: snapshotBirds(scene),
     chatThrottleMs: getChatThrottle(site),
+    pluginModules: plugins.browserModules("widget", pluginContext(site)),
   });
 
   if (identity.joined) {
@@ -2564,14 +2806,11 @@ function handleInit(client, message) {
     // Reconnect during the grace window: the owner gets applyOwnerProfile above
     // but we skip the join broadcast, so refresh peers with the claimed look.
     if (identity.isOwner && site) {
-      broadcast(scene, {
-        type: "profile",
-        id: identity.id,
-        displayName: identity.displayName,
-        color: identity.color,
-        badgeColor: identity.badgeColor,
-        isOwner: true,
-      }, { exceptConnectionId: client.connectionId });
+      broadcast(
+        scene,
+        { type: "profile", ...serializeIdentity(identity, { owner: true, badge: true }) },
+        { exceptConnectionId: client.connectionId },
+      );
     }
     syncIdentityAwayState(identity);
     return;
@@ -2589,7 +2828,9 @@ function handleInit(client, message) {
     site.lastSeenAt = now;
     site.verifiedAt = site.verifiedAt || now;
 
-    if (firstVerify || now - lastSavedSeenAt > LAST_SEEN_SAVE_INTERVAL_MS) {
+    const urlChanged = rememberSiteLastSeenUrl(site, identity.readingUrl);
+
+    if (firstVerify || urlChanged || now - lastSavedSeenAt > LAST_SEEN_SAVE_INTERVAL_MS) {
       saveSites();
       if (firstVerify) ensureMapWorldGrown();
     }
@@ -2597,6 +2838,10 @@ function handleInit(client, message) {
 
   broadcast(scene, { type: "join", peer: snapshotIdentity(identity) }, { exceptConnectionId: client.connectionId });
   syncIdentityAwayState(identity, joinedAt);
+  plugins.run("onVisitorJoin", pluginContext(site, {
+    visitor: pluginVisitor(identity),
+    joinedAt,
+  }));
 }
 
 function handleMove(client, message) {
@@ -2663,12 +2908,7 @@ function handleProfile(client, message) {
   // Owners keep their look across resets: persist their own edits too.
   rememberOwnerProfile(client.site, client.identity);
 
-  broadcast(client.scene, {
-    type: "profile",
-    id: client.identity.id,
-    displayName: client.identity.displayName,
-    color: client.identity.color,
-  });
+  broadcast(client.scene, { type: "profile", ...serializeIdentity(client.identity, { owner: true, badge: true }) });
 }
 
 function handleReading(client, message) {
@@ -2690,6 +2930,7 @@ function handleReading(client, message) {
   client.readingActive = readingActive;
   client.identity.readingLabel = readingLabel;
   client.identity.readingUrl = readingUrl;
+  if (client.site && rememberSiteLastSeenUrl(client.site, readingUrl)) saveSites();
   refreshIdentityReadingActive(client.identity);
   const now = Date.now();
   if (client.identity.readingActive && !previousReadingActive) {
@@ -2749,6 +2990,13 @@ function handleSay(client, message) {
   if (!allowIpEvent(client, "chat", IP_CHAT_EVENT_LIMIT)) return;
 
   client.lastChatAt = now;
+
+  const event = pluginContext(client.site, {
+    visitor: pluginVisitor(client.identity),
+    message: Object.freeze({ text, at: now }),
+  });
+  if (!plugins.run("onMessage", event)) return;
+
   client.identity.messages.push({ text, at: now });
   client.identity.messages = client.identity.messages.slice(-MAX_RECENT_MESSAGES);
   touchIdentityActivity(client.identity, now);
@@ -2760,10 +3008,6 @@ function handleSay(client, message) {
     if (now - lastSavedMessageAt > LAST_SEEN_SAVE_INTERVAL_MS) {
       saveSites();
     }
-  }
-
-  if (allowTelegramNotification(now)) {
-    void sendTelegramChatNotification(client.site, client.identity, text, now);
   }
 
   broadcast(
@@ -2801,6 +3045,15 @@ function handleClientMessage(client, raw) {
 
   if (!isPlainObject(message)) return;
   if (typeof message.type !== "string") return;
+
+  const pluginMessage = { ...message };
+  delete pluginMessage.browserSecret;
+  const accepted = plugins.run("onSocketMessage", pluginContext(client.site, {
+    visitor: client.identity ? pluginVisitor(client.identity) : null,
+    message: Object.freeze(pluginMessage),
+  }));
+  if (!accepted) return;
+
   if (!Object.hasOwn(MESSAGE_HANDLERS, message.type)) return;
 
   if (message.type !== "init" && message.type !== "solve" && !client.joined) return;
@@ -2893,7 +3146,7 @@ wss.on("connection", (ws, req) => {
     return;
   }
 
-  if (access.scene.clients.size >= MAX_CONNECTIONS) {
+  if (access.scene.clients.size >= getConnectionLimit(access.site)) {
     ws.close(1013, "full");
     return;
   }

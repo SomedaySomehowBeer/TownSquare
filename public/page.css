@@ -34,12 +34,19 @@ body {
 :root {
   --hosted-preview-dock-height: 13.75rem;
   --hosted-preview-dock-chrome: 2rem;
+  --hosted-preview-dock-collapsed-height: 2.75rem;
 }
 
 .hosted-shell:has(#register-view:not([hidden]) .hosted-preview-dock),
-.hosted-shell:has(#admin-view:not([hidden]) .hosted-preview-dock) {
+.hosted-shell:has(#admin-view:not([hidden]) #tab-appearance:not([hidden]) .hosted-preview-dock) {
   padding-bottom: calc(
     var(--hosted-preview-dock-height) + env(safe-area-inset-bottom, 0px) + 12px
+  );
+}
+
+.hosted-shell:has(#admin-view:not([hidden]) #tab-appearance:not([hidden]) .hosted-preview-dock.is-collapsed) {
+  padding-bottom: calc(
+    var(--hosted-preview-dock-collapsed-height) + env(safe-area-inset-bottom, 0px) + 12px
   );
 }
 
@@ -58,6 +65,39 @@ body {
   background: color-mix(in oklab, var(--surface) 94%, transparent);
   box-shadow: 0 -12px 36px -18px rgba(42, 41, 38, 0.34);
   backdrop-filter: blur(14px);
+}
+
+.hosted-preview-dock.hosted-section.is-collapsed {
+  height: calc(var(--hosted-preview-dock-collapsed-height) + env(safe-area-inset-bottom, 0px));
+}
+
+.hosted-preview-dock.is-collapsed .townsquare-host {
+  display: none;
+}
+
+.hosted-preview-head-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hosted-preview-toggle {
+  flex: none;
+  padding: 4px 12px;
+  border: 1px solid var(--hair-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.hosted-preview-toggle:hover {
+  color: var(--ink);
+  border-color: var(--hair-1, var(--hair-2));
 }
 
 .hosted-preview-dock .hosted-section-head {
@@ -1215,6 +1255,51 @@ body {
 .hosted-footnote a {
   color: var(--you-deep);
   font-weight: 650;
+}
+
+.hosted-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 20px;
+  padding-bottom: 2px;
+  border-bottom: 1px solid var(--hair-2);
+}
+
+.hosted-tab {
+  flex: none;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.hosted-tab:hover {
+  color: var(--ink);
+}
+
+.hosted-tab.is-active {
+  color: var(--ink);
+  border-color: var(--hair-2);
+  background: var(--surface);
+}
+
+.hosted-tab:focus-visible {
+  outline: 2px solid var(--you-deep);
+  outline-offset: 2px;
+}
+
+/* The first section in a tab sits right under the nav, so drop its divider. */
+.hosted-tabpanel > .hosted-section:first-child {
+  margin-top: 22px;
+  border-top: none;
 }
 
 .hosted-section,

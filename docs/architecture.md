@@ -31,7 +31,13 @@ TownSquare currently has four practical surfaces:
    - private admin token for moderation/settings, stored as a hash
    - verified owner badge: admin marks a live visitor's browser id into the site's
      `ownerBrowserIds`; the server stamps `isOwner` on that identity (gated by the
-     visitor's `browserSecret`, so it cannot be spoofed) and broadcasts it as a crown
+     visitor's `browserSecret`, so it cannot be spoofed) and broadcasts it as a crown.
+     The crown is anti-spoofed on two fronts: (1) ownership is only mutable through
+     the `setOwnerVisitor`/`updateOwnerProfile` admin actions, which require the
+     site's admin token; and (2) `sanitizeDisplayName` strips the crown emoji and
+     crown-like confusables from every display name, so a visitor cannot fake the
+     badge by typing 👑 in front of their own name. The crown therefore stays a
+     server-granted signal, never a glyph any client can reproduce.
    - service admin password for operator-level site management
    - service-admin world editor for the public network map
    - small JSON site registry
@@ -60,10 +66,44 @@ That separation is now reflected directly in the repo:
   the server persists operator-edited point props and water strokes under `DATA_DIR`.
   Map world dimensions grow with verified site count (see `public/shared/map-world.mjs`);
   painted scenery stays anchored while new empty margin expands outward.
+- `server/plugins.js` = the small in-process plugin registry and hook contract.
+- `plugins/` = public feature modules registered by this distribution. These are
+  trusted server modules, not remotely installed extensions. Telegram message
+  notifications are the first existing feature extracted behind this boundary.
 - `server.js` = static + realtime service. Public embed URLs (`/townsquare.mjs`,
   `/widget.css`) are a stable contract; clean routes (`/admin`, `/dev`, …) are
   aliased to their files in `resolvePublicFile`, so files can move without
   changing URLs.
+
+## Server plugins
+
+Plugins add hosted/network features around the core runtime. The core remains
+responsible for presence, movement, chat storage/broadcast, embeds, and
+self-hosting.
+
+Stable decision/event hooks surround the realtime core. Plugin-scoped site
+data, authenticated admin actions, namespaced visitor serialization, and
+same-origin admin/widget browser module registries support full-stack hosted
+features without changing the core protocol for self-hosters. The complete
+contract and private-repository example are in `docs/plugins.md`.
+
+Plugins receive small event objects rather than WebSocket, response, scene, or
+registry internals. Socket events never include `browserSecret`. Extension
+payloads are JSON-shaped objects so the widget/runtime protocol does not depend
+on plugin implementation details.
+
+A hosted bootstrap registers private modules before starting the public server:
+
+```js
+const { registerPlugin } = require("../TownSquare/server/plugins");
+const supporterPlugin = require("./plugins/supporter-badges");
+
+registerPlugin(supporterPlugin);
+require("../TownSquare/server");
+```
+
+This keeps public and private modules composable without a remote plugin loader
+or a repository split.
 
 ## Why this boundary matters
 

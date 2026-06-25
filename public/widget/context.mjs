@@ -31,6 +31,7 @@
  * @property {boolean} typing
  * @property {boolean} isOwner
  * @property {string} badgeColor
+ * @property {Record<string, any>} plugins Namespaced server plugin data.
  * @property {number} propZoneEnteredAt
  * @property {string | null} settlePropId
  * @property {boolean} settleRequested
@@ -51,6 +52,7 @@
  * @property {boolean} readingActive
  * @property {boolean} isOwner
  * @property {string} badgeColor
+ * @property {Record<string, any>} plugins Namespaced server plugin data.
  * @property {AvatarView} avatar
  * @property {ReturnType<typeof setTimeout> | null} walkTimer
  */
@@ -67,6 +69,7 @@
  * @property {Map<string, import("../shared/scene-props.mjs").SceneProp>} propsById
  * @property {Map<string, import("../shared/bird-perches.mjs").BirdPerch>} birdPerchesById
  * @property {number} chatThrottleMs Slow-mode cooldown from the server.
+ * @property {ReturnType<import("./plugins.mjs").createWidgetPluginRuntime>} widgetPlugins
  * @property {ReturnType<typeof setTimeout> | null} reconnectTimer
  * @property {ReturnType<typeof setTimeout> | null} typingTimer
  * @property {ReturnType<typeof setTimeout> | null} [cooldownHintTimer]
@@ -92,6 +95,7 @@
  * @property {(event: MouseEvent) => void} onStageClick
  * @property {Map<number, import("./birds.mjs").BirdView>} [birds]
  * @property {HTMLElement} [birdLayer]
+ * @property {HTMLElement} [cloudLayer]
  * @property {{ left: Array<import("../shared/site-config.mjs").Connection>, right: Array<import("../shared/site-config.mjs").Connection> } | null} [connectionsBySide]
  * @property {{ left: HTMLButtonElement | null, right: HTMLButtonElement | null } | null} [signposts]
  * @property {{ overlay: HTMLElement, onKeyDown: (event: KeyboardEvent) => void, trigger: HTMLButtonElement | null } | null} [connectionsModal]
