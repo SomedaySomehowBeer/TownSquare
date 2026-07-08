@@ -2,16 +2,28 @@
  * Pure browser helpers used during widget mount and connection setup.
  */
 
-import { normalizeAbsoluteOrigin } from "../shared/url.mjs";
+import { normalizeAbsoluteOrigin } from "../../lib/url.mjs";
 import {
   BROWSER_ID_KEY,
   BROWSER_SECRET_KEY,
   CHARACTER_COLORS,
   DEFAULT_CHARACTER_COLOR,
   DISPLAY_NAME_MAX,
+  MESSAGE_BOARD_READ_KEY,
   PROFILE_STORAGE_KEY,
   READING_LABEL_MAX,
 } from "./constants.mjs";
+
+/**
+ * @param {EventTarget | null} target
+ * @returns {boolean}
+ */
+export function isTypingTarget(target) {
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || Boolean(target instanceof Element && target.closest("[contenteditable]"));
+}
 
 /**
  * Stable per-browser identity used to dedupe visitors across tabs.
@@ -58,6 +70,64 @@ export function saveBrowserSecret(browserSecret) {
     localStorage.setItem(BROWSER_SECRET_KEY, browserSecret);
   } catch {
     // Reconnect will mint a fresh ephemeral identity if storage is unavailable.
+  }
+}
+
+/**
+ * Short stable fingerprint of a message board's current text. Used to tell
+ * whether the visitor has already read the message the owner is showing now —
+ * the "!" badge appears whenever this differs from the stored marker. Not a
+ * security hash; collisions only mean a missed badge, which is harmless.
+ *
+ * @param {string} title
+ * @param {string} body
+ * @returns {string}
+ */
+export function messageBoardSignature(title = "", body = "") {
+  const input = `${title}${String.fromCharCode(0)}${body}`;
+  let hash = 5381;
+  for (let index = 0; index < input.length; index += 1) {
+    hash = ((hash << 5) + hash + input.charCodeAt(index)) | 0;
+  }
+  return (hash >>> 0).toString(36);
+}
+
+/**
+ * Storage key scoped to a site so two TownSquares on one origin keep separate
+ * read-state. Falls back to a shared key when no siteKey is available (dev/preview).
+ *
+ * @param {string} siteKey
+ * @returns {string}
+ */
+function messageBoardReadKey(siteKey) {
+  return siteKey ? `${MESSAGE_BOARD_READ_KEY}:${siteKey}` : MESSAGE_BOARD_READ_KEY;
+}
+
+/**
+ * The signature of the last message-board message this browser opened, or "".
+ *
+ * @param {string} siteKey
+ * @returns {string}
+ */
+export function getMessageBoardRead(siteKey = "") {
+  try {
+    return localStorage.getItem(messageBoardReadKey(siteKey)) || "";
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Record that this browser has opened the current message-board message.
+ *
+ * @param {string} siteKey
+ * @param {string} signature
+ */
+export function setMessageBoardRead(siteKey = "", signature = "") {
+  try {
+    localStorage.setItem(messageBoardReadKey(siteKey), signature);
+  } catch {
+    // Best-effort: without storage the badge simply reappears next load.
   }
 }
 
@@ -271,11 +341,20 @@ export function readCurrentPage(root, options = {}) {
 }
 
 /**
+ * The visitor's nameplate (display name + color), persisted in `localStorage` so
+ * it follows them back across visits to this site. Recognition, not an account:
+ * unverified, not unique, and scoped to this origin (sharing one nameplate across
+ * different sites is a separate, opt-in step). Falls back to a legacy
+ * `sessionStorage` value once so anyone mid-session keeps their name.
+ *
  * @returns {{ displayName: string, color: string }}
  */
 export function getStoredProfile() {
   try {
-    const parsed = JSON.parse(sessionStorage.getItem(PROFILE_STORAGE_KEY) || "{}");
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY)
+      || sessionStorage.getItem(PROFILE_STORAGE_KEY)
+      || "{}";
+    const parsed = JSON.parse(raw);
     const data = parsed && typeof parsed === "object" ? parsed : {};
     return {
       displayName: normalizeDisplayName(data.displayName),
@@ -296,7 +375,7 @@ export function saveStoredProfile(profile) {
     color: normalizeCharacterColor(profile.color),
   };
   try {
-    sessionStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalized));
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(normalized));
   } catch {
     // The server still keeps the in-memory profile for the connected session.
   }
@@ -323,13 +402,17 @@ export function normalizeOrigin(origin) {
  * @param {string} serverOrigin
  * @param {string} socketPath
  * @param {string} [siteKey]
+ * @param {{ watch?: boolean }} [options] `watch` connects read-only (livestream overlay).
  * @returns {string}
  */
-export function buildSocketUrl(serverOrigin, socketPath, siteKey = "") {
+export function buildSocketUrl(serverOrigin, socketPath, siteKey = "", { watch = false } = {}) {
   const url = new URL(socketPath, `${serverOrigin}/`);
   url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
   if (siteKey) {
     url.searchParams.set("siteKey", siteKey);
+  }
+  if (watch) {
+    url.searchParams.set("watch", "1");
   }
   return url.toString();
 }
