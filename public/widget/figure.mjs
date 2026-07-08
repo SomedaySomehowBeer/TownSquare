@@ -15,6 +15,13 @@
  * foot. The `far` class on the off-side arm/leg lets widget.css paint them a
  * lighter, receding shade.
  *
+ * `g.book` is an open book held while the visitor reads elsewhere on the page
+ * (upstream's "reading away" state, ported to this rig). It's drawn as two
+ * filled page panels + a centre crease, sized oversized so it stays legible at
+ * the figure's small on-scene scale, and placed at the hands of the reading
+ * pose (widget.css `--book`: near arm folds up to hold it, far arm hides). It
+ * is opacity 0 except in the `--book` pose, so it never shows in other poses.
+ *
  * @param {string} [svgAttributes] Extra attributes for the root svg tag.
  * @returns {string}
  */
@@ -45,6 +52,11 @@ export function figureMarkup(svgAttributes = "") {
         <g class="joint arm-l">
           <line class="limb" x1="10.4" y1="16" x2="10.4" y2="22.24"></line>
           <g class="joint elbow-l"><line class="fore" x1="10.4" y1="22.24" x2="10.4" y2="28"></line></g>
+        </g>
+        <g class="book">
+          <polygon points="15.47,18.43 11.63,18 10.72,13.67 13.99,14.04"></polygon>
+          <polygon points="15.47,18.43 18.44,15.83 17.02,11.65 14.4,13.93"></polygon>
+          <line x1="15.47" y1="18.43" x2="14.19" y2="13.99"></line>
         </g>
       </g>
     </svg>

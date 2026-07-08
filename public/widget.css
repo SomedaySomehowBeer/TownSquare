@@ -2379,6 +2379,26 @@
 .townsquare-avatar svg g.knee-l  { transform-origin: 10.4px 33.05px; }
 .townsquare-avatar svg g.knee-r  { transform-origin: 9.6px 33.05px; }
 
+/* Book / reading pose, retuned for this rig. Upstream's --book angles target
+   the splayed stick figure; our arms hang vertically, so the near arm (arm-l)
+   folds up to hold the book at chest height and the far arm (arm-r) stays
+   hidden behind the body. Upstream already hides g.arm-r line.limb + g.elbow-r
+   and fades g.book in/out with a transition — we only override the angles, the
+   book pivot, and drop the extra book rotation (our tilt is baked into the
+   figure.mjs geometry). g.book has no book-stub here (far arm is fully hidden).
+   Pages fill with the scene colour so the book reads as solid, matching the
+   far-limb shade convention. */
+.townsquare-avatar svg g.book { transform-origin: 14.7px 15.7px; }
+/* pages fill with the scene colour (opaque so the hidden far arm can't show
+   through); the selector must out-specify `.townsquare-avatar svg *`'s fill:none. */
+.townsquare-avatar svg g.book polygon { fill: var(--scene, #e4e2dd); stroke: currentColor; stroke-width: 1.3; }
+.townsquare-avatar svg g.book line { fill: none; stroke: currentColor; stroke-width: 1.3; }
+.townsquare-avatar--book svg g.arm-l   { transform: rotate(-26deg); }
+.townsquare-avatar--book svg g.elbow-l { transform: rotate(-124deg); }
+.townsquare-avatar--book svg g.arm-r   { transform: none; }
+.townsquare-avatar--book svg g.elbow-r { transform: none; }
+.townsquare-avatar--book svg g.book    { opacity: 1; transform: none; }
+
 /* Walk-sandbox preview keeps the bold weights too. */
 .townsquare-avatar--preview svg .torso { stroke-width: 6.3; }
 .townsquare-avatar--preview svg .limb,
