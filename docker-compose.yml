@@ -1,3 +1,11 @@
+# TownSquare app for the droplet. It publishes NO host ports: the shared edge
+# Caddy (see the droplet-devops repo) owns 80/443 for the whole droplet and
+# reverse-proxies to this container over the external `edge` Docker network as
+# `townsquare:8787`. TLS, the /live WebSocket upgrade, and the /register* +
+# /service-admin* 404s all live in the edge Caddyfile now.
+#
+# Prereq on the droplet (created once by the edge stack):
+#   docker network create edge
 services:
   townsquare:
     image: ghcr.io/somedaysomehowbeer/townsquare:latest
@@ -11,17 +19,20 @@ services:
       INACTIVE_DISCONNECT_MS: "120000"
     volumes:
       - townsquare-data:/data
-    ports:
-      - "127.0.0.1:8787:8787"   # only Caddy reaches the app
-  caddy:
-    image: caddy:2-alpine
-    restart: unless-stopped
-    network_mode: host
-    volumes:
-      - ./ops/Caddyfile:/etc/caddy/Caddyfile
-      - caddy-data:/data
-      - caddy-config:/config
+    networks:
+      default: {}
+      edge:
+        aliases: [townsquare]   # must match the reverse_proxy upstream in the edge Caddyfile
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8787/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+networks:
+  edge:
+    external: true
+
 volumes:
   townsquare-data:
-  caddy-data:
-  caddy-config:
