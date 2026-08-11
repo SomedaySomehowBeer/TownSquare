@@ -16,7 +16,7 @@
 // many tabs, reconnects, heartbeats, or interactions they produce.
 //
 // Buckets older than the retention window are pruned, so storage stays bounded
-// by (unique visitors/day x 59) per site. This data is analytics-only and lives
+// by (unique visitors/day x 180) per site. This data is analytics-only and lives
 // in its own file, separate from the critical sites registry, so its frequent
 // writes never touch sites.json.
 
@@ -28,8 +28,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DAILY_DAYS = 1;
 const WEEKLY_DAYS = 7;
 const MONTHLY_DAYS = 30;
-// A 30-point series of trailing 30-day windows needs today and the prior 58 days.
-const RETENTION_DAYS = MONTHLY_DAYS * 2 - 1;
+// Detailed visitor identifiers and hourly masks are retained for six months.
+// Older reporting comes from the identifier-free historical aggregate store.
+const RETENTION_DAYS = 180;
 // Coalesce bursts of joins into at most one write per this interval.
 const DEFAULT_SAVE_INTERVAL_MS = 60000;
 const STORAGE_VERSION = 3;
@@ -120,7 +121,15 @@ function createVisitorStats(options = {}) {
   }
 
   /** A join is both a unique visit and activity in its arrival hour. */
-  const recordVisit = recordActivity;
+  function recordVisit(siteKey, browserId, at = now()) {
+    if (!siteKey || !isStableBrowserId(browserId)) return false;
+    const today = dayIndex(at);
+    // Report whether this is a new daily visitor, not merely a new hourly
+    // observation. The historical store must never count a person twice.
+    const wasAlreadyCounted = bySite.get(siteKey)?.get(today)?.has(browserId) || false;
+    recordActivity(siteKey, browserId, at);
+    return !wasAlreadyCounted;
+  }
 
   /** Unique browserIds across the last `windowDays` buckets ending today. */
   function uniqueOverWindow(days, today, windowDays) {
@@ -162,6 +171,17 @@ function createVisitorStats(options = {}) {
       series.push({ day, count });
     }
     return series;
+  }
+
+  /** Identifier-free daily counts, used to seed durable aggregate history. */
+  function getAllDailyCounts() {
+    const sites = {};
+    for (const [siteKey, days] of bySite) {
+      const counts = {};
+      for (const [day, bucket] of days) counts[day] = bucket.size;
+      if (Object.keys(counts).length > 0) sites[siteKey] = counts;
+    }
+    return sites;
   }
 
   /** Count sites with any visitors in each trailing window ending on the displayed day. */
@@ -334,6 +354,7 @@ function createVisitorStats(options = {}) {
     getStats,
     getDailySeries,
     getAggregateDailySeries,
+    getAllDailyCounts,
     getActiveSiteSeries,
     getActivityByWeekdayAndHour,
     load,

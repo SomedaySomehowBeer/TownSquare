@@ -1091,8 +1091,7 @@ function buildPlatformStats(sites, platform = null) {
     messagesMonthly,
     ownersInAdmin7d,
     ownersInAdmin30d,
-    rollingActiveSitesSeries7d: [],
-    rollingActiveSitesSeries30d: [],
+    activeSitesSeriesByRange: {},
     dailySeries: [],
     messageDailySeries: [],
   };
@@ -1277,16 +1276,14 @@ function renderVerifiedSitesChart(sites, rangeDays = VERIFIED_CHART_DAYS) {
 
 function renderRangedStatistics(sites, stats) {
   const rangeDays = Number(statisticsRangeEl?.value) || 7;
-  const activeSitesSeries = rangeDays === 30
-    ? stats.rollingActiveSitesSeries30d
-    : stats.rollingActiveSitesSeries7d;
+  const activeSitesSeries = stats.activeSitesSeriesByRange?.[rangeDays] || [];
   for (const chart of [
     activeSitesTrendChartEl,
     visitorTrendChartEl,
     messageTrendChartEl,
     verifiedTrendChartEl,
   ]) {
-    chart.classList.toggle("service-stats-chart--scroll", rangeDays === 30);
+    chart.classList.toggle("service-stats-chart--scroll", rangeDays > 7);
   }
 
   renderPlatformStats(stats, rangeDays);

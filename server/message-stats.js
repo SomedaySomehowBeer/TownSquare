@@ -9,7 +9,7 @@
 //   - monthly = messages across the last 30 day buckets
 //
 // Buckets older than the retention window are pruned, so storage stays bounded
-// by 30 numbers per site. Like visitor stats, this is analytics-only data in
+// by 180 numbers per site. Like visitor stats, this is analytics-only data in
 // its own file, separate from the critical sites registry.
 
 const fs = require("fs");
@@ -19,8 +19,9 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 const DAILY_DAYS = 1;
 const WEEKLY_DAYS = 7;
 const MONTHLY_DAYS = 30;
-// Keep enough buckets to satisfy the widest window. Anything older is dropped.
-const RETENTION_DAYS = MONTHLY_DAYS;
+// Keep recent per-site detail for six months. Older reporting comes from the
+// compact historical aggregate store.
+const RETENTION_DAYS = 180;
 // Coalesce bursts of messages into at most one write per this interval.
 const DEFAULT_SAVE_INTERVAL_MS = 60000;
 const STORAGE_VERSION = 1;
@@ -111,6 +112,17 @@ function createMessageStats(options = {}) {
     return series;
   }
 
+  /** Daily per-site counts, used to seed durable aggregate history. */
+  function getAllDailyCounts() {
+    const sites = {};
+    for (const [siteKey, days] of bySite) {
+      const counts = {};
+      for (const [day, count] of days) counts[day] = count;
+      if (Object.keys(counts).length > 0) sites[siteKey] = counts;
+    }
+    return sites;
+  }
+
   /** @returns {{daily:number, weekly:number, monthly:number}} */
   function getStats(siteKey, at = now()) {
     const days = bySite.get(siteKey);
@@ -194,7 +206,9 @@ function createMessageStats(options = {}) {
     }
   }
 
-  return { recordMessage, getStats, getDailySeries, getAggregateDailySeries, load, flush, start, stop };
+  return {
+    recordMessage, getStats, getDailySeries, getAggregateDailySeries, getAllDailyCounts, load, flush, start, stop,
+  };
 }
 
 module.exports = { createMessageStats, RETENTION_DAYS };

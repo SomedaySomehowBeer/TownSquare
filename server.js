@@ -8,6 +8,7 @@ const { plugins } = require("./server/plugins");
 const { atomicWriteJson } = require("./server/atomic-write");
 const { createVisitorStats } = require("./server/visitor-stats");
 const { createMessageStats } = require("./server/message-stats");
+const { createHistoricalStats } = require("./server/historical-stats");
 const { registerPublicPlugins } = require("./plugins");
 const { createToken, hashAdminToken, tokensMatch, adminTokenMatches } = require("./server/auth-tokens");
 const { createAdminSessionStore, parseCookies } = require("./server/admin-sessions");
@@ -88,6 +89,7 @@ const NOTIFICATIONS_FILE = path.join(DATA_DIR, "notifications.json");
 const MAP_WORLD_FILE = path.join(DATA_DIR, "map-world.json");
 const VISITOR_STATS_FILE = path.join(DATA_DIR, "visitor-stats.json");
 const MESSAGE_STATS_FILE = path.join(DATA_DIR, "message-stats.json");
+const HISTORICAL_STATS_FILE = path.join(DATA_DIR, "historical-stats.json");
 const DEFAULT_MAP_WORLD_FILE = path.join(PUBLIC_DIR, "default-map-world.json");
 let ALLOWED_ORIGINS = new Set();
 const DEFAULT_DEV_ORIGINS = new Set([
@@ -2057,10 +2059,17 @@ function buildServiceAdminPlatformStats(sites) {
     weatherTried,
     weatherActive,
     footballActive,
-    rollingActiveSitesSeries7d: visitorStats.getActiveSiteSeries(7, 7),
-    rollingActiveSitesSeries30d: visitorStats.getActiveSiteSeries(30, 30),
-    dailySeries: visitorStats.getAggregateDailySeries(30),
-    messageDailySeries: messageStats.getAggregateDailySeries(30),
+    // These compact series contain only daily counts, so they can be retained
+    // indefinitely while detailed browser-level analytics remain bounded.
+    activeSitesSeriesByRange: {
+      7: historicalStats.getActiveSiteSeries(7, 7),
+      30: historicalStats.getActiveSiteSeries(30, 30),
+      90: historicalStats.getActiveSiteSeries(90, 90),
+      180: historicalStats.getActiveSiteSeries(180, 180),
+      365: historicalStats.getActiveSiteSeries(365, 365),
+    },
+    dailySeries: historicalStats.getAggregateDailySeries("visitors", 365),
+    messageDailySeries: historicalStats.getAggregateDailySeries("messages", 365),
   };
 }
 
@@ -3299,6 +3308,7 @@ let sitesByKey = new Map();
 const scenes = new Map();
 const visitorStats = createVisitorStats({ filePath: VISITOR_STATS_FILE });
 const messageStats = createMessageStats({ filePath: MESSAGE_STATS_FILE });
+const historicalStats = createHistoricalStats({ filePath: HISTORICAL_STATS_FILE });
 let nextConnectionId = 1;
 
 function finalizeDisconnect(identity) {
@@ -3633,7 +3643,9 @@ function confirmVisit(site, identity, joinedAt) {
     }
 
     // Tally this visitor toward the site's daily/weekly/monthly unique counts.
-    visitorStats.recordVisit(site.siteKey, identity.browserId, now);
+    if (visitorStats.recordVisit(site.siteKey, identity.browserId, now)) {
+      historicalStats.recordVisitor(site.siteKey, now);
+    }
   }
 
   if (!isShadowBlocked(site, identity.browserId)) {
@@ -3854,6 +3866,7 @@ function handleSay(client, message) {
     client.site.messageCount = (client.site.messageCount || 0) + 1;
     client.site.lastMessageAt = now;
     messageStats.recordMessage(client.site.siteKey, now);
+    historicalStats.recordMessage(client.site.siteKey, now);
     if (now - lastSavedMessageAt > LAST_SEEN_SAVE_INTERVAL_MS) {
       saveSites();
     }
@@ -4120,6 +4133,11 @@ async function startServer() {
   visitorStats.start();
   messageStats.load();
   messageStats.start();
+  historicalStats.load();
+  // Preserve the detail still available when upgrading. Previously pruned
+  // browser-level data cannot be reconstructed.
+  historicalStats.seedDetailed(visitorStats.getAllDailyCounts(), messageStats.getAllDailyCounts());
+  historicalStats.start();
 
   const shared = await import("./public/lib/shared-constants.mjs");
   MIN_X = shared.MIN_X;
@@ -4216,6 +4234,8 @@ function shutdown(signal) {
     visitorStats.flush();
     messageStats.stop();
     messageStats.flush();
+    historicalStats.stop();
+    historicalStats.flush();
   } catch (error) {
     console.error("Error flushing visitor stats on shutdown", error);
   }
